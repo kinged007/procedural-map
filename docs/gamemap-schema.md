@@ -1,6 +1,6 @@
-# GameMap v1.0 schema
+# GameMap v1.1 schema
 
-The canonical product boundary is `GameMap` v1.0. Generation, native JSON import, and future external
+The canonical product boundary is `GameMap` v1.1. Generation, native JSON import, and future external
 import adapters all produce this model, and a consumer uses the same geometry regardless of which one
 produced it.
 
@@ -15,12 +15,13 @@ elided with a comment rather than truncated silently.
 
 ```ts
 interface GameMap {
-  version: '1.0';
+  version: '1.1';
   metadata: { id: string; seed?: number; generator?: string; generatedAt?: string };
   bounds: { width: number; height: number };
   terrain: TerrainRegion[];
   water: WaterRegion[];
   vegetation: VegetationEntity[];
+  forests: ForestEntity[];
   structures: MapEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
@@ -28,9 +29,9 @@ interface GameMap {
 }
 ```
 
-All nine of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `structures`, `roads`,
-and `barriers` are required, even when the collection is empty. `metadataLayers` is optional. A
-generated map sets `structures` and `barriers` to `[]`; they are reserved for buildings and walls.
+All ten of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`, `structures`,
+`roads`, and `barriers` are required, even when the collection is empty. `metadataLayers` is optional.
+A generated map sets `structures` and `barriers` to `[]`; they are reserved for buildings and walls.
 
 `bounds` is the size of the world in world units. Every coordinate in the map is absolute and lies
 inside it.
@@ -240,6 +241,86 @@ is `oak` or `birch`, chosen by local moisture.
   "asset": { "category": "vegetation.tree", "variant": "oak-1" }
 }
 ```
+
+## forests
+
+A forest is a grove of trees published as one entity. It exists for the read path: a consumer
+resolving a movement query tests each forest's bounds box and then only walks the trunks of the
+forests near the query, instead of testing every tree on the map.
+
+```ts
+interface ForestEntity extends MapEntity {
+  type: 'forest';
+  species: string;
+  geometry: PolygonGeometry; // convex hull around the trees, 3 to 24 points
+  trees: VegetationEntity[]; // 2 to 128 trees; the generator emits 3 or more
+  asset: { category: 'vegetation.forest'; variant: string };
+  metadata: { treeCount: number; densityPct: number; walkableInside: boolean };
+}
+```
+
+`species` is `oak`, `birch`, or `mixed`, taken from the majority of the trees inside. `geometry` is the
+convex hull of the tree positions, counter-clockwise, and every tree lies inside it.
+
+A forest **must not** carry `collision`, which is the one break from the rule that every blocking
+feature has one. A grove is not a wall. The trunks block and the clearings between them stay walkable,
+so treating the hull as a wall would seal ground the player is meant to cross. A map that puts
+`collision` on a forest is rejected.
+
+`trees` is a copy of the entries in `vegetation`, not a separate set of trees. At least two, and the
+generator emits three or more. Every tree in a forest must also appear in `vegetation` with the same id
+and identical fields, and no tree appears in two forests. This is duplication, not a second truth: a
+consumer wanting a flat tree list uses `vegetation` and needs no new code, and validation fails if the
+two copies ever disagree.
+
+`metadata.densityPct` is canopy cover, 0 to 100, saturated at 100. Canopies overlap freely, so the raw
+ratio of canopy area to hull area runs into the thousands in a thick wood; cover cannot exceed the
+ground there is. `metadata.walkableInside` is measured, not assumed: the generator rasterises
+walkability at 8-unit cells and records whether any cell inside the hull is clear of water, rock, and
+trunks. Roughly a quarter of groves on a densely wooded map report `false`, which is a true statement
+about thick wood at that resolution and not a defect.
+
+Grove size is capped at 128 trees. Trees link by proximity, so in dense woodland the links chain and
+one component can swallow the map: over a thousand trees on a 4096x4096 default. A hull over that
+many trees narrows nothing, so an oversized component is split on its wider axis at the median until
+each part fits. A grove is a local wood, not a woodland. Splitting by proximity instead would break a
+wood into arbitrary pieces, and the median keeps the pieces roughly square.
+
+```json
+{
+  "id": "forest-2",
+  "type": "forest",
+  "species": "oak",
+  "geometry": {
+    "points": [
+      { "x": 467.10282624699175, "y": 243.23847617488354 },
+      { "x": 488.7969619128853, "y": 244.91557502187788 },
+      { "x": 497.31472798157483, "y": 264.06441053841263 },
+      { "x": 477.7666717534885, "y": 261.40952289570123 }
+    ]
+  },
+  "trees": [
+    {
+      "id": "tree-108",
+      "type": "tree",
+      "species": "oak",
+      "position": { "x": 467.10282624699175, "y": 243.23847617488354 },
+      "radius": 16.095158183947206,
+      "rotation": 4.174596564451918,
+      "collision": {
+        "type": "circle",
+        "center": { "x": 467.10282624699175, "y": 243.23847617488354 },
+        "radius": 5.161063708830625
+      },
+      "asset": { "category": "vegetation.tree", "variant": "oak-3" }
+    }
+  ],
+  "asset": { "category": "vegetation.forest", "variant": "oak-1" },
+  "metadata": { "treeCount": 4, "densityPct": 100, "walkableInside": false }
+}
+```
+
+The example grove holds four trees; only the first is shown.
 
 ## roads
 

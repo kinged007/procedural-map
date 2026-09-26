@@ -1,4 +1,5 @@
 import type {
+  ForestEntity,
   GameMap,
   PolygonGeometry,
   RoadEntity,
@@ -8,8 +9,10 @@ import type {
   WaterRegion,
 } from '../map/GameMap.js';
 import { boundsOf, circleIntersectsPolygon, polygonArea } from '../map/geometry.js';
+import { rasterizeWalkability } from '../navigation/walkability.js';
 import { assertValidMap } from '../validation/MapValidator.js';
 import { gridToPolygons } from './contours.js';
+import { generateForests, markWalkableInside } from './forests.js';
 import { generateRoads } from './roads/RoadGenerator.js';
 import { generateTerrain } from './terrain/TerrainGenerator.js';
 import { sampleField } from './sampleField.js';
@@ -28,6 +31,13 @@ const ROAD_CLEARANCE = 3;
 const MIN_DIMENSION = 128;
 const MAX_DIMENSION = 4096;
 const MAX_TREES = 8000;
+
+/**
+ * Resolution the generator measures `walkableInside` at. A consumer bakes walkability at whatever
+ * tile size it plays at, and the boolean it reads was measured here, so the number is published
+ * alongside it rather than left to look universal.
+ */
+const FOREST_CLEARANCE_CELL = 8;
 
 function mixSeed(seed: number): number {
   let mixed = 2166136261;
@@ -417,8 +427,10 @@ export function generateMap(config: GenerationConfig): GameMap {
   const random = new Random(mixSeed(resolved.seed) ^ 0x51f15e);
   const roadRandom = new Random(mixSeed(resolved.seed) ^ 0x2f1c93);
   const roads = generateRoads(resolved, fields, water, terrain, () => roadRandom.next());
+  const vegetation = generateTrees(resolved, fields, water, random, impassable, roads);
+  const forests: ForestEntity[] = generateForests(vegetation);
   const map: GameMap = {
-    version: '1.0',
+    version: '1.1',
     metadata: {
       id: `generated-${resolved.seed}-${resolved.width}x${resolved.height}`,
       seed: resolved.seed,
@@ -443,12 +455,16 @@ export function generateMap(config: GenerationConfig): GameMap {
       ...terrain,
     ],
     water,
-    vegetation: generateTrees(resolved, fields, water, random, impassable, roads),
+    vegetation,
+    forests,
     structures: [],
     roads,
     barriers: [],
     metadataLayers: { fields, generation: resolved, waterLevel: level },
   };
+  // Forests do not block, so this grid is the same one a consumer would bake and does not depend on
+  // them. Measuring the clearings against it is what stops the field being a guess.
+  markWalkableInside(forests, rasterizeWalkability(map, { cellSize: FOREST_CLEARANCE_CELL }));
   assertValidMap(map);
   return map;
 }

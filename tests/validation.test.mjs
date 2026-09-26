@@ -3,7 +3,7 @@ import test from 'node:test';
 import { exportMap, importMap, validateMap } from '../dist/index.js';
 
 const makeMap = () => ({
-  version: '1.0',
+  version: '1.1',
   metadata: { id: 'validation-fixture', seed: 42 },
   bounds: { width: 100, height: 100 },
   terrain: [
@@ -22,6 +22,7 @@ const makeMap = () => ({
     },
   ],
   water: [],
+  forests: [],
   vegetation: [
     {
       id: 'tree-1',
@@ -42,6 +43,7 @@ const makeMap = () => ({
       terrain: [0, 0.5, 1, 0.5],
       elevation: [0, 0, 0, 0],
       moisture: [1, 1, 1, 1],
+      forests: [],
       vegetation: [0.5, 0.5, 0.5, 0.5],
     },
   },

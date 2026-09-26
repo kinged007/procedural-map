@@ -110,11 +110,13 @@ test('a chunk bake stays under a millisecond with the tree count at its ceiling'
   console.log(
     `      ${chunksX * chunksY} chunk bakes over ${map.vegetation.length} trees: p50 ${(timing.p50 / coordinates.length).toFixed(3)}ms, p95 ${(timing.p95 / coordinates.length).toFixed(3)}ms per chunk`,
   );
-  // The commission's gate is under 1ms per chunk, which this measures at about 0.4ms. The bound is
-  // set to 2ms so a machine twice as slow still passes. The cost is currently linear in tree count;
-  // the forest entities replace that scan with a hull broadphase, and the margin goes with them.
+  // The commission's gate is under 1ms per chunk. The grove broadphase brought this to 0.13ms, so
+  // the bound is set to 0.5ms, which still passes on a machine four times slower. A chunk bake costs
+  // one bounds test per grove plus the trunks of the groves it touches, so it follows the grove count
+  // rather than the tree count; the remaining flat scan over grove bounds is worth indexing only if
+  // a bake ever shows up in a frame budget.
   assert.ok(
-    timing.p95 / coordinates.length < 2,
+    timing.p95 / coordinates.length < 0.5,
     `per-chunk bake took ${(timing.p95 / coordinates.length).toFixed(2)}ms`,
   );
 });

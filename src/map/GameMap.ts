@@ -53,6 +53,29 @@ export interface VegetationEntity extends MapEntity {
   collision: { type: 'circle'; center: Point; radius: number };
 }
 
+/** One tree inside a `ForestEntity`. The same entity also appears in `vegetation`. */
+export type ForestTree = VegetationEntity;
+
+export interface ForestEntity extends MapEntity {
+  type: 'forest';
+  species: 'mixed' | 'oak' | 'birch';
+  /**
+   * Convex hull of the grove, for a broadphase bounds test, rendering and a minimap. It is not a
+   * collision shape: a grove's clearings have to stay walkable, so `collision` is deliberately absent
+   * and the trunks in `trees` are what block movement.
+   */
+  geometry: PolygonGeometry;
+  trees: ForestTree[];
+  asset: AssetReference;
+  metadata: {
+    treeCount: number;
+    /** Share of the hull's area covered by tree canopies, as a percentage. */
+    densityPct: number;
+    /** Whether the walkability raster still reports open ground inside the hull. */
+    walkableInside: boolean;
+  };
+}
+
 export interface RoadEntity extends MapEntity {
   type: 'road';
   kind: 'primary' | 'secondary' | 'path';
@@ -73,7 +96,7 @@ export interface SpatialFields {
 }
 
 export interface GameMap {
-  version: '1.0';
+  version: '1.1';
   metadata: {
     id: string;
     seed?: number;
@@ -84,6 +107,7 @@ export interface GameMap {
   terrain: TerrainRegion[];
   water: WaterRegion[];
   vegetation: VegetationEntity[];
+  forests: ForestEntity[];
   structures: MapEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];

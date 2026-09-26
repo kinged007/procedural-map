@@ -99,6 +99,13 @@ spawnCandidates(raster, map, { count: 8, minSeparation: 200 });
 A cell is blocked if any part of it is covered by water or rock. The rule is stated, with its
 consequences, in [Consuming generated maps](docs/consuming-maps.md).
 
+Trees are not in that grid, because a trunk blocks a small circle inside a large canopy and baking the
+canopy would seal the clearings between trees. Each map also carries `forests`, the groves its trees
+belong to, as a convex hull plus the trees inside. A chunk bake uses the hulls as a broadphase, so it
+costs what the wood next to it costs rather than what the whole map costs, and `metadata
+.walkableInside` on a forest tells you whether there is clear ground inside its hull before you decide
+to seal it. A forest has no `collision`, on purpose: a grove is not a wall.
+
 The Canvas renderer is available from the `fieldwork-map/rendering` subpath. Supply it with an HTML canvas and either the built-in `defaultTheme` or a custom `MapTheme`.
 
 ```js
@@ -114,7 +121,7 @@ renderer.render(map, { theme: defaultTheme, view: 'styled' });
 | Document                                           | What it covers                                                                                                                                                      |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Consuming generated maps](docs/consuming-maps.md) | **Start here if you are consuming a map in a game.** What the generator produces, what it expects your engine to do, cost and limits, and what is not produced yet. |
-| [GameMap v1.0 schema](docs/gamemap-schema.md)      | Field-by-field structure of the exported JSON, with worked examples taken from a real generated map, and every validation rule.                                     |
+| [GameMap v1.1 schema](docs/gamemap-schema.md)      | Field-by-field structure of the exported JSON, with worked examples taken from a real generated map, and every validation rule.                                     |
 | [Generation](docs/generation.md)                   | How each layer is produced: fields, water, terrain classification, vegetation, and roads, and how the controls affect the result.                                   |
 | [Architecture](docs/architecture.md)               | Where the product boundary sits and how the modules divide up.                                                                                                      |
 | [PRD](../PRD.md)                                   | Requirements, design principles, and the roadmap.                                                                                                                   |

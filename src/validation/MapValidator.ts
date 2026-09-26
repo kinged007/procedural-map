@@ -364,7 +364,7 @@ export function validateMap(data: unknown): ValidationResult {
     const validator = new Validator();
     if (!isRecord(data)) return { valid: false, errors: ['map: must be an object'] };
     validator.jsonValue(data, 'map');
-    if (data.version !== '1.0') validator.error('version', 'must be supported version "1.0"');
+    if (data.version !== '1.1') validator.error('version', 'must be supported version "1.1"');
     if (!isRecord(data.metadata)) validator.error('metadata', 'must be an object');
     else {
       if (typeof data.metadata.id !== 'string' || data.metadata.id.length === 0)
@@ -390,6 +390,7 @@ export function validateMap(data: unknown): ValidationResult {
       'terrain',
       'water',
       'vegetation',
+      'forests',
       'structures',
       'roads',
       'barriers',
@@ -402,7 +403,10 @@ export function validateMap(data: unknown): ValidationResult {
         if (!Array.isArray(entities)) continue;
         entities.forEach((entity, index) => {
           const specialized =
-            collection === 'terrain' || collection === 'water' || collection === 'vegetation';
+            collection === 'terrain' ||
+            collection === 'water' ||
+            collection === 'vegetation' ||
+            collection === 'forests';
           validator.entity(entity, `${collection}[${index}]`, bounds!, !specialized);
           if (!isRecord(entity)) return;
           if (
@@ -484,6 +488,70 @@ export function validateMap(data: unknown): ValidationResult {
             )
               validator.error(`${collection}[${index}].radius`, 'must fit inside map bounds');
           }
+          if (collection === 'forests' && isRecord(entity)) {
+            const label = `${collection}[${index}]`;
+            // A forest is the one entity that must not carry collision. Its hull deliberately
+            // over-covers the ground between its trees, so treating it as a shape to collide with
+            // would seal the clearings the trees leave walkable. The circles in `trees` are what
+            // block, and a consumer that reads a hull as a wall is a bug worth failing on.
+            if (entity.collision !== undefined)
+              validator.error(
+                `${label}.collision`,
+                'must be absent: a forest hull is a broadphase shape, not a collision shape',
+              );
+            if (
+              entity.type !== 'forest' ||
+              !['mixed', 'oak', 'birch'].includes(entity.species as string) ||
+              !validator.polygon(entity.geometry, `${label}.geometry`, bounds!) ||
+              !Array.isArray(entity.trees) ||
+              entity.trees.length < 2
+            )
+              validator.error(
+                label,
+                'must be a forest with a species, a hull, and at least two trees',
+              );
+            if (Array.isArray(entity.trees))
+              entity.trees.forEach((tree, treeIndex) => {
+                if (
+                  !isRecord(tree) ||
+                  tree.type !== 'tree' ||
+                  !validator.point(
+                    tree.position,
+                    `${label}.trees[${treeIndex}].position`,
+                    bounds!,
+                  ) ||
+                  !validator.finite(tree.radius, `${label}.trees[${treeIndex}].radius`) ||
+                  (tree.radius as number) <= 0 ||
+                  !isRecord(tree.collision) ||
+                  tree.collision.type !== 'circle' ||
+                  !validator.collision(
+                    tree.collision,
+                    `${label}.trees[${treeIndex}].collision`,
+                    bounds!,
+                  )
+                )
+                  validator.error(
+                    `${label}.trees[${treeIndex}]`,
+                    'must be a tree with position, positive radius, and circle collision',
+                  );
+                else if (
+                  !pointEquals(tree.position as Point, (tree.collision as { center: Point }).center)
+                )
+                  validator.error(
+                    `${label}.trees[${treeIndex}].collision.center`,
+                    'must match tree position',
+                  );
+              });
+            if (!isRecord(entity.metadata) || !Number.isInteger(entity.metadata.treeCount))
+              validator.error(`${label}.metadata.treeCount`, 'must be an integer');
+            if (
+              isRecord(entity.metadata) &&
+              !validator.finite(entity.metadata.densityPct, `${label}.metadata.densityPct`)
+            )
+              validator.error(`${label}.metadata.densityPct`, 'must be a finite number');
+            if (isRecord(entity.metadata) && typeof entity.metadata.walkableInside !== 'boolean')
+              validator.error(`${label}.metadata.walkableInside`, 'must be a boolean');
+          }
         });
       }
       if (
@@ -524,6 +592,36 @@ export function validateMap(data: unknown): ValidationResult {
                     `must not overlap water[${waterIndex}]`,
                   );
               }
+    }
+
+    // A tree is published twice, once in `vegetation` and once inside the forest that groups it, so
+    // that a consumer wanting a flat tree list needs no new code. Two copies of one fact drift unless
+    // something checks them, so the forest's copy has to be the same tree.
+    if (
+      validator.errors.length === 0 &&
+      Array.isArray(data.vegetation) &&
+      Array.isArray(data.forests)
+    ) {
+      const byId = new Map<string, unknown>();
+      for (const tree of data.vegetation)
+        if (isRecord(tree) && typeof tree.id === 'string') byId.set(tree.id, tree);
+      data.forests.forEach((forest, forestIndex) => {
+        if (!isRecord(forest) || !Array.isArray(forest.trees)) return;
+        const seen = new Set<string>();
+        forest.trees.forEach((tree, treeIndex) => {
+          const label = `forests[${forestIndex}].trees[${treeIndex}]`;
+          if (!isRecord(tree) || typeof tree.id !== 'string') return;
+          const original = byId.get(tree.id);
+          if (!original) {
+            validator.error(label, 'must be a tree that also appears in vegetation');
+            return;
+          }
+          if (seen.has(tree.id)) validator.error(label, 'must not repeat a tree within its forest');
+          seen.add(tree.id);
+          if (JSON.stringify(tree) !== JSON.stringify(original))
+            validator.error(label, 'must match the tree of the same id in vegetation');
+        });
+      });
     }
     if (data.metadataLayers !== undefined) {
       if (!isRecord(data.metadataLayers)) validator.error('metadataLayers', 'must be an object');

@@ -1,6 +1,6 @@
 # Architecture
 
-The canonical product boundary is `GameMap` v1.0. Generation, native JSON import, and future external import adapters produce this model. Consumers use the same geometry, semantic entities, and asset references regardless of source.
+The canonical product boundary is `GameMap` v1.1. Generation, native JSON import, and future external import adapters produce this model. Consumers use the same geometry, semantic entities, and asset references regardless of source.
 
 ```
 generation / import adapter -> GameMap -> validation -> export, renderer, game consumer
@@ -26,11 +26,28 @@ The MVP includes the `temperate` default theme. `MapTheme` lets a renderer subst
 
 ## Map guarantees
 
-All geometry uses absolute world coordinates. Bounds define the valid rectangle from `(0, 0)` through `(width, height)`. The validator requires finite values, unique entity IDs, supported version `1.0`, valid geometry, and entity coordinates within the bounds. Generated trees do not overlap water.
+All geometry uses absolute world coordinates. Bounds define the valid rectangle from `(0, 0)` through `(width, height)`. The validator requires finite values, unique entity IDs, supported version `1.1`, valid geometry, and entity coordinates within the bounds. Generated trees do not overlap water.
 
 Terrain classification is a separate stage over the generated fields. It contours the combined terrain and moisture score into `meadow` and `scrub` overlays using the same marching-squares module as water, kept in `generation/contours.ts`.
 
 `metadataLayers` is optional canonical metadata. Generator output stores debug fields there so they survive native JSON export and import. Consumers may ignore these layers.
+
+## Forests
+
+`generation/forests.ts` groups the generated trees into groves after they are placed. Trees link to
+their nearest neighbour within 26 units, the links are walked as connected components through spatial
+buckets, and a component of three or more trees becomes a `ForestEntity`: the convex hull of its
+trees, the trees themselves, a species taken from the majority, canopy cover, and a measured answer to
+whether there is walkable ground inside the hull.
+
+The hull exists for the read path. `navigation`'s `chunkTile` tests each forest's bounds box and then
+only walks the trunks of the forests a chunk touches, so a chunk bake costs what the wood next to it
+costs rather than what the whole map costs.
+
+Linking by proximity chains in dense woodland, so an oversized component is split on its wider axis at
+the median until each part holds at most 128 trees. Generation does depend on `navigation` for one
+internal 8-unit raster, used only to measure `walkableInside` and discarded; the generated map carries
+no grid, because the canonical format should not pin a consumer to one tile size.
 
 ## Walkability
 

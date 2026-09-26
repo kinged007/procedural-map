@@ -16,7 +16,7 @@ test('generation is byte-stable for the same config', () => {
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(
     stableHash(first),
-    'fc524e170433c1f77fca96dca50c35895b196b0cd9f84a51bbcd177700a7465e',
+    'aa1ff565bf3c12f340b0a46c69e436b13c29fa2d49cd4d3160f8e0c23f7bcd76',
   );
 });
 

@@ -88,7 +88,7 @@ runtime.
 ### 2. Blockers
 
 Every blocking feature carries a `collision` object. There is no separate impassable list, so a
-consumer does not need to know which kind of feature it is looking at:
+consumer does not know which kind of feature it is looking at:
 
 ```js
 const blockers = [
@@ -185,14 +185,43 @@ const chunk = chunkTile(raster, map, chunkX, chunkY, { chunkSize: 32 });
 chunk[y * chunkSize + x]; // 0 open, 1 blocked
 ```
 
-Bake a chunk once, when the camera first reaches it, and keep the result. The bake is the expensive
-part; the lookup afterwards is an array read. That split is what keeps the per-frame cost
-independent of how much map you generated. On a 4096x4096 map at the 8,000 tree ceiling, a chunk
-bake is around 0.4ms and a lookup is a byte fetch.
+The trunk step uses the grove hulls as a broadphase. A chunk tests each forest's bounds box and then walks only the trunks of the forests whose box it touches, so a bake costs what the wood near the chunk costs rather than what the whole map costs. Bake a chunk once, when the camera first reaches it, and keep the result. The bake is the expensive part; the lookup afterwards is an array read. That split is what keeps the per-frame cost independent of how much map you generated. On a 4096x4096 map at the 8,000 tree ceiling, a 32-world-unit chunk bakes in 0.045ms, against 0.29ms scanning every tree; a 1024-world-unit chunk takes 0.18ms, against 0.35ms.
 
-The trunk step currently tests every tree in the map, so a bake costs a few hundred microseconds
-rather than a fixed amount. If your tree count grows past the generator's ceiling, that is the first
-thing to replace with a broadphase.
+What a bake still costs is one bounds test per grove, so it follows the grove count and not the tree
+count. Index the grove bounds into a uniform grid if bakes ever land in a frame budget; nothing here
+needs one at the generator's own ceilings.
+
+### Forests
+
+A forest is a grove of trees published as one entity, and it exists to serve the broadphase above. It
+carries the trees inside it, a convex hull around them, and three fields worth reading.
+
+```js
+import { boundsOf, pointInPolygon } from 'fieldwork-map';
+
+for (const forest of map.forests) {
+  const box = boundsOf(forest.geometry);
+  if (!pointInPolygon(position, forest.geometry)) continue;
+  if (
+    forest.trees.some((tree) => distance(position, tree.collision.center) < tree.collision.radius)
+  )
+    blocked = true;
+}
+```
+
+- `forest.metadata.walkableInside` is measured at 8-unit cells: `true` means there is clear ground
+  inside the hull. This is the field to read before deciding a grove is sealed. Roughly a quarter of
+  groves on a densely wooded map report `false`, which is a true statement about thick wood.
+- `forest.metadata.densityPct` is canopy cover, saturated at 100. Useful for thinning distant wood.
+- `forest.species` is `oak`, `birch`, or `mixed`, from the majority of trees inside.
+
+A forest deliberately has **no** `collision`. A grove is not a wall, and the trunks block while the
+clearings between them stay walkable. Adding `collision` to a forest is a validation error, because
+the clearings are the point.
+
+Trees appear twice in a map: once in `vegetation` as a flat list, and once inside the forest they
+belong to. The copies are identical and validation fails if they drift. Use `vegetation` when you
+want every tree, and a forest's `trees` when you already know which grove you are in.
 
 ### Where can a character actually go
 
@@ -297,6 +326,6 @@ The studio in `demo/` exposes all of these as tabs, with sliders for every gener
 
 ## See also
 
-- [GameMap v1.0 schema](gamemap-schema.md) — field-by-field structure
+- [GameMap v1.1 schema](gamemap-schema.md) — field-by-field structure
 - [Generation](generation.md) — how the map is produced
 - [Architecture](architecture.md) — where the boundary sits

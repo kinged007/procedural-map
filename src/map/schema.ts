@@ -11,8 +11,10 @@ const jsonValue = {
 
 export const gameMapSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.0.json',
-  title: 'GameMap v1.0',
+  $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.1.json',
+  title: 'GameMap v1.1',
+  description:
+    'A forest carries no collision. Its geometry is a hull for broadphase, rendering and a minimap, and it deliberately over-covers the clearings between trees so that a consumer can test one bounds box instead of every tree on the map. Movement is blocked by the circles in the forest tree list, never by the hull.',
   type: 'object',
   required: [
     'version',
@@ -21,17 +23,19 @@ export const gameMapSchema = {
     'terrain',
     'water',
     'vegetation',
+    'forests',
     'structures',
     'roads',
     'barriers',
   ],
   properties: {
-    version: { const: '1.0' },
+    version: { const: '1.1' },
     metadata: { $ref: '#/$defs/mapMetadata' },
     bounds: { $ref: '#/$defs/bounds' },
     terrain: { type: 'array', items: { $ref: '#/$defs/terrain' } },
     water: { type: 'array', items: { $ref: '#/$defs/water' } },
     vegetation: { type: 'array', items: { $ref: '#/$defs/tree' } },
+    forests: { type: 'array', items: { $ref: '#/$defs/forest' } },
     structures: { type: 'array', items: { $ref: '#/$defs/entity' } },
     roads: { type: 'array', items: { $ref: '#/$defs/road' } },
     barriers: { type: 'array', items: { $ref: '#/$defs/entity' } },
@@ -202,6 +206,36 @@ export const gameMapSchema = {
                 center: { $ref: '#/$defs/point' },
                 radius: { type: 'number', exclusiveMinimum: 0 },
               },
+            },
+          },
+        },
+      ],
+    },
+    forest: {
+      allOf: [
+        { $ref: '#/$defs/entity' },
+        {
+          type: 'object',
+          // Collision is listed as forbidden rather than merely omitted, so a consumer that assumes
+          // every blocking feature carries one fails loudly on a forest rather than treating a hull
+          // as a wall. The circles in `trees` are what block.
+          required: ['species', 'geometry', 'trees', 'asset', 'metadata'],
+          not: { required: ['collision'] },
+          properties: {
+            type: { const: 'forest' },
+            species: { enum: ['mixed', 'oak', 'birch'] },
+            geometry: { $ref: '#/$defs/polygon' },
+            trees: { type: 'array', minItems: 2, items: { $ref: '#/$defs/tree' } },
+            asset: { $ref: '#/$defs/asset' },
+            metadata: {
+              type: 'object',
+              required: ['treeCount', 'densityPct', 'walkableInside'],
+              properties: {
+                treeCount: { type: 'integer', minimum: 2 },
+                densityPct: { type: 'number', minimum: 0 },
+                walkableInside: { type: 'boolean' },
+              },
+              additionalProperties: { $ref: '#/$defs/jsonValue' },
             },
           },
         },
