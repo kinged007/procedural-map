@@ -16,7 +16,7 @@ test('generation is byte-stable for the same config', () => {
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(
     stableHash(first),
-    '68090e0d210757e4f0da97f17b32f165e5ea472650b784de8133ffeea1ed4e44',
+    '1c9eb2c92ee5a729ad9d39e31aedfae61484df12de95a30e414307e3fd5f2cab',
   );
 });
 
@@ -110,6 +110,100 @@ test('the emitted rock polygon covers the high ground, not the low ground', () =
       `seed ${seed}: rock polygon covers ${(actual * 100).toFixed(1)}% of the map, expected about ${(expected * 100).toFixed(1)}%`,
     );
   }
+});
+
+test('roads form a valid network on every seed and map size', () => {
+  for (const config of [
+    { seed: 583921 },
+    { seed: 42, width: 1024, height: 768 },
+    { seed: 7, width: 800, height: 600 },
+    { seed: 0, width: 640, height: 480, water: { amount: 0.3 } },
+    { seed: 12345, width: 512, height: 512 },
+  ]) {
+    const map = generateMap(config);
+    assert.ok(map.roads.length > 0, `expected roads for seed ${config.seed}`);
+    for (const road of map.roads) {
+      assert.ok(['primary', 'secondary', 'path'].includes(road.kind));
+      assert.equal(road.type, 'road');
+      assert.ok(road.path.length >= 2, 'a road needs at least two points');
+      assert.ok(road.width > 0, 'a road needs a positive width');
+      assert.equal(road.collision.type, 'polygon');
+      // The ribbon is built from the centreline, so it must have two points per centreline point.
+      assert.equal(
+        road.collision.points.length,
+        road.path.length * 2,
+        `road ${road.id} ribbon should match its centreline`,
+      );
+      for (const point of [...road.path, ...road.collision.points]) {
+        assert.ok(point.x >= 0 && point.x <= map.bounds.width, `road ${road.id} leaves the map`);
+        assert.ok(point.y >= 0 && point.y <= map.bounds.height, `road ${road.id} leaves the map`);
+      }
+    }
+  }
+});
+
+test('road density scales the network', () => {
+  const counts = [0, 0.25, 0.5, 0.75, 1].map(
+    (density) => generateMap({ seed: 583921, roads: { density } }).roads.length,
+  );
+  for (let i = 1; i < counts.length; i += 1)
+    assert.ok(
+      counts[i] >= counts[i - 1],
+      `density should not reduce the network: ${counts.join(', ')}`,
+    );
+  assert.ok(
+    counts[counts.length - 1] > counts[0] * 2,
+    `density should have a real effect: ${counts.join(', ')}`,
+  );
+});
+
+test('road tiers are distinct and each has a sensible width', () => {
+  const map = generateMap({ seed: 583921, roads: { density: 1 } });
+  const widths = new Map();
+  for (const road of map.roads) widths.set(road.kind, road.width);
+  assert.ok(widths.has('primary') && widths.has('secondary') && widths.has('path'));
+  // A primary must be wider than a secondary, which must be wider than a path.
+  assert.ok(widths.get('primary') > widths.get('secondary'), 'primary should be widest');
+  assert.ok(widths.get('secondary') > widths.get('path'), 'secondary should be wider than a path');
+});
+
+test('roads stay apart from each other except where they branch', () => {
+  // Parallel roads that overlap read as a single smeared stripe. A branch is expected to touch the
+  // road it grew from, so only that pair is allowed to be close.
+  const map = generateMap({ seed: 583921, roads: { density: 1 } });
+  const shortSide = Math.min(map.bounds.width, map.bounds.height);
+  const separation = shortSide * 0.08;
+  const distanceToSegment = (point, a, b) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const t =
+      lengthSquared === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared));
+    return Math.hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy));
+  };
+  for (let i = 0; i < map.roads.length; i += 1)
+    for (let j = i + 1; j < map.roads.length; j += 1) {
+      const a = map.roads[i];
+      const b = map.roads[j];
+      // A branch is required to touch its parent, so the shared junction is skipped.
+      const touching = a.path.some((p) => b.path.some((q) => Math.hypot(p.x - q.x, p.y - q.y) < 1));
+      if (touching) continue;
+      for (const point of a.path)
+        for (let k = 1; k < b.path.length; k += 1)
+          assert.ok(
+            distanceToSegment(point, b.path[k - 1], b.path[k]) > separation,
+            `${a.id} and ${b.id} overlap where they are not joined`,
+          );
+    }
+});
+
+test('road generation is skipped when the map is mostly water', () => {
+  // With almost no dry ground, a network would be meaningless, and routing every candidate would be
+  // wasted work.
+  const map = generateMap({ seed: 4, width: 512, height: 512, water: { amount: 1 } });
+  assert.equal(map.roads.length, 0, 'a fully flooded map has no roads');
 });
 
 test('rock publishes a collision polygon covering the region', () => {

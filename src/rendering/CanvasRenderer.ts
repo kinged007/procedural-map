@@ -1,4 +1,10 @@
-import type { CollisionGeometry, GameMap, Point, PolygonGeometry } from '../map/GameMap.js';
+import type {
+  CollisionGeometry,
+  GameMap,
+  Point,
+  PolygonGeometry,
+  RoadEntity,
+} from '../map/GameMap.js';
 import type { MapTheme } from '../themes/MapTheme.js';
 import { defaultTheme } from '../themes/DefaultTheme.js';
 import { resolveTreeAsset } from '../themes/AssetResolver.js';
@@ -92,6 +98,29 @@ function fillField(
     map.bounds.height,
   );
   context.restore();
+}
+
+/**
+ * Draws roads as ribbons along their centrelines, each with a darker casing under a lighter surface.
+ * The casing is what makes a road read as a road at map scale instead of a coloured stripe. The two
+ * passes are separated because a single pass per road would draw a later road's casing over an
+ * earlier road's surface at a junction.
+ */
+function drawRoads(context: CanvasRenderingContext2D, roads: RoadEntity[], theme: MapTheme): void {
+  context.lineJoin = 'round';
+  context.lineCap = 'round';
+  for (const pass of ['casing', 'surface'] as const) {
+    for (const road of roads) {
+      if (road.path.length < 2) continue;
+      context.beginPath();
+      context.moveTo(road.path[0].x, road.path[0].y);
+      for (let index = 1; index < road.path.length; index += 1)
+        context.lineTo(road.path[index].x, road.path[index].y);
+      context.lineWidth = pass === 'casing' ? road.width + 3 : road.width;
+      context.strokeStyle = pass === 'casing' ? theme.roads.casing : theme.roads[road.kind];
+      context.stroke();
+    }
+  }
 }
 
 function drawCollision(context: CanvasRenderingContext2D, collision: CollisionGeometry) {
@@ -217,6 +246,8 @@ export class CanvasRenderer {
           context.restore();
         }
       }
+
+      if (styled && map.roads.length > 0) drawRoads(context, map.roads, theme);
 
       if (styled) {
         for (const tree of [...map.vegetation].sort((a, b) => a.position.y - b.position.y)) {

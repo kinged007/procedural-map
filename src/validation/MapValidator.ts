@@ -422,6 +422,25 @@ export function validateMap(data: unknown): ValidationResult {
           )
             validator.error(`${collection}[${index}]`, 'must be a terrain region');
           if (
+            collection === 'roads' &&
+            (entity.type !== 'road' ||
+              !['primary', 'secondary', 'path'].includes(entity.kind as string) ||
+              !Array.isArray(entity.path) ||
+              entity.path.length < 2 ||
+              !entity.path.every((point) =>
+                validator.point(point, `${collection}[${index}].path`, bounds!),
+              ) ||
+              !validator.finite(entity.width, `${collection}[${index}].width`) ||
+              (entity.width as number) <= 0 ||
+              !isRecord(entity.collision) ||
+              entity.collision.type !== 'polygon' ||
+              !validator.polygon(entity.collision, `${collection}[${index}].collision`, bounds!))
+          )
+            validator.error(
+              `${collection}[${index}]`,
+              'must be a road with a polyline and polygon collision',
+            );
+          if (
             collection === 'water' &&
             (entity.type !== 'water' ||
               entity.kind !== 'lake' ||

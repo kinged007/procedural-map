@@ -33,7 +33,7 @@ export const gameMapSchema = {
     water: { type: 'array', items: { $ref: '#/$defs/water' } },
     vegetation: { type: 'array', items: { $ref: '#/$defs/tree' } },
     structures: { type: 'array', items: { $ref: '#/$defs/entity' } },
-    roads: { type: 'array', items: { $ref: '#/$defs/entity' } },
+    roads: { type: 'array', items: { $ref: '#/$defs/road' } },
     barriers: { type: 'array', items: { $ref: '#/$defs/entity' } },
     metadataLayers: { $ref: '#/$defs/metadataLayers' },
   },
@@ -132,6 +132,27 @@ export const gameMapSchema = {
             type: { const: 'terrain' },
             kind: { enum: ['grass', 'meadow', 'scrub', 'rock', 'beach'] },
             geometry: { $ref: '#/$defs/polygon' },
+            collision: {
+              allOf: [
+                { $ref: '#/$defs/polygon' },
+                { type: 'object', required: ['type'], properties: { type: { const: 'polygon' } } },
+              ],
+            },
+          },
+        },
+      ],
+    },
+    road: {
+      allOf: [
+        { $ref: '#/$defs/entity' },
+        {
+          type: 'object',
+          required: ['kind', 'path', 'width', 'collision'],
+          properties: {
+            type: { const: 'road' },
+            kind: { enum: ['primary', 'secondary', 'path'] },
+            path: { type: 'array', minItems: 2, items: { $ref: '#/$defs/point' } },
+            width: { type: 'number', exclusiveMinimum: 0 },
             collision: {
               allOf: [
                 { $ref: '#/$defs/polygon' },

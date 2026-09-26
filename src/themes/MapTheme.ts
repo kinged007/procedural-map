@@ -10,5 +10,6 @@ export interface MapTheme {
     detail: string;
   };
   water: { fill: string; shore: string; line: string; ripple: string };
+  roads: { primary: string; secondary: string; path: string; casing: string };
   vegetation: { canopy: string[]; outline: string; trunk: string; shadow: string };
 }

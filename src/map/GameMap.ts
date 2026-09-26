@@ -53,6 +53,16 @@ export interface VegetationEntity extends MapEntity {
   collision: { type: 'circle'; center: Point; radius: number };
 }
 
+export interface RoadEntity extends MapEntity {
+  type: 'road';
+  kind: 'primary' | 'secondary' | 'path';
+  /** Ordered centreline, from one end of the road to the other. */
+  path: Point[];
+  /** Full width of the road surface, in world units. */
+  width: number;
+  collision: { type: 'polygon' } & PolygonGeometry;
+}
+
 export interface SpatialFields {
   columns: number;
   rows: number;
@@ -75,7 +85,7 @@ export interface GameMap {
   water: WaterRegion[];
   vegetation: VegetationEntity[];
   structures: MapEntity[];
-  roads: MapEntity[];
+  roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };
 }

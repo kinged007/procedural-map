@@ -9,6 +9,7 @@ import type {
 import { circleIntersectsPolygon, polygonArea } from '../map/geometry.js';
 import { assertValidMap } from '../validation/MapValidator.js';
 import { gridToPolygons } from './contours.js';
+import { generateRoads } from './roads/RoadGenerator.js';
 import { generateTerrain } from './terrain/TerrainGenerator.js';
 import { sampleField } from './sampleField.js';
 import {
@@ -162,6 +163,15 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         config.vegetation?.clustering,
         DEFAULT_CONFIG.vegetation.clustering,
         'vegetation.clustering',
+        0,
+        1,
+      ),
+    },
+    roads: {
+      density: resolveNumber(
+        config.roads?.density,
+        DEFAULT_CONFIG.roads.density,
+        'roads.density',
         0,
         1,
       ),
@@ -378,6 +388,8 @@ export function generateMap(config: GenerationConfig): GameMap {
   const terrain = generateTerrain(resolved, fields, water);
   const impassable = terrain.filter((region) => region.collision !== undefined);
   const random = new Random(mixSeed(resolved.seed) ^ 0x51f15e);
+  const roadRandom = new Random(mixSeed(resolved.seed) ^ 0x2f1c93);
+  const roads = generateRoads(resolved, fields, water, terrain, () => roadRandom.next());
   const map: GameMap = {
     version: '1.0',
     metadata: {
@@ -406,7 +418,7 @@ export function generateMap(config: GenerationConfig): GameMap {
     water,
     vegetation: generateTrees(resolved, fields, water, random, impassable),
     structures: [],
-    roads: [],
+    roads,
     barriers: [],
     metadataLayers: { fields, generation: resolved, waterLevel: level },
   };

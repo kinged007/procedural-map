@@ -1218,6 +1218,22 @@ A strict partition, in which every region is disjoint and covers the map exactly
 
 ---
 
+# 12.3 Road geometry and connectivity
+
+A road is a centreline plus a width. The centreline is an ordered polyline from one end of the road to the other, and the width is the full width of the surface. The collision polygon is the ribbon formed by offsetting the centreline to each side, so collision covers the visible road and nothing else.
+
+- A road is one entity with one centreline. Junctions are not separate entities; two centrelines simply meet.
+- Roads are published as `primary`, `secondary`, or `path`, in descending width.
+- A road that branches from another is required to touch it. Every other pair of roads is kept a minimum distance apart, so a consumer can tell a junction from two roads running alongside each other.
+- Roads cross water and impassable terrain at a high cost, so they prefer open ground and only cross where there is no reasonable alternative. Bridges and formal river crossings are v0.7 work.
+- A ribbon whose ring intersects itself is not a road. Reversals are removed from the centreline before the ribbon is built, and a candidate whose ribbon is still not simple is discarded rather than published.
+- `roads.density` scales the target count per tier. It never drops a tier to zero, so a sparse map is a small network rather than no network.
+- Road generation is skipped when water and impassable terrain together cover more than 55% of the map, since routing has no meaningful result there.
+
+Routing is a greedy walk over a small fan of headings, not a shortest-path search. Each step takes the cheapest heading available, which produces the meander and long detours of a surveyed road rather than a taut path between endpoints.
+
+---
+
 # 29. Roadmap
 
 ## v0.1 — Environmental Generator
