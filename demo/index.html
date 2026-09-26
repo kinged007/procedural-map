@@ -100,6 +100,10 @@
               <option value="2048x2048">Square · 2,048 × 2,048</option>
               <option value="4096x3072">Large · 4,096 × 3,072</option>
             </select>
+            <p class="field-help">
+              Cell size sets walkability granularity. A feature smaller than a cell still blocks
+              that cell, so pick it under your smallest obstacle.
+            </p>
           </div>
           <div class="form-section environment-section">
             <div class="section-heading">
@@ -200,6 +204,10 @@
               ><span class="stat-detail">individual entities</span>
             </div>
             <div class="stat">
+              <span class="stat-label">GROVES</span><strong id="grove-count">—</strong
+              ><span class="stat-detail">hull broadphase</span>
+            </div>
+            <div class="stat">
               <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong
               ><span class="stat-detail">polygon geometry</span>
             </div>
@@ -228,10 +236,21 @@
               ><button data-view="vegetation" aria-pressed="false">Forest</button
               ><button data-view="water" aria-pressed="false">Water</button
               ><button data-view="collision" aria-pressed="false">Collision</button
-              ><button data-view="entities" aria-pressed="false">Entities</button>
+              ><button data-view="entities" aria-pressed="false">Entities</button
+              ><button data-view="navigation" aria-pressed="false">Navigation</button
+              ><button data-view="forests" aria-pressed="false">Forests</button>
             </div>
+            <label class="cell-size-field" for="cell-size"
+              ><span>Cell</span>
+              <select id="cell-size" title="Walkability cell size, in world units">
+                <option value="4">4</option>
+                <option value="8" selected>8</option>
+                <option value="16">16</option>
+                <option value="32">32</option>
+              </select>
+            </label>
             <span class="live-indicator" id="valid-badge"
-              ><span class="status-dot"></span> Valid map</span
+              ><span class="status-dot"></span> <span id="map-version">Valid map</span></span
             >
           </div>
           <div class="map-viewport" id="map-viewport">
@@ -250,7 +269,8 @@
             </div>
             <div class="map-caption">
               <span class="caption-label">FIELD NOTES</span
-              ><span id="view-description">Grassland, open water & clustered woodland</span>
+              ><span id="view-description">Grassland, open water & clustered woodland</span
+              ><span id="navigation-stats" class="caption-stats"></span>
             </div>
             <div class="zoom-controls">
               <button id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button

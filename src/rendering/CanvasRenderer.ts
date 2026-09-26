@@ -8,6 +8,8 @@ import type {
 import type { MapTheme } from '../themes/MapTheme.js';
 import { defaultTheme } from '../themes/DefaultTheme.js';
 import { resolveTreeAsset } from '../themes/AssetResolver.js';
+import type { WalkabilityRaster } from '../navigation/walkability.js';
+import type { NavigableRegion, SpawnCandidate } from '../navigation/regions.js';
 
 export type MapView =
   | 'styled'
@@ -17,13 +19,29 @@ export type MapView =
   | 'vegetation'
   | 'water'
   | 'collision'
-  | 'entities';
+  | 'entities'
+  | 'navigation'
+  | 'forests';
+
+/**
+ * The read path, as data. The renderer does not build it: the caller derives it with the library's own
+ * `rasterizeWalkability`, `navigableRegions`, and `spawnCandidates`, which is the arrangement a real
+ * consumer uses, where the work is done once per map and read per frame.
+ */
+export interface NavigationOverlay {
+  raster: WalkabilityRaster;
+  /** One entry per navigable area, largest first, from `navigableRegions`. */
+  regions?: NavigableRegion[];
+  /** Roomiest ground across the map, from `spawnCandidates`. */
+  candidates?: SpawnCandidate[];
+}
 
 export interface RenderOptions {
   view?: MapView;
   theme?: MapTheme;
   zoom?: number;
   pan?: Point;
+  navigation?: NavigationOverlay;
 }
 
 function polygonPath(context: CanvasRenderingContext2D, geometry: PolygonGeometry) {
@@ -134,9 +152,126 @@ function drawCollision(context: CanvasRenderingContext2D, collision: CollisionGe
   context.stroke();
 }
 
+/**
+ * Draws the walkability grid, the roomiest ground in each navigable area, and the spawn candidates.
+ *
+ * The grid is stretched from one pixel per cell, so the blockiness is the map's own: a lake boundary
+ * follows cell edges because a cell the shoreline merely clips is blocked, not because the polygon is
+ * coarse. Markers are sized in screen space, so they stay legible when the whole map is in view.
+ */
+function drawNavigation(
+  context: CanvasRenderingContext2D,
+  map: GameMap,
+  overlay: NavigationOverlay,
+  scale: number,
+  texture: HTMLCanvasElement | undefined,
+) {
+  if (texture) {
+    context.imageSmoothingEnabled = false;
+    context.drawImage(texture, 0, 0, map.bounds.width, map.bounds.height);
+    context.imageSmoothingEnabled = true;
+  } else {
+    context.fillStyle = '#e7e0cb';
+    context.fillRect(0, 0, map.bounds.width, map.bounds.height);
+  }
+
+  // Roomiest ground per navigable area, ringed at the clearance that earned it the ring. A wide ring is
+  // a place a base fits; a hairline is a gap between two rocks.
+  context.strokeStyle = '#2f6d4f';
+  context.lineWidth = 1.6 / scale;
+  context.setLineDash([6 / scale, 5 / scale]);
+  for (const region of overlay.regions ?? []) {
+    const { x, y } = region.representativeOpenPoint;
+    context.beginPath();
+    context.arc(x, y, Math.max(region.clearance, 5 / scale), 0, Math.PI * 2);
+    context.stroke();
+  }
+  context.setLineDash([]);
+
+  // Candidates get a fixed-size crosshair so they stay findable at any zoom. Their clearance is not
+  // drawn: a candidate with 315 units of room is a circle across a sixth of the map, and six of those
+  // read as boundaries rather than markers. The ring above already shows how much room the map has.
+  context.strokeStyle = '#b8791f';
+  context.fillStyle = '#b8791f';
+  context.lineWidth = 1.6 / scale;
+  for (const candidate of overlay.candidates ?? []) {
+    const { x, y } = candidate.point;
+    const arm = 5 / scale;
+    context.beginPath();
+    context.moveTo(x - arm, y);
+    context.lineTo(x + arm, y);
+    context.moveTo(x, y - arm);
+    context.lineTo(x, y + arm);
+    context.stroke();
+    context.beginPath();
+    context.arc(x, y, 1.8 / scale, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
+/**
+ * Draws each grove's hull, tinted by whether there is walkable ground inside it.
+ *
+ * The tint is the point of the view. A grove whose hull is entirely blocked is not a contradiction, it
+ * is thick wood, and reading `walkableInside` off the map is faster than walking into it.
+ */
+function drawForests(context: CanvasRenderingContext2D, map: GameMap, scale: number) {
+  for (const forest of map.forests) {
+    polygonPath(context, forest.geometry);
+    context.fillStyle = forest.metadata.walkableInside ? '#6f9a6b4d' : '#b45f4533';
+    context.fill();
+    context.strokeStyle = forest.metadata.walkableInside ? '#3f6b46' : '#9c4c3d';
+    context.lineWidth = 1.4 / scale;
+    context.stroke();
+  }
+  // Trunks inside the hull, so the density that produced it is visible. A grove drawn as an empty
+  // outline says nothing about whether the clearings inside it are real.
+  context.fillStyle = '#2f4231';
+  for (const tree of map.vegetation) {
+    context.beginPath();
+    context.arc(
+      tree.position.x,
+      tree.position.y,
+      Math.max(tree.radius * 0.22, 1.1 / scale),
+      0,
+      Math.PI * 2,
+    );
+    context.fill();
+  }
+}
+
 export class CanvasRenderer {
   private context: CanvasRenderingContext2D;
   private transform = { scale: 1, x: 0, y: 0 };
+  private raster: { source: WalkabilityRaster; canvas: HTMLCanvasElement } | undefined;
+
+  /**
+   * Builds the grid as one pixel per cell, once per raster.
+   *
+   * The grid runs to a million cells on a large map, so rebuilding it per frame would allocate four
+   * megabytes of pixels on every pan and zoom to draw something that has not changed. The same split
+   * the read path uses: bake once, read per frame.
+   */
+  private rasterTexture(source: WalkabilityRaster): HTMLCanvasElement | undefined {
+    if (this.raster?.source === source) return this.raster.canvas;
+    const canvas = document.createElement('canvas');
+    canvas.width = source.columns;
+    canvas.height = source.rows;
+    const textureContext = canvas.getContext('2d');
+    if (!textureContext) return undefined;
+    const pixels = textureContext.createImageData(source.columns, source.rows);
+    for (let index = 0; index < source.cells.length; index += 1) {
+      const at = index * 4;
+      const blocked = source.cells[index] === 1;
+      pixels.data[at] = blocked ? 57 : 231;
+      pixels.data[at + 1] = blocked ? 68 : 224;
+      pixels.data[at + 2] = blocked ? 60 : 203;
+      pixels.data[at + 3] = 255;
+    }
+    textureContext.putImageData(pixels, 0, 0);
+    this.raster = { source, canvas };
+    return canvas;
+  }
 
   constructor(private canvas: HTMLCanvasElement) {
     const context = canvas.getContext('2d');
@@ -156,7 +291,13 @@ export class CanvasRenderer {
   }
 
   render(map: GameMap, options: RenderOptions = {}) {
-    const { view = 'styled', theme = defaultTheme, zoom = 1, pan = { x: 0, y: 0 } } = options;
+    const {
+      view = 'styled',
+      theme = defaultTheme,
+      zoom = 1,
+      pan = { x: 0, y: 0 },
+      navigation,
+    } = options;
     const { width, height } = this.canvas.getBoundingClientRect();
     if (!width || !height) return;
     const ratio = Math.min(globalThis.devicePixelRatio || 1, 2);
@@ -325,6 +466,9 @@ export class CanvasRenderer {
           context.fill();
         }
       }
+      if (view === 'navigation' && navigation)
+        drawNavigation(context, map, navigation, scale, this.rasterTexture(navigation.raster));
+      if (view === 'forests') drawForests(context, map, scale);
     }
     context.restore();
     context.strokeStyle = '#435b4a35';

@@ -1,8 +1,16 @@
-import { DEFAULT_CONFIG, exportMap, generateMap, importMap } from '../src/index.js';
+import {
+  DEFAULT_CONFIG,
+  exportMap,
+  generateMap,
+  importMap,
+  navigableRegions,
+  rasterizeWalkability,
+  spawnCandidates,
+} from '../src/index.js';
 import type { GameMap, GenerationConfig, Point, ResolvedGenerationConfig } from '../src/index.js';
 import { polygonArea } from '../src/map/geometry.js';
 import { CanvasRenderer } from '../src/rendering/CanvasRenderer.js';
-import type { MapView } from '../src/rendering/CanvasRenderer.js';
+import type { MapView, NavigationOverlay } from '../src/rendering/CanvasRenderer.js';
 import { resolveGenerationConfig } from '../src/generation/MapGenerator.js';
 
 function element<T extends HTMLElement>(id: string): T {
@@ -20,6 +28,7 @@ const seedInput = element<HTMLInputElement>('seed');
 const generateButton = element<HTMLButtonElement>('generate-button');
 const exportButton = element<HTMLButtonElement>('export-button');
 const importButton = element<HTMLButtonElement>('import-button');
+const cellSizeInput = element<HTMLSelectElement>('cell-size');
 const ranges = ['density', 'water', 'variation', 'clustering', 'roads'] as const;
 const numberFormat = new Intl.NumberFormat('en');
 const descriptions: Record<MapView, string> = {
@@ -31,6 +40,10 @@ const descriptions: Record<MapView, string> = {
   water: 'Canonical water polygons, including islands',
   collision: 'Obstacle geometry · outlined in terracotta',
   entities: 'Individual entity positions in world coordinates',
+  navigation:
+    'The read path a game runs on: walkability cells, roomiest ground per area in green, spawn candidates in amber',
+  forests:
+    'Grove hulls, tinted by whether there is walkable ground inside. Green groves are crossable, terracotta ones are thick wood',
 };
 
 let map: GameMap | undefined;
@@ -40,6 +53,27 @@ let pan: Point = { x: 0, y: 0 };
 let busy = false;
 let frame: number | undefined;
 let dragging: { x: number; y: number; pan: Point; pointerId: number } | undefined;
+let navigation: NavigationOverlay | undefined;
+
+/**
+ * Derives the read path for a map, once.
+ *
+ * This is the arrangement a consumer uses, and the demo is the place to show it: rasterising and
+ * flooding costs tens of milliseconds, which is fine per map and ruinous per frame. Deriving on map
+ * change and handing the result to the renderer is the whole point of the read path.
+ */
+function deriveNavigation(current: GameMap) {
+  const cellSize = Number(cellSizeInput.value);
+  const started = performance.now();
+  const raster = rasterizeWalkability(current, { cellSize });
+  const regions = navigableRegions(raster);
+  const candidates = spawnCandidates(raster, current, { count: 6, minSeparation: 220 });
+  navigation = { raster, regions, candidates };
+  const open = raster.cells.reduce((total, cell) => total + (cell === 0 ? 1 : 0), 0);
+  element('navigation-stats').textContent =
+    `cell ${cellSize} · ${raster.columns}×${raster.rows} grid · ${((open / raster.cells.length) * 100).toFixed(0)}% open · ` +
+    `${regions.length} area${regions.length === 1 ? '' : 's'} · derived in ${Math.round(performance.now() - started)} ms`;
+}
 
 function notify(message: string, error = false) {
   const notification = element('notification');
@@ -115,7 +149,7 @@ function requestRender() {
   frame = requestAnimationFrame(() => {
     frame = undefined;
     if (!map) return;
-    renderer.render(map, { view, zoom, pan });
+    renderer.render(map, { view, zoom, pan, navigation });
     element<HTMLOutputElement>('zoom-value').value = `${Math.round(zoom * 100)}%`;
     element('empty-field').hidden =
       !!map.metadataLayers?.fields ||
@@ -132,7 +166,9 @@ function fit() {
 function showMap(nextMap: GameMap, source: string, elapsed?: number) {
   map = nextMap;
   const { width, height } = map.bounds;
+  deriveNavigation(nextMap);
   element('tree-count').textContent = numberFormat.format(map.vegetation.length);
+  element('grove-count').textContent = numberFormat.format(map.forests.length);
   element('lake-count').textContent = numberFormat.format(map.water.length);
   const coverage =
     (map.water.reduce((total, lake) => total + polygonArea(lake.geometry), 0) / (width * height)) *
@@ -143,11 +179,12 @@ function showMap(nextMap: GameMap, source: string, elapsed?: number) {
   element('seed-display').textContent =
     map.metadata.seed !== undefined ? `SEED ${map.metadata.seed}` : 'AUTHORED MAP';
   element('map-source').textContent = source;
+  element('map-version').textContent = `GameMap ${map.version}`;
   element('map-status-text').textContent =
     elapsed === undefined ? 'Imported · validated' : `Generated in ${Math.round(elapsed)} ms`;
   canvas.setAttribute(
     'aria-label',
-    `Landscape with ${map.vegetation.length} trees and ${map.water.length} water bodies. ${width} by ${height} world units. Drag to pan; use plus and minus to zoom.`,
+    `Landscape with ${map.vegetation.length} trees, ${map.forests.length} groves, and ${map.water.length} water bodies. ${width} by ${height} world units. Drag to pan; use plus and minus to zoom.`,
   );
   element('generation-note').textContent =
     elapsed === undefined
@@ -229,6 +266,12 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((button) => 
   });
 });
 
+cellSizeInput.addEventListener('change', () => {
+  if (!map) return;
+  deriveNavigation(map);
+  requestRender();
+});
+
 exportButton.addEventListener('click', () => {
   if (!map) return;
   try {
@@ -239,7 +282,9 @@ exportButton.addEventListener('click', () => {
     link.download = `map-${map.metadata.seed ?? 'imported'}.json`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    notify('Map exported as GameMap 1.0 JSON. Import this file to restore the same landscape.');
+    notify(
+      `Map exported as GameMap ${map.version} JSON. Import this file to restore the same landscape.`,
+    );
   } catch (error) {
     notify(error instanceof Error ? error.message : 'Unable to export this map.', true);
   }
