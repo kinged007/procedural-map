@@ -20,7 +20,7 @@ const seedInput = element<HTMLInputElement>('seed');
 const generateButton = element<HTMLButtonElement>('generate-button');
 const exportButton = element<HTMLButtonElement>('export-button');
 const importButton = element<HTMLButtonElement>('import-button');
-const ranges = ['density', 'water', 'variation', 'clustering'] as const;
+const ranges = ['density', 'water', 'variation', 'clustering', 'roads'] as const;
 const numberFormat = new Intl.NumberFormat('en');
 const descriptions: Record<MapView, string> = {
   styled: 'Grassland, open water & clustered woodland',
@@ -89,6 +89,7 @@ function configFromControls(): GenerationConfig {
       density: element<HTMLInputElement>('density').valueAsNumber / 100,
       clustering: element<HTMLInputElement>('clustering').valueAsNumber / 100,
     },
+    roads: { density: element<HTMLInputElement>('roads').valueAsNumber / 100 },
   };
 }
 
@@ -103,6 +104,7 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('water').value = String(config.water.amount * 100);
   element<HTMLInputElement>('variation').value = String(config.terrain.variation * 100);
   element<HTMLInputElement>('clustering').value = String(config.vegetation.clustering * 100);
+  element<HTMLInputElement>('roads').value = String(config.roads.density * 100);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);
   refreshRanges();

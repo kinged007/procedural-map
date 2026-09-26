@@ -131,6 +131,12 @@
             <details class="advanced">
               <summary>Advanced settings <span aria-hidden="true">+</span></summary>
               <div class="range-field">
+                <label for="roads"
+                  >Road network<output id="roads-value" for="roads">50%</output></label
+                ><input id="roads" type="range" min="0" max="100" value="50" />
+                <div class="range-hints"><span>Isolated lanes</span><span>Full network</span></div>
+              </div>
+              <div class="range-field">
                 <label for="clustering"
                   >Forest clustering<output id="clustering-value" for="clustering"
                     >80%</output

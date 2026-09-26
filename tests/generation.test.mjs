@@ -16,7 +16,7 @@ test('generation is byte-stable for the same config', () => {
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(
     stableHash(first),
-    '1483a6d8f017df45b017c6d406a94059f6ac9c08fd647e8113a3881b56726dcc',
+    'fc524e170433c1f77fca96dca50c35895b196b0cd9f84a51bbcd177700a7465e',
   );
 });
 
@@ -163,6 +163,47 @@ test('a road never crosses water or impassable rock', () => {
             !pointInPolygon(point, region.geometry),
             `${road.id} runs through rock on seed ${config.seed}`,
           );
+      }
+    }
+  }
+});
+
+test('a road keeps a minimum distance from the shoreline', () => {
+  // The clearance the generator uses, restated here so a change to one without the other is caught.
+  const CLEARANCE = 20;
+  const distanceToSegment = (point, a, b) => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const t =
+      lengthSquared === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared));
+    return Math.hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy));
+  };
+  for (const config of [
+    { seed: 583921 },
+    { seed: 42, width: 1024, height: 768 },
+    { seed: 7, water: { amount: 0.3 } },
+  ]) {
+    const map = generateMap(config);
+    for (const road of map.roads) {
+      // Both ends are checked separately: a road that runs along a bank still has to clear it where
+      // it stops, which is where a setback is easiest to lose.
+      for (const point of [road.path[0], road.path[road.path.length - 1], ...road.path]) {
+        for (const lake of map.water) {
+          const ring = lake.geometry.points;
+          let closest = Infinity;
+          for (let k = 0; k < ring.length; k += 1)
+            closest = Math.min(
+              closest,
+              distanceToSegment(point, ring[k], ring[(k + 1) % ring.length]),
+            );
+          assert.ok(
+            closest >= CLEARANCE - 0.5,
+            `${road.id} ends ${closest.toFixed(1)} units from ${lake.id} on seed ${config.seed}`,
+          );
+        }
       }
     }
   }

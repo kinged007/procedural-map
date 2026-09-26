@@ -6,7 +6,7 @@ import type {
   TerrainRegion,
   WaterRegion,
 } from '../../map/GameMap.js';
-import { boundsOf, pointInPolygon, polygonArea } from '../../map/geometry.js';
+import { boundsOf, circleIntersectsPolygon, polygonArea } from '../../map/geometry.js';
 import { ringIsSimple } from '../terrain/Shoreline.js';
 import type { ResolvedGenerationConfig } from '../GenerationConfig.js';
 import { sampleField } from '../sampleField.js';
@@ -22,6 +22,13 @@ const EDGE_MARGIN = 16;
 
 /** Minimum road length, in world units. A shorter stub is dropped rather than published. */
 const MIN_ROAD_LENGTH = 40;
+
+/**
+ * Distance a road centreline is kept from a water edge, in world units. A road that stops level with
+ * the shoreline reads as cut off rather than routed, so the last step is refused this far out and the
+ * road turns along the bank instead.
+ */
+const SHORE_CLEARANCE = 20;
 
 /** Share of the map covered by water and rock at which road generation is skipped. */
 const BLOCKED_SHARE = 0.55;
@@ -237,7 +244,8 @@ interface RouteCost {
 
 /**
  * Builds the polygon index. Water and rock rings are indexed by their bounding box, so a step near the
- * middle of the map only pays for contours that actually overlap that area.
+ * middle of the map only pays for contours that actually overlap that area. Each water ring is
+ * inserted over its bounds grown by the shore clearance, because a road is refused before it arrives.
  */
 function buildRouteCost(
   config: ResolvedGenerationConfig,
@@ -248,15 +256,31 @@ function buildRouteCost(
   const cell = Math.max(24, Math.round(Math.min(config.width, config.height) * 0.05));
   const waterIndex = new SpatialIndex<PolygonGeometry>(config.width, config.height, cell);
   const rockIndex = new SpatialIndex<PolygonGeometry>(config.width, config.height, cell);
-  for (const lake of water) waterIndex.insert(boundsOf(lake.geometry.points), lake.geometry);
+  for (const lake of water) {
+    const bounds = boundsOf(lake.geometry.points);
+    waterIndex.insert(
+      {
+        minX: bounds.minX - SHORE_CLEARANCE,
+        minY: bounds.minY - SHORE_CLEARANCE,
+        maxX: bounds.maxX + SHORE_CLEARANCE,
+        maxY: bounds.maxY + SHORE_CLEARANCE,
+      },
+      lake.geometry,
+    );
+  }
   for (const region of rock) rockIndex.insert(boundsOf(region.geometry.points), region.geometry);
   return { water: waterIndex, rock: rockIndex, fields, width: config.width, height: config.height };
 }
 
-function covered(index: SpatialIndex<PolygonGeometry>, point: Point): boolean {
-  for (const geometry of index.query(point.x, point.y, point.x, point.y))
-    if (pointInPolygon(point, geometry)) return true;
-  return false;
+/**
+ * True when a point is within `clearance` of any indexed polygon, counting the polygon interior. A
+ * clearance of zero reduces to "inside", which is what impassable terrain wants. Only the contours
+ * overlapping the query box are measured, so a step in open country pays for a few rings.
+ */
+function nearAny(index: SpatialIndex<PolygonGeometry>, point: Point, clearance: number): boolean {
+  return index
+    .query(point.x - clearance, point.y - clearance, point.x + clearance, point.y + clearance)
+    .some((geometry) => circleIntersectsPolygon(point, clearance, geometry));
 }
 
 /**
@@ -264,7 +288,7 @@ function covered(index: SpatialIndex<PolygonGeometry>, point: Point): boolean {
  * or turns away; it never crosses. Bridges and fords are v0.7 work.
  */
 function blocked(point: Point, cost: RouteCost): boolean {
-  return covered(cost.water, point) || covered(cost.rock, point);
+  return nearAny(cost.water, point, SHORE_CLEARANCE) || nearAny(cost.rock, point, 0);
 }
 
 /**
@@ -292,8 +316,8 @@ function insideMap(config: ResolvedGenerationConfig, point: Point): boolean {
  * The walk is a greedy step over a small fan of headings, not a shortest-path search. Each step takes
  * the cheapest heading available, which produces the meander and long detours of a surveyed road
  * rather than a taut path between endpoints. Cost is charged against a budget so the road terminates.
- * Water and rock are refused outright, so a road bends around an obstruction for as long as it takes
- * and ends where the ground runs out.
+ * Water and rock are refused outright, and a step is refused short of the shoreline rather than at it,
+ * so a road bends around an obstruction for as long as it takes and stops with room to spare.
  */
 function growRoad(
   start: Point,

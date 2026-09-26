@@ -1226,6 +1226,7 @@ A road is a centreline plus a width. The centreline is an ordered polyline from 
 - Roads are published as `primary`, `secondary`, or `path`, in descending width.
 - A road that branches from another is required to touch it. Every other pair of roads is kept a minimum distance apart, so a consumer can tell a junction from two roads running alongside each other.
 - A road never enters open water or impassable terrain. A step into either is refused, so a road bends around an obstruction for as long as it can and ends where the ground runs out. It does not cross. Bridges and fords are v0.7 work.
+- A road is kept a minimum distance from any water edge, measured from its centreline. A road that stops level with the shoreline reads as cut off rather than routed, so the refusal happens short of the water and the road turns along the bank instead of ending against it. The clearance is a fixed value in world units, not a share of the map, so it looks the same on a small map and a large one.
 - Trees are not planted on a road or overhanging it. A road is cut through the wood, so its verges are left clear and the map carries a visible clearing along every road. Vegetation is generated after roads for this reason.
 - A ribbon whose ring intersects itself is not a road. Reversals are removed from the centreline before the ribbon is built, and a candidate whose ribbon is still not simple is discarded rather than published.
 - `roads.density` scales the target count per tier. It never drops a tier to zero, so a sparse map is a small network rather than no network.
