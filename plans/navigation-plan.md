@@ -20,11 +20,17 @@ resolved game-side), and buildings, road collision, heightmap, navmesh, region n
 
 4096x4096 at the 8,000 tree ceiling, printed on every run of `tests/worstcase.test.mjs`.
 
-| Measurement                    | Measured               | Bound in the gate |
-| ------------------------------ | ---------------------- | ----------------- |
-| Whole-world bake, cellSize 4   | p95 4.9ms              | < 250ms           |
-| Per-chunk bake, 8,000 trees    | p50 0.10ms, p95 0.13ms | < 0.5ms           |
-| 20,000 lookups, 1280² vs 4096² | 2.19ms vs 1.94ms       | ratio < 2x        |
+| Measurement                    | Measured                         | Bound in the gate |
+| ------------------------------ | -------------------------------- | ----------------- |
+| Whole-world bake, cellSize 4   | p95 5-20ms, load dependent       | < 250ms           |
+| Per-chunk bake, 8,000 trees    | p50 0.10-0.31ms, p95 0.13-0.77ms | < 2ms             |
+| 20,000 lookups, 1280² vs 4096² | 2.2ms vs 1.9ms                   | ratio < 2x        |
+
+The per-chunk range is idle to loaded, measured on the same machine. It matters that the timing noise
+band is wider than the regression the broadphase removed, so a wall-clock bound cannot be tightened to
+the idle reading without becoming a gate against the machine's own load. The gate for the broadphase is
+deterministic instead, in `tests/forests.test.mjs`: it counts the trunks a point reaches and asserts
+the mean does not grow with map size.
 
 A sweep of 144 map and cell-size combinations, 6.1M open cells, found zero cells that read open while
 a blocker covered them. That is the one direction the fill rule must never fail.
