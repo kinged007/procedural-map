@@ -1,0 +1,1657 @@
+# Procedural Map Generator
+
+## Product Requirements Document
+
+**Status:** MVP / v0.1  
+**Project:** `procedural-map-mvp`  
+**Primary platform:** TypeScript / JavaScript, Node.js + browser compatible  
+**Purpose:** Standalone procedural map generation and map-import service/library for a browser-based game  
+**Inspiration / reference:** Watabou Village Generator and related procedural settlement generators
+
+---
+
+# 1. Executive Summary
+
+The Procedural Map Generator is an isolated map-generation system responsible for producing structured, deterministic, machine-readable maps that can be consumed by an external game system.
+
+The generator must not contain game-specific player, combat, objective, team, NPC, or gameplay logic.
+
+Its responsibility ends at producing a valid **semantic world description** containing terrain, water, vegetation, roads, structures, environmental obstacles, asset assignments, and related spatial metadata.
+
+The central architectural principle is:
+
+> **The game consumes a canonical map format and does not need to know whether that map was procedurally generated, manually authored, or imported from an external tool.**
+
+Therefore:
+
+```
+Procedural Generator ─────┐
+                          │
+External Map Importer ────┼──► Canonical Map ───► Game
+                          │
+Future Map Editor ────────┘
+```
+
+The initial MVP will demonstrate this architecture using a simple generated environment consisting primarily of:
+
+- grass / land;
+- terrain variation;
+- lakes / water;
+- forests;
+- individual trees;
+- environmental collision/obstruction metadata;
+- basic visual assets;
+- deterministic seeded generation;
+- JSON import/export.
+
+The architecture must deliberately support future expansion toward significantly richer Watabou-style generated environments containing roads, settlements, buildings, fields, rivers, bridges, walls, vegetation systems, biomes, and configurable visual themes.
+
+---
+
+# 2. Problem
+
+The game requires maps that can be created in several different ways.
+
+Some maps should be generated automatically and randomly.
+
+Some maps should use predefined generation parameters or themes.
+
+Some maps should be manually designed using external tools such as Watabou Village Generator.
+
+Some maps may eventually be edited through a dedicated map editor.
+
+These different sources must not require separate implementations inside the game.
+
+Without a standardized map abstraction, generation logic, visual assets, collision geometry, imported maps, and game integration become tightly coupled.
+
+The system therefore needs an intermediate representation:
+
+# `GameMap`
+
+Every map source is converted into this format.
+
+The external game system consumes only this format.
+
+---
+
+# 3. Product Vision
+
+The long-term system should allow a developer to request:
+
+```
+generateMap({
+    seed: 583921,
+    size: "large",
+
+    generation: {
+        settlementDensity: 0.6,
+        forestDensity: 0.7,
+        waterAmount: 0.25,
+        terrainVariation: 0.4
+    },
+
+    theme: "temperate-medieval"
+});
+```
+
+and receive a complete semantic map.
+
+Alternatively:
+
+```
+importMap(watabouJson);
+```
+
+should ultimately produce the same canonical map representation.
+
+The game should therefore not care whether the map came from:
+
+```
+Random generation
+        │
+        ▼
+     GameMap
+
+Watabou JSON
+        │
+        ▼
+     GameMap
+
+Custom editor
+        │
+        ▼
+     GameMap
+
+Static authored JSON
+        │
+        ▼
+     GameMap
+```
+
+This abstraction is the core product.
+
+---
+
+# 4. Scope Boundary
+
+This repository is specifically a **map/world generation system**.
+
+It is NOT the game engine.
+
+## This project owns
+
+- seeded random generation;
+- terrain generation;
+- elevation/environmental fields;
+- water generation;
+- vegetation generation;
+- forest distribution;
+- environmental structures;
+- future road generation;
+- future building placement;
+- future settlement generation;
+- environmental collision geometry;
+- map boundaries;
+- semantic terrain classifications;
+- asset references;
+- visual map rendering;
+- themes;
+- external map importing;
+- map normalization;
+- map validation;
+- JSON serialization;
+- deterministic regeneration.
+
+## This project does NOT own
+
+- players;
+- player bases;
+- teams;
+- NPCs;
+- enemies;
+- combat;
+- objectives;
+- quests;
+- game resources;
+- capture points;
+- player spawn logic;
+- match balancing;
+- game modes;
+- scoring;
+- AI behaviour;
+- inventory;
+- networking;
+- game state.
+
+Those systems belong to the consuming game.
+
+The map system provides sufficient spatial information for those systems to make their own decisions.
+
+For example, this service may expose:
+
+```
+{
+    type: "tree",
+    collision: {
+        type: "circle",
+        radius: 8
+    }
+}
+```
+
+The game decides what collision means for its player/entity system.
+
+---
+
+# 5. Core Architectural Principle
+
+Generation and rendering must remain separate.
+
+The generator produces:
+
+```
+SEMANTIC WORLD
+```
+
+not:
+
+```
+IMAGE
+```
+
+For example:
+
+```
+{
+    "id": "tree-184",
+    "type": "tree",
+    "species": "oak",
+    "position": {
+        "x": 812,
+        "y": 441
+    },
+    "radius": 9,
+    "collision": {
+        "type": "circle",
+        "radius": 7
+    },
+    "asset": {
+        "category": "vegetation.tree",
+        "variant": "oak-03"
+    }
+}
+```
+
+The renderer may display this as a stylized illustrated tree.
+
+The external game may instead render it using:
+
+- Canvas;
+- WebGL;
+- PixiJS;
+- Phaser;
+- Three.js;
+- SVG;
+- sprites;
+- another rendering engine.
+
+The underlying map remains unchanged.
+
+---
+
+# 6. System Architecture
+
+The intended architecture is:
+
+```
+                   GENERATION CONFIG
+                         +
+                        SEED
+                         │
+                         ▼
+                ┌─────────────────┐
+                │ MAP GENERATOR   │
+                └────────┬────────┘
+                         │
+                         ▼
+                      RawMap
+                         │
+                         ▼
+                ┌─────────────────┐
+                │ MAP NORMALIZER  │
+                └────────┬────────┘
+                         │
+                         ▼
+                ┌─────────────────┐
+                │ CANONICAL MAP   │
+                │    GameMap      │
+                └────────┬────────┘
+                         │
+              ┌──────────┼───────────┐
+              │          │           │
+              ▼          ▼           ▼
+           Renderer   Validator    Exporter
+              │                      │
+              ▼                      ▼
+         Visual Map                JSON
+```
+
+External maps enter at the normalization layer:
+
+```
+Watabou JSON
+     │
+     ▼
+WatabouImporter
+     │
+     ▼
+RawMap / normalized entities
+     │
+     ▼
+GameMap
+```
+
+---
+
+# 7. MVP Objectives
+
+Version 0.1 must prove six architectural assumptions.
+
+## 7.1 Deterministic procedural generation
+
+The same seed and configuration must always generate the same map.
+
+Example:
+
+```
+Seed 583921
+     +
+Configuration A
+     ↓
+Map X
+```
+
+must always produce Map X.
+
+This is essential for:
+
+- multiplayer synchronization;
+- debugging;
+- reproducibility;
+- saving maps;
+- testing;
+- sharing generated worlds.
+
+---
+
+# 8. MVP Environment
+
+The first generated environment should intentionally be simple.
+
+It should contain:
+
+### Terrain
+
+A rectangular world consisting primarily of traversable grass/land.
+
+### Water
+
+One or more irregular bodies of water.
+
+Water should be generated using spatial fields/noise rather than simple randomly positioned circles.
+
+Water entities must expose their geometry.
+
+### Vegetation
+
+Trees should occur in natural-looking clusters.
+
+Tree placement should be influenced by a generated vegetation/forest-density field rather than uniform random scattering.
+
+This should naturally create:
+
+- forests;
+- forest edges;
+- sparse woodland;
+- clearings;
+- open grassland.
+
+### Environmental obstructions
+
+Trees and water must expose collision/obstruction information.
+
+The generator itself does not perform player collision.
+
+It simply describes the geometry.
+
+---
+
+# 9. Procedural Generation Model
+
+The MVP should use seeded coherent noise such as Simplex/OpenSimplex-style noise combined with deterministic pseudorandom generation.
+
+Conceptually:
+
+```
+Seed
+ │
+ ├── terrain noise
+ │
+ ├── moisture noise
+ │
+ ├── vegetation noise
+ │
+ └── water/elevation noise
+```
+
+Multiple spatial fields should influence generation.
+
+For example:
+
+```
+Elevation
+    +
+Moisture
+    +
+Forest probability
+        ↓
+Environmental classification
+```
+
+This approach provides a foundation for later biome generation.
+
+Future systems may classify regions using combinations such as:
+
+```
+low elevation
+      ↓
+water
+
+high moisture + moderate elevation
+      ↓
+forest
+
+low moisture
+      ↓
+grassland
+
+high elevation
+      ↓
+rock / mountain
+```
+
+MVP implementation may use simpler thresholds while preserving this architecture.
+
+---
+
+# 10. Generation Configuration
+
+Generation parameters must remain independent from visual themes.
+
+Example:
+
+```
+interface GenerationConfig {
+    seed: number;
+
+    width: number;
+    height: number;
+
+    terrain: {
+        variation: number;
+        scale: number;
+    };
+
+    water: {
+        amount: number;
+        scale: number;
+    };
+
+    vegetation: {
+        density: number;
+        clustering: number;
+    };
+}
+```
+
+A configuration such as:
+
+```
+{
+    seed: 583921,
+
+    width: 2048,
+    height: 2048,
+
+    terrain: {
+        variation: 0.35,
+        scale: 0.004
+    },
+
+    water: {
+        amount: 0.20,
+        scale: 0.003
+    },
+
+    vegetation: {
+        density: 0.65,
+        clustering: 0.8
+    }
+}
+```
+
+must produce deterministic results.
+
+---
+
+# 11. Theme System
+
+Visual theme and map geometry must remain separate.
+
+For example:
+
+```
+MAP
+
+tree
+tree
+lake
+grass
+tree
+```
+
+could be rendered as:
+
+```
+Temperate Theme
+Oak / birch / green grass / blue water
+```
+
+or:
+
+```
+Autumn Theme
+Orange foliage / brown grass / dark water
+```
+
+without regenerating the map.
+
+A theme should eventually define:
+
+```
+interface MapTheme {
+    id: string;
+
+    terrain: TerrainAssetSet;
+    vegetation: VegetationAssetSet;
+    water: WaterAssetSet;
+    structures: StructureAssetSet;
+}
+```
+
+MVP requires only one default theme.
+
+---
+
+# 12. MVP Asset Strategy
+
+The first visual layer should take inspiration from the illustrated procedural-map style demonstrated by Watabou without depending on Watabou's proprietary generator implementation.
+
+Initial environmental assets should preferably be procedurally drawn vector-like graphics.
+
+Examples:
+
+- stylized tree canopy;
+- tree trunk;
+- shoreline;
+- grass texture/details;
+- water fill;
+- rocks or small environmental details if time permits.
+
+Assets may be implemented using:
+
+- Canvas drawing primitives;
+- generated paths;
+- SVG-compatible geometry;
+- lightweight reusable vector definitions.
+
+The semantic entity must not depend upon the visual implementation.
+
+Example:
+
+```
+Tree Entity
+    │
+    ├── semantic information
+    │
+    ├── collision geometry
+    │
+    └── asset reference
+             │
+             ▼
+         Renderer
+```
+
+The architecture must allow later replacement with:
+
+- SVG artwork;
+- raster sprites;
+- generated vector graphics;
+- externally created asset packs.
+
+## 12.1 Asset Delivery Format (renderer-side decision, not MVP scope)
+
+This section records a decision for the eventual game renderer. It does not change the MVP and it is not a v0.1 acceptance criterion. It changes nothing in `GameMap`, generation, or the canonical schema.
+
+**Author SVG, ship a texture atlas.** SVG is the authoring format because it is resolution-independent and diffable in source control. It is not a runtime format: per-element overhead makes one DOM path per tree far too expensive for realtime use, and thousands of loose textures forfeit GPU batching and exhaust video memory.
+
+A realistic browser target, given the MVP's roughly 1,600 trees on one map:
+
+- author each asset as SVG;
+- bake all variants into a single texture atlas at build time;
+- ship that atlas plus a small JSON manifest mapping `category` / `variant` to a frame rectangle;
+- render with WebGL2 instanced quads, one draw call per atlas;
+- use KTX2 / Basis for GPU-compressed texture delivery at scale.
+
+Two alternatives earn their place conditionally:
+
+| Condition | Approach |
+| --------- | -------- |
+| Large, stylised vector art viewed at a wide zoom range | SDF atlas — crisp vector-looking outlines at any zoom from one small texture |
+| Tens of thousands of distinct, non-variant art | WebGL2 `sampler2DArray` texture arrays instead of a single atlas |
+
+In-world text should stay vector or SDF regardless of the choice for everything else.
+
+**Why procedural drawing is not the shipping format.** Canvas drawing is deterministic per engine but not guaranteed across engines: `Math.sin` and `Math.cos` are implementation-approximated in ECMA-262, so different JavaScript engines can differ in the final bits. The variation is not visible, but it means the visual result cannot be verified once for every client. Baking makes the asset pipeline verified once and identical on every machine, which is what a realtime multiplayer client needs.
+
+**Where this plugs in.** The `AssetReference` (`category` + `variant`) on every entity is the seam, and `AssetResolver` is the function that resolves it. It currently returns colours and shape parameters; in a game engine it returns a texture, a frame rectangle, and a pivot. Only that resolver changes. The map stays JSON, assets stay content-hashable and CDN-cached, and no map is regenerated as a result.
+
+---
+
+# 13. Canonical Map Format — GameMap v1
+
+A formal schema must be created early.
+
+Illustrative structure:
+
+```
+interface GameMap {
+    version: "1.0";
+
+    metadata: {
+        id: string;
+        seed?: number;
+        generator?: string;
+        generatedAt?: string;
+    };
+
+    bounds: {
+        width: number;
+        height: number;
+    };
+
+    terrain: TerrainRegion[];
+
+    water: WaterRegion[];
+
+    vegetation: VegetationEntity[];
+
+    structures: StructureEntity[];
+
+    roads: RoadEntity[];
+
+    barriers: BarrierEntity[];
+
+    metadataLayers?: Record<string, unknown>;
+}
+```
+
+Not every collection must contain entities in MVP.
+
+Empty collections should nevertheless be supported to preserve schema stability.
+
+---
+
+# 14. Base Map Entity
+
+Environmental objects should share a common structure.
+
+Example:
+
+```
+interface MapEntity {
+    id: string;
+
+    type: string;
+
+    position?: {
+        x: number;
+        y: number;
+    };
+
+    rotation?: number;
+
+    tags?: string[];
+
+    collision?: CollisionGeometry;
+
+    asset?: AssetReference;
+
+    metadata?: Record<string, unknown>;
+}
+```
+
+---
+
+# 15. Collision Geometry
+
+The map must expose collision geometry without implementing game physics.
+
+Supported MVP geometry:
+
+```
+type CollisionGeometry =
+    | CircleCollision
+    | PolygonCollision
+    | RectangleCollision;
+```
+
+Examples:
+
+```
+tree
+    ↓
+circle collision
+```
+
+```
+lake
+    ↓
+polygon collision
+```
+
+Future examples:
+
+```
+building
+    ↓
+polygon footprint
+```
+
+```
+wall
+    ↓
+polyline / polygon
+```
+
+The consuming game can transform these definitions into its own physics or navigation system.
+
+---
+
+# 16. Renderer
+
+The MVP must contain a browser visualization tool.
+
+Its purpose is both demonstration and debugging.
+
+The renderer is NOT the canonical representation of the map.
+
+It consumes `GameMap`.
+
+The UI should approximately provide:
+
+```
+┌─────────────────────────────────────────────┐
+│ Procedural Map Generator                    │
+├─────────────────────────────────────────────┤
+│ Seed            [ 583921 ]                  │
+│ Forest Density  [━━━━━━●━━]                 │
+│ Water Amount    [━━━━●━━━━]                 │
+│                                             │
+│ [ Generate ] [ Random Seed ]                │
+│ [ Export JSON ] [ Import JSON ]             │
+├─────────────────────────────────────────────┤
+│                                             │
+│                 MAP                         │
+│                                             │
+│    trees           lake                     │
+│     forest       ~~~~~~~~                   │
+│                 ~~~~~~~~~                   │
+│         grass      ~~~~                     │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+# 17. Debug Visualization
+
+Debugging procedural systems becomes increasingly difficult as algorithms become more sophisticated.
+
+Therefore debug visualization should exist from MVP.
+
+Possible layers:
+
+```
+Rendered Map
+Terrain Field
+Elevation Field
+Water Mask
+Vegetation Probability
+Entity Locations
+Collision Geometry
+```
+
+The user should be able to toggle these layers.
+
+Example:
+
+```
+View:
+
+● Styled
+○ Terrain Noise
+○ Water
+○ Forest Probability
+○ Collision
+○ Entities
+```
+
+This becomes increasingly important when roads, buildings, plots, settlements and biomes are introduced.
+
+---
+
+# 18. JSON Export
+
+Every generated map must be exportable as canonical JSON.
+
+Example:
+
+```
+Generate
+    ↓
+GameMap
+    ↓
+Export
+    ↓
+map-583921.json
+```
+
+The exported file must contain sufficient information to reconstruct the map without rerunning procedural generation.
+
+---
+
+# 19. Native JSON Import
+
+The MVP must support importing its own exported maps.
+
+Therefore:
+
+```
+Generate
+ ↓
+Export JSON
+ ↓
+Import JSON
+ ↓
+Render
+```
+
+must reproduce the same world.
+
+This validates the canonical schema.
+
+---
+
+# 20. External Import Architecture
+
+External formats must use adapters.
+
+Conceptually:
+
+```
+interface MapImporter<T> {
+    canImport(data: unknown): boolean;
+
+    import(data: T): GameMap;
+}
+```
+
+Initial structure:
+
+```
+importers/
+
+    NativeMapImporter.ts
+    WatabouImporter.ts
+```
+
+`WatabouImporter` may initially be incomplete or experimental.
+
+It must nevertheless exist as a first-class architectural concept.
+
+---
+
+# 21. Watabou Integration Goal
+
+Watabou Village Generator supports JSON export containing generated settlement information.
+
+The long-term objective is:
+
+```
+Watabou Village Generator
+          ↓
+       JSON export
+          ↓
+     WatabouImporter
+          ↓
+      normalization
+          ↓
+        GameMap
+          ↓
+          Game
+```
+
+The external game must not require special Watabou-specific handling.
+
+Any information that can be reliably extracted should eventually be mapped into canonical entities such as:
+
+- roads;
+- buildings;
+- vegetation;
+- water;
+- fields;
+- walls;
+- terrain;
+- bridges;
+- other structures.
+
+Exact support depends on the available Watabou export schema and should be implemented incrementally after examining representative exports.
+
+---
+
+# 22. Validation
+
+Maps must pass validation before being returned.
+
+MVP validation should include:
+
+- valid map dimensions;
+- entity IDs unique;
+- coordinates inside map bounds;
+- valid polygons;
+- no malformed collision geometry;
+- no trees generated inside water;
+- no invalid numeric values;
+- supported schema version.
+
+Later validation may include:
+
+- roads remain connected;
+- buildings do not overlap improperly;
+- buildings are not underwater;
+- bridges connect valid land regions;
+- structures remain accessible;
+- settlement geometry remains valid.
+
+---
+
+# 23. Proposed Repository Structure
+
+```
+procedural-map-mvp/
+
+├── src/
+│
+│   ├── map/
+│   │   ├── GameMap.ts
+│   │   ├── MapEntity.ts
+│   │   ├── CollisionGeometry.ts
+│   │   └── schema.ts
+│   │
+│   ├── generation/
+│   │   ├── MapGenerator.ts
+│   │   ├── GenerationConfig.ts
+│   │   ├── SeededRandom.ts
+│   │   │
+│   │   ├── terrain/
+│   │   │   └── TerrainGenerator.ts
+│   │   │
+│   │   ├── water/
+│   │   │   └── WaterGenerator.ts
+│   │   │
+│   │   └── vegetation/
+│   │       └── VegetationGenerator.ts
+│   │
+│   ├── themes/
+│   │   ├── MapTheme.ts
+│   │   ├── AssetResolver.ts
+│   │   └── default/
+│   │       └── DefaultTheme.ts
+│   │
+│   ├── rendering/
+│   │   ├── MapRenderer.ts
+│   │   ├── CanvasRenderer.ts
+│   │   └── DebugRenderer.ts
+│   │
+│   ├── importers/
+│   │   ├── MapImporter.ts
+│   │   ├── NativeMapImporter.ts
+│   │   └── WatabouImporter.ts
+│   │
+│   ├── exporters/
+│   │   └── JsonExporter.ts
+│   │
+│   ├── validation/
+│   │   └── MapValidator.ts
+│   │
+│   └── index.ts
+│
+├── demo/
+│   ├── index.html
+│   ├── app.ts
+│   └── styles.css
+│
+├── tests/
+│
+├── examples/
+│   └── maps/
+│
+├── docs/
+│   ├── architecture.md
+│   ├── gamemap-schema.md
+│   └── generation.md
+│
+├── PRD.md
+├── README.md
+├── package.json
+└── tsconfig.json
+```
+
+Exact structure may evolve, but architectural boundaries should remain.
+
+---
+
+# 24. Public API
+
+The generator should eventually be usable without its demo interface.
+
+Example:
+
+```
+import {
+    generateMap,
+    importMap,
+    validateMap
+} from "@project/procedural-map";
+```
+
+Generation:
+
+```
+const map = generateMap({
+    seed: 583921,
+    width: 2048,
+    height: 2048,
+
+    water: {
+        amount: 0.2
+    },
+
+    vegetation: {
+        density: 0.7
+    }
+});
+```
+
+Import:
+
+```
+const map = importMap(json);
+```
+
+Validation:
+
+```
+const result = validateMap(map);
+```
+
+The consuming game should not need the demo UI or renderer.
+
+---
+
+# 25. Service/Library Independence
+
+The project should be capable of operating as:
+
+1. a TypeScript library;
+2. a Node.js module;
+3. a browser module;
+4. potentially later, a standalone generation service/API.
+
+The core generator must therefore not depend upon browser DOM APIs.
+
+This separation should be maintained:
+
+```
+Core
+    generation
+    schemas
+    import
+    export
+    validation
+
+Browser-only
+    demo UI
+    canvas renderer
+    debug visualization
+```
+
+This ensures server-side generation remains possible.
+
+---
+
+# 26. MVP Acceptance Criteria
+
+Version 0.1 is considered successful when:
+
+1. A developer can enter a numeric seed.
+2. The generator produces a deterministic map.
+3. Different seeds visibly produce different maps.
+4. Maps contain grass/land.
+5. Maps contain naturally shaped water areas.
+6. Maps contain clustered forests/trees.
+7. Trees do not spawn inside water.
+8. Trees exist as semantic entities.
+9. Water exists as semantic geometry.
+10. Environmental obstacles expose collision metadata.
+11. The map can be rendered using the default theme.
+12. Debug layers can display generation information.
+13. The map can be exported as JSON.
+14. Exported JSON can be imported again.
+15. Re-imported maps visually and semantically match the original.
+16. Core generation works without the browser renderer.
+17. Generation configuration is independent from visual theme configuration.
+18. The architecture contains a defined external importer interface.
+
+---
+
+# 27. Testing Requirements
+
+Deterministic generation requires automated testing.
+
+Important tests include:
+
+```
+same seed + same config
+        ↓
+identical GameMap
+```
+
+and:
+
+```
+different seed
+        ↓
+different generated map
+```
+
+Additional tests:
+
+- entities remain inside bounds;
+- tree/water exclusion works;
+- serialization round-trip preserves map;
+- invalid JSON is rejected;
+- invalid polygons are detected;
+- duplicate IDs fail validation;
+- unsupported schema versions fail cleanly.
+
+Snapshot/hash-based deterministic tests should be considered.
+
+---
+
+# 28. Performance
+
+MVP does not need extreme optimization.
+
+However, the architecture should anticipate large maps.
+
+Generation algorithms should avoid unnecessary object allocation in high-density spatial fields.
+
+Potential future optimization techniques include:
+
+- typed arrays for noise fields;
+- spatial indexes;
+- chunked generation;
+- Web Workers;
+- server-side generation;
+- lazy rendering;
+- deterministic chunk generation.
+
+No premature optimization is required in v0.1.
+
+---
+
+# 29. Roadmap
+
+## v0.1 — Environmental Generator
+
+Goal:
+
+**Prove the architecture.**
+
+Features:
+
+- seeded PRNG;
+- coherent noise;
+- terrain field;
+- water generation;
+- grass;
+- forest-density field;
+- tree entities;
+- collision metadata;
+- canonical `GameMap`;
+- basic illustrated renderer;
+- debug layers;
+- generation controls;
+- JSON import/export;
+- map validation;
+- native importer.
+
+---
+
+## v0.2 — Terrain &amp; Biomes
+
+Introduce richer environmental classification.
+
+Potential additions:
+
+- elevation;
+- moisture;
+- biome classification;
+- beaches;
+- rocky terrain;
+- hills;
+- multiple vegetation species;
+- vegetation rules;
+- improved lake generation;
+- rivers.
+
+Conceptually:
+
+```
+Elevation + Moisture + Temperature
+                 ↓
+               Biome
+```
+
+---
+
+## v0.3 — Road Generation
+
+Introduce generated path networks.
+
+Potential work:
+
+- primary roads;
+- secondary roads;
+- organic paths;
+- road connectivity;
+- terrain-aware routing;
+- river crossing detection;
+- road semantic entities.
+
+This marks the beginning of settlement-oriented generation.
+
+---
+
+## v0.4 — Building Placement
+
+Introduce structures.
+
+Features:
+
+- building footprints;
+- road-facing placement;
+- building spacing;
+- collision polygons;
+- building categories;
+- orientation;
+- asset assignment;
+- plot/parcel concepts.
+
+---
+
+## v0.5 — Settlement Generation
+
+Move toward the structural capabilities demonstrated by tools such as Watabou Village Generator.
+
+Potential systems:
+
+- settlement centres;
+- organic road networks;
+- building plots;
+- village density;
+- town density;
+- central squares;
+- neighbourhoods;
+- settlement boundaries.
+
+Generation parameters might include:
+
+```
+settlement density
+road density
+building density
+building spacing
+centrality
+organic/regular layout
+```
+
+---
+
+## v0.6 — Rural Structures
+
+Add environmental features surrounding settlements:
+
+- fields;
+- farms;
+- orchards;
+- fences;
+- trails;
+- clearings;
+- isolated buildings;
+- vegetation transitions.
+
+---
+
+## v0.7 — Infrastructure
+
+Add:
+
+- bridges;
+- walls;
+- gates;
+- docks;
+- piers;
+- paths;
+- river crossings;
+- barriers.
+
+---
+
+## v0.8 — Theme System Expansion
+
+Separate generation completely from visual identity.
+
+Example themes:
+
+```
+Temperate Medieval
+Nordic
+Autumn
+Winter
+Desert
+Swamp
+Fantasy
+Ruined
+```
+
+Themes should primarily define:
+
+- asset sets;
+- palette;
+- terrain rendering;
+- vegetation rendering;
+- architecture;
+- decoration.
+
+Themes should not fundamentally alter the canonical schema.
+
+---
+
+## v0.9 — Watabou Import
+
+Develop robust support for representative Watabou Village Generator JSON exports.
+
+Workflow:
+
+```
+Create/customize village in Watabou
+             ↓
+         Export JSON
+             ↓
+       Import into system
+             ↓
+      Convert to GameMap
+             ↓
+          Validate
+             ↓
+         Render / use
+```
+
+This provides a practical manual/custom map authoring workflow without requiring a custom editor immediately.
+
+---
+
+## v1.0 — Stable Map Platform
+
+Target:
+
+A stable map-generation/import platform capable of supplying production maps to the main game.
+
+Expected capabilities:
+
+- procedural terrain;
+- water;
+- biomes;
+- forests;
+- roads;
+- settlements;
+- buildings;
+- environmental structures;
+- multiple themes;
+- canonical map schema;
+- deterministic generation;
+- import/export;
+- external-map adapters;
+- validation;
+- stable TypeScript API.
+
+---
+
+# 30. Post-v1 Opportunities
+
+Possible future capabilities include:
+
+### Chunked worlds
+
+Generate sections of extremely large maps deterministically as needed.
+
+### Custom map editor
+
+```
+Generate
+   ↓
+Edit
+   ↓
+Validate
+   ↓
+Export
+```
+
+### Generation presets
+
+For example:
+
+```
+Dense Forest Village
+River Settlement
+Open Farmland
+Mountain Village
+Lakeside Village
+Walled Town
+```
+
+These should primarily be parameter presets rather than separate generators.
+
+### Community maps
+
+Because maps use a standardized JSON format, maps could eventually be shared independently from game code.
+
+### Procedural asset generation
+
+More sophisticated building/tree/environment illustrations could themselves be generated from parameters.
+
+### Generation plugins
+
+Independent generators could potentially contribute map layers:
+
+```
+TerrainGenerator
+WaterGenerator
+RoadGenerator
+SettlementGenerator
+VegetationGenerator
+StructureGenerator
+```
+
+---
+
+# 31. Design Principles
+
+The project should follow the following principles throughout development.
+
+### Semantic first
+
+Generate meaningful world entities, not pixels.
+
+### Deterministic
+
+Seeds must reliably reproduce worlds.
+
+### Renderer independent
+
+Map structure must not depend upon Canvas, SVG, Phaser, PixiJS or another rendering technology.
+
+### Theme independent
+
+Generation determines **what exists and where**.
+
+Themes determine **what it looks like**.
+
+### Gameplay independent
+
+The generator describes the environment.
+
+The game determines what happens inside that environment.
+
+### Import-source independent
+
+The game should not care whether a map originated from procedural generation, Watabou, an editor or a static file.
+
+### Extensible
+
+New map layers should not require rewriting existing generators.
+
+### Observable
+
+Generation decisions should be inspectable through debug visualization.
+
+### Validated
+
+Generated maps should satisfy structural invariants before being returned.
+
+---
+
+# 32. Guiding Architecture
+
+The complete long-term pipeline should remain conceptually:
+
+```
+                         MAP SOURCE
+                             │
+            ┌────────────────┼────────────────┐
+            │                │                │
+       Procedural         Watabou          Editor
+       Generator           JSON            / Other
+            │                │                │
+            └────────────────┼────────────────┘
+                             ▼
+                       NORMALIZATION
+                             │
+                             ▼
+                         GameMap
+                             │
+                 ┌───────────┼───────────┐
+                 │           │           │
+                 ▼           ▼           ▼
+             Validation   Rendering    JSON Export
+                 │
+                 ▼
+              Consumer
+                 │
+                 ▼
+              MAIN GAME
+```
+
+The boundary between `GameMap` and the consuming game is the most important contract in the project.
+
+The procedural generator may evolve substantially over time.
+
+The renderer may evolve substantially over time.
+
+Asset technology may change.
+
+New importers may be introduced.
+
+Generation algorithms may become considerably more sophisticated.
+
+The external game should remain largely unaffected by those changes because it consumes the stable canonical map representation.
+
+---
+
+# 33. Immediate Development Plan
+
+Implementation should begin in the following order:
+
+**Phase 1 — Foundation**
+
+Define:
+
+- `GameMap v1`;
+- entities;
+- collision geometry;
+- `GenerationConfig`;
+- `MapTheme`;
+- importer interface;
+- validator interface.
+
+**Phase 2 — Deterministic generation**
+
+Implement:
+
+- seeded PRNG;
+- coherent noise;
+- spatial fields;
+- deterministic tests.
+
+**Phase 3 — Environment**
+
+Implement:
+
+- land;
+- water;
+- forest probability;
+- tree placement;
+- exclusion rules.
+
+**Phase 4 — Rendering**
+
+Implement:
+
+- browser canvas;
+- grass;
+- stylized water;
+- stylized procedural trees;
+- map bounds;
+- zoom/fit if required.
+
+**Phase 5 — Debugging**
+
+Expose:
+
+- noise fields;
+- water mask;
+- forest field;
+- entity positions;
+- collision geometry.
+
+**Phase 6 — Persistence**
+
+Implement:
+
+- JSON export;
+- native JSON import;
+- schema validation;
+- round-trip tests.
+
+At completion, the project should provide the first genuinely usable version of the map platform:
+
+```
+          SEED + PARAMETERS
+                  │
+                  ▼
+        PROCEDURAL GENERATOR
+                  │
+                  ▼
+              GameMap
+             /       \
+            ▼         ▼
+       Visualizer    JSON
+                        │
+                        ▼
+                    Main Game
+```
+
+This MVP then becomes the foundation on which roads, buildings, settlements, richer themes and Watabou compatibility are progressively developed without replacing the underlying architecture.

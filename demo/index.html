@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f8f2" />
+    <meta
+      name="description"
+      content="Generate, inspect, and export deterministic procedural landscapes."
+    />
+    <title>Fieldwork — Procedural Map Studio</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="icon-download" viewBox="0 0 24 24">
+        <path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4" />
+      </symbol>
+      <symbol id="icon-upload" viewBox="0 0 24 24">
+        <path d="M12 16V4m-4 4 4-4 4 4M5 16v4h14v-4" />
+      </symbol>
+      <symbol id="icon-shuffle" viewBox="0 0 24 24">
+        <path d="m17 3 4 4-4 4M3 7h3c5 0 7 10 12 10h3M17 13l4 4-4 4M3 17h3c2 0 4-3 6-5s4-5 6-5h3" />
+      </symbol>
+      <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6" /></symbol>
+      <symbol id="icon-fit" viewBox="0 0 24 24">
+        <path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5" />
+      </symbol>
+      <symbol id="icon-tree" viewBox="0 0 24 24">
+        <path d="m12 3-6 8h3l-5 6h7v4h2v-4h7l-5-6h3z" />
+      </symbol>
+      <symbol id="icon-water" viewBox="0 0 24 24">
+        <path d="M3 7c3-4 6 4 9 0s6 4 9 0M3 12c3-4 6 4 9 0s6 4 9 0M3 17c3-4 6 4 9 0s6 4 9 0" />
+      </symbol>
+    </svg>
+    <header class="app-header">
+      <a class="brand" href="./" aria-label="Fieldwork home">
+        <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <rect width="40" height="40" rx="10" fill="currentColor" />
+          <path
+            d="M7 27c4-11 5-17 12-17 8 0 6 12 14 11M7 33c8-6 5-18 13-17 5 1 3 12 13 11M12 34c6-4 4-12 9-12 4 1 5 12 12 11"
+            stroke="#e6eacb"
+            stroke-width="1.3"
+          />
+        </svg>
+        <span>fieldwork<span class="brand-description">PROCEDURAL MAP STUDIO</span></span>
+      </a>
+      <div class="header-actions">
+        <span class="version-label"
+          ><span class="status-dot"></span> Environmental generator <span>v0.1</span></span
+        >
+        <button class="button button-quiet" id="import-button">
+          <svg class="icon"><use href="#icon-upload" /></svg> Import JSON
+        </button>
+        <button class="button button-dark" id="export-button" disabled>
+          <svg class="icon"><use href="#icon-download" /></svg> Export map
+        </button>
+        <input type="file" id="import-file" accept=".json,application/json" hidden />
+      </div>
+    </header>
+
+    <main class="studio">
+      <aside class="settings">
+        <div class="settings-intro">
+          <p class="eyebrow">WORLD SETTINGS <span>01 / GENERATE</span></p>
+          <h1>Create a landscape.</h1>
+          <p>One seed. A landscape to explore.</p>
+        </div>
+        <form id="generation-form">
+          <div class="form-section">
+            <label class="field-label" for="seed"
+              >World seed <span class="label-note">DETERMINISTIC</span></label
+            >
+            <div class="seed-input">
+              <span aria-hidden="true">#</span
+              ><input
+                id="seed"
+                name="seed"
+                type="number"
+                step="1"
+                min="-2147483648"
+                max="4294967295"
+                value="583921"
+                required
+              /><button
+                type="button"
+                id="random-seed"
+                title="Randomize seed and generate"
+                aria-label="Randomize seed and generate"
+              >
+                <svg class="icon"><use href="#icon-shuffle" /></svg>
+              </button>
+            </div>
+            <p class="field-help">Same seed and settings, same world.</p>
+            <label class="field-label size-label" for="map-size">Map dimensions</label>
+            <select id="map-size" name="size">
+              <option value="1024x768">Small · 1,024 × 768</option>
+              <option value="2048x1536" selected>Medium · 2,048 × 1,536</option>
+              <option value="2048x2048">Square · 2,048 × 2,048</option>
+              <option value="4096x3072">Large · 4,096 × 3,072</option>
+            </select>
+          </div>
+          <div class="form-section environment-section">
+            <div class="section-heading">
+              <span>Environment</span><span class="tiny-label">PARAMETERS</span>
+            </div>
+            <div class="range-field">
+              <label for="density"
+                ><span
+                  ><svg class="icon"><use href="#icon-tree" /></svg>Forest density</span
+                ><output id="density-value" for="density">65%</output></label
+              ><input id="density" type="range" min="0" max="100" value="65" />
+              <div class="range-hints"><span>Sparse</span><span>Dense</span></div>
+            </div>
+            <div class="range-field">
+              <label for="water"
+                ><span
+                  ><svg class="icon"><use href="#icon-water" /></svg>Water amount</span
+                ><output id="water-value" for="water">20%</output></label
+              ><input id="water" type="range" min="0" max="100" value="20" />
+              <div class="range-hints"><span>Dry land</span><span>Wetlands</span></div>
+            </div>
+            <div class="range-field">
+              <label for="variation"
+                ><span><span class="terrain-icon" aria-hidden="true">⌁</span>Terrain variation</span
+                ><output id="variation-value" for="variation">35%</output></label
+              ><input id="variation" type="range" min="0" max="100" value="35" />
+              <div class="range-hints"><span>Subtle</span><span>Varied</span></div>
+            </div>
+            <details class="advanced">
+              <summary>Advanced settings <span aria-hidden="true">+</span></summary>
+              <div class="range-field">
+                <label for="clustering"
+                  >Forest clustering<output id="clustering-value" for="clustering"
+                    >80%</output
+                  ></label
+                ><input id="clustering" type="range" min="0" max="100" value="80" />
+              </div>
+              <label class="field-label" for="terrain-scale">Terrain noise scale</label
+              ><input
+                class="number-input"
+                id="terrain-scale"
+                type="number"
+                min="0.0001"
+                max="0.05"
+                step="0.0001"
+                value="0.004"
+                required
+              /><label class="field-label" for="water-scale">Water noise scale</label
+              ><input
+                class="number-input"
+                id="water-scale"
+                type="number"
+                min="0.0001"
+                max="0.05"
+                step="0.0001"
+                value="0.003"
+                required
+              />
+            </details>
+          </div>
+          <button class="button generate-button" id="generate-button" type="submit">
+            <span>Generate landscape</span><svg class="icon"><use href="#icon-arrow" /></svg>
+          </button>
+          <p class="generation-note" id="generation-note">Ready when you are.</p>
+        </form>
+        <div class="presets">
+          <p class="eyebrow">A PLACE TO START</p>
+          <div class="preset-buttons">
+            <button data-preset="woodland">
+              <span class="preset-swatch woodland"></span>Woodland</button
+            ><button data-preset="wetlands">
+              <span class="preset-swatch wetlands"></span>Wetlands</button
+            ><button data-preset="grassland">
+              <span class="preset-swatch grassland"></span>Grassland
+            </button>
+          </div>
+        </div>
+        <div class="sidebar-footer">
+          <span class="status-dot"></span> Generated locally. Yours to export.
+        </div>
+      </aside>
+
+      <section class="workspace" aria-label="Map preview">
+        <div class="workspace-heading">
+          <div>
+            <p class="eyebrow">YOUR WORLD, IN VIEW</p>
+            <h2 id="map-title">Temperate landscape <span class="theme-badge">TEMPERATE</span></h2>
+          </div>
+          <div class="map-identifier">
+            <span id="map-source">PROCEDURAL</span><span id="seed-display">SEED 583921</span>
+          </div>
+        </div>
+        <div class="map-panel">
+          <div class="view-toolbar">
+            <span class="toolbar-label">VIEW</span>
+            <div class="view-tabs" role="group" aria-label="Map view">
+              <button data-view="styled" class="active" aria-pressed="true">Illustrated</button
+              ><button data-view="terrain" aria-pressed="false">Terrain</button
+              ><button data-view="elevation" aria-pressed="false">Elevation</button
+              ><button data-view="moisture" aria-pressed="false">Moisture</button
+              ><button data-view="vegetation" aria-pressed="false">Forest</button
+              ><button data-view="water" aria-pressed="false">Water</button
+              ><button data-view="collision" aria-pressed="false">Collision</button
+              ><button data-view="entities" aria-pressed="false">Entities</button>
+            </div>
+            <span class="live-indicator" id="valid-badge"
+              ><span class="status-dot"></span> Valid map</span
+            >
+          </div>
+          <div class="map-viewport" id="map-viewport">
+            <canvas
+              id="map-canvas"
+              tabindex="0"
+              role="img"
+              aria-label="Procedural landscape preview. Drag to pan; use the zoom controls or plus and minus keys to zoom."
+            ></canvas>
+            <div class="compass" aria-hidden="true">
+              <span>N</span
+              ><svg width="24" height="36" viewBox="0 0 24 36">
+                <path d="m12 3-8 24 8-5 8 5z" fill="#52654d" />
+                <path d="M12 3v19l8 5z" fill="#b4bba2" />
+              </svg>
+            </div>
+            <div class="map-caption">
+              <span class="caption-label">FIELD NOTES</span
+              ><span id="view-description">Grassland, open water & clustered woodland</span>
+            </div>
+            <div class="zoom-controls">
+              <button id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button
+              ><output id="zoom-value">100%</output
+              ><button id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button><span></span
+              ><button id="fit-map" aria-label="Fit map to view" title="Fit map to view">
+                <svg class="icon"><use href="#icon-fit" /></svg>
+              </button>
+            </div>
+            <div class="empty-field" id="empty-field" hidden>
+              This imported map does not include generation fields.
+            </div>
+          </div>
+          <div class="map-status">
+            <span
+              ><span class="status-dot"></span
+              ><span id="map-status-text">Preparing your landscape…</span></span
+            ><span class="coordinates" id="coordinates">X — &nbsp; Y —</span
+            ><span id="dimensions-display">2,048 × 1,536 units</span>
+          </div>
+        </div>
+        <div class="map-summary">
+          <div class="stat">
+            <span class="stat-label">TREES</span><strong id="tree-count">—</strong
+            ><span class="stat-detail">individual entities</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong
+            ><span class="stat-detail">polygon geometry</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">WATER COVERAGE</span><strong id="water-coverage">—</strong
+            ><span class="stat-detail">of total map area</span>
+          </div>
+          <div class="map-legend">
+            <span><i class="legend-land"></i>Grassland</span
+            ><span><i class="legend-forest"></i>Woodland</span
+            ><span><i class="legend-water"></i>Water</span>
+          </div>
+        </div>
+        <p class="workspace-footer">
+          <span>Drag to pan <span>·</span> Scroll to zoom <span>·</span> Double-click to fit</span
+          ><span>GameMap 1.0 <span> / </span> Renderer independent</span>
+        </p>
+        <div id="notification" class="notification" role="status" aria-live="polite" hidden></div>
+      </section>
+    </main>
+    <script type="module" src="./app.ts"></script>
+  </body>
+</html>
