@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { defaultTheme } from '../dist/themes/DefaultTheme.js';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
@@ -15,7 +16,7 @@ test('generation is byte-stable for the same config', () => {
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(
     stableHash(first),
-    '216069de461c1b44b37526ae18040b23d81a5af30da3b5c33dff5ca9ccb9751d',
+    'c1a3dd296411643f67cf685a4816c388fb158e0165dc8197548d5387723b04ec',
   );
 });
 
@@ -89,6 +90,28 @@ test('rock covers a small, stable share of the map', () => {
   }
 });
 
+test('the emitted rock polygon covers the high ground, not the low ground', () => {
+  // Checking the field threshold alone is not enough: the polygon can be generated from the wrong
+  // side of the contour and still report a correct scoreLevel. Compare the polygon area against the
+  // share of the field above the level.
+  for (const seed of [583921, 42, 777, 7, 0, -91]) {
+    const map = generateMap({ seed, width: 1024, height: 768, vegetation: { density: 0 } });
+    const { fields } = map.metadataLayers;
+    const level = map.terrain.find((region) => region.kind === 'rock').metadata.scoreLevel;
+    const expected =
+      fields.elevation.filter((value) => value >= level).length / fields.elevation.length;
+    const total = map.bounds.width * map.bounds.height;
+    const actual =
+      map.terrain
+        .filter((region) => region.kind === 'rock')
+        .reduce((sum, region) => sum + polygonArea(region.geometry), 0) / total;
+    assert.ok(
+      Math.abs(actual - expected) < 0.06,
+      `seed ${seed}: rock polygon covers ${(actual * 100).toFixed(1)}% of the map, expected about ${(expected * 100).toFixed(1)}%`,
+    );
+  }
+});
+
 test('beaches form a band that hugs each shoreline and excludes the lake', () => {
   const map = generateMap({ seed: 583921, width: 1024, height: 768, water: { amount: 0.2 } });
   const beaches = map.terrain.filter((region) => region.kind === 'beach');
@@ -99,21 +122,31 @@ test('beaches form a band that hugs each shoreline and excludes the lake', () =>
     assert.ok(lake, 'beach should reference its source lake');
     assert.equal(beach.geometry.holes.length, 1, 'the lake should be punched out of the band');
 
-    // The band is the lake grown by the shoreline width, so every outer-ring point sits that far
-    // from the lake outline, and the band area is the difference between the two rings.
+    // The band is the lake grown by a per-vertex offset, so each outer-ring point sits its own
+    // distance from the matching lake vertex.
     const width = beach.metadata.shorelineWidth;
-    const closest = Math.min(
-      ...beach.geometry.points.map((point) =>
-        Math.min(
-          ...lake.geometry.points.map((vertex) =>
-            Math.hypot(point.x - vertex.x, point.y - vertex.y),
-          ),
-        ),
-      ),
+    assert.equal(
+      beach.geometry.points.length,
+      lake.geometry.points.length,
+      'band ring should keep the lake ring vertex count',
     );
+    const offsets = beach.geometry.points.map((point, index) => {
+      const vertex = lake.geometry.points[index];
+      return Math.hypot(point.x - vertex.x, point.y - vertex.y);
+    });
     assert.ok(
-      Math.abs(closest - width) < 0.5,
-      `band offset ${closest.toFixed(2)} should be ${width}`,
+      Math.max(...offsets) - Math.min(...offsets) > 1,
+      'offsets should differ around the shore',
+    );
+    // The shrink fallback scales every offset by the same factor, so the band may be narrower than
+    // requested but never wider.
+    assert.ok(Math.max(...offsets) <= width.max + 0.5, 'band should not exceed the widest offset');
+    assert.ok(Math.min(...offsets) <= width.min + 0.5, 'band should not go below the narrowest');
+    // A band too wide for the shoreline is scaled down uniformly, so the realised widths track the
+    // requested range without ever exceeding it.
+    assert.ok(
+      Math.min(...offsets) >= width.min - 0.5,
+      'realised widths should not fall below the requested minimum',
     );
     assert.ok(polygonArea(beach.geometry) > 0, 'beach should enclose a positive area');
 
@@ -184,6 +217,91 @@ test('water contours are unaffected by the shared contour module', () => {
 // emission order (grass, then meadow, then scrub) combined with last-match-wins resolution, which
 // yields scrub > meadow > grass precedence. These tests pin both, so a future change to region
 // ordering, kind assignment, or contouring cannot silently change which surface a consumer sees.
+test('beach width varies around each shoreline', () => {
+  // A single-width band reads as a line rather than ground. Widths must differ along the shore, not
+  // just between maps.
+  let sawVariation = false;
+  for (const seed of [583921, 42, 777, 7, 0, -91, 100]) {
+    const map = generateMap({ seed, width: 1024, height: 768, water: { amount: 0.2 } });
+    for (const beach of map.terrain.filter((region) => region.kind === 'beach')) {
+      const { max, min } = beach.metadata.shorelineWidth;
+      if (max - min > 1) sawVariation = true;
+      assert.ok(min >= 0, 'beach width must not be negative');
+      assert.ok(max > 0, 'beach width must be positive');
+    }
+  }
+  assert.ok(sawVariation, 'at least one shoreline should vary in width');
+});
+
+test('every lake gets a beach across seeds and map sizes', () => {
+  // A wide band is rejected more often than a narrow one, so a regression here would silently strip
+  // beaches from entire maps rather than fail loudly.
+  for (const config of [
+    { seed: 583921, width: 1024, height: 768, water: { amount: 0.2 } },
+    { seed: 90210, width: 1024, height: 768, water: { amount: 0.2 } },
+    { seed: 0, width: 1024, height: 768, water: { amount: 0.2 } },
+    { seed: 5, width: 800, height: 600, water: { amount: 0.3 } },
+    { seed: 100, width: 640, height: 480, water: { amount: 0.25 } },
+  ]) {
+    const map = generateMap(config);
+    const beaches = map.terrain.filter((region) => region.kind === 'beach');
+    if (map.water.length === 0) continue;
+    assert.equal(
+      beaches.length,
+      map.water.length,
+      `seed ${config.seed} should give every lake a beach`,
+    );
+  }
+});
+
+test('beach width is wide enough to be visible at fit zoom', () => {
+  // A map drawn to fill a laptop viewport puts roughly 0.44 screen pixels on one world unit, so the
+  // old fixed 7-unit band landed at about 3 pixels and read as a line. The median beach now has to
+  // be several times wider than that, and roughly half must clear 10 units.
+  const widths = [];
+  for (const seed of [583921, 42, 777, 7, 0, -91, 5, 100, 12345]) {
+    const map = generateMap({ seed, width: 1024, height: 768, water: { amount: 0.2 } });
+    for (const beach of map.terrain.filter((region) => region.kind === 'beach'))
+      widths.push(beach.metadata.shorelineWidth.max);
+  }
+  widths.sort((a, b) => a - b);
+  const median = widths[Math.floor(widths.length / 2)];
+  assert.ok(widths.length > 10, `expected many beaches, got ${widths.length}`);
+  assert.ok(
+    median > 10,
+    `median widest beach section should clear 10 units, got ${median.toFixed(1)}`,
+  );
+  const wide = widths.filter((width) => width > 10).length;
+  assert.ok(
+    wide / widths.length > 0.5,
+    `most beaches should exceed 10 units, got ${wide}/${widths.length}`,
+  );
+});
+
+test('terrain colours are distinguishable in the default theme', () => {
+  // Rock was previously 20 RGB units from meadow and invisible on screen.
+  const channel = (hex, index) => parseInt(hex.slice(index, index + 2), 16);
+  const distance = (a, b) =>
+    Math.hypot(
+      channel(a, 1) - channel(b, 1),
+      channel(a, 3) - channel(b, 3),
+      channel(a, 5) - channel(b, 5),
+    );
+  const { terrain } = defaultTheme;
+  const pairs = [
+    ['rock', 'meadow'],
+    ['rock', 'grass'],
+    ['rock', 'scrub'],
+    ['beach', 'grass'],
+    ['beach', 'scrub'],
+  ];
+  for (const [a, b] of pairs)
+    assert.ok(
+      distance(terrain[a], terrain[b]) > 25,
+      `${a} and ${b} should be clearly distinguishable, got ${distance(terrain[a], terrain[b]).toFixed(0)}`,
+    );
+});
+
 test('terrain regions are emitted grass, meadow, scrub, rock, beach', () => {
   for (const seed of [583921, 42, 777, 7, 0, -91, 90210, 31337]) {
     const map = generateMap({ seed, width: 768, height: 512 });

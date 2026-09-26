@@ -1,7 +1,13 @@
-import type { SpatialFields, TerrainRegion, WaterRegion } from '../../map/GameMap.js';
+import type {
+  PolygonGeometry,
+  SpatialFields,
+  TerrainRegion,
+  WaterRegion,
+} from '../../map/GameMap.js';
 import { polygonArea } from '../../map/geometry.js';
 import type { ResolvedGenerationConfig } from '../GenerationConfig.js';
 import { gridToPolygons } from '../contours.js';
+import { sampleField } from '../sampleField.js';
 import { shorelineBand } from './Shoreline.js';
 
 export type TerrainKind = TerrainRegion['kind'];
@@ -28,30 +34,41 @@ const ROCK_QUANTILE = 0.94;
 /** Regions below this share of the map are dropped as noise. */
 const MIN_REGION_FRACTION = 0.0025;
 
-/** Width of the band drawn along each shoreline, in world units. */
-const BEACH_WIDTH = 7;
+/**
+ * How many vertices either side of each one share its width when the band is smoothed. Shorelines
+ * carry tens to hundreds of vertices, so this is a fraction of the ring rather than a fixed span.
+ */
+const BEACH_SMOOTHING_RADIUS = 6;
 
 /**
- * Builds a beach band along each lake. The band is the shoreline ring offset outward with the lake
- * punched out as a hole, so it is a ring of land rather than a filled blob. Lakes whose offset folds
- * through itself or would leave the map are skipped.
+ * Beach width range, in world units.
+ *
+ * The upper end matters for legibility: a map drawn to fit a laptop viewport puts roughly 0.44
+ * screen pixels on one world unit, so a 7-unit band lands at about 3 pixels and reads as a line
+ * rather than ground. The lower end is near zero so sheltered inlets close to bare shoreline
+ * instead of every shore carrying a visible rim.
  */
-function generateBeaches(config: ResolvedGenerationConfig, water: WaterRegion[]): TerrainRegion[] {
-  const beaches: TerrainRegion[] = [];
-  for (const lake of water) {
-    const geometry = shorelineBand(lake.geometry, BEACH_WIDTH, config.width, config.height);
-    if (!geometry) continue;
-    beaches.push({
-      id: `terrain-beach-${beaches.length + 1}`,
-      type: 'terrain',
-      kind: 'beach',
-      geometry,
-      asset: { category: 'terrain.grass', variant: 'beach-1' },
-      metadata: { shorelineWidth: BEACH_WIDTH, source: lake.id },
-    });
-  }
-  return beaches;
-}
+const BEACH_MIN_WIDTH = 1.5;
+const BEACH_MAX_WIDTH = 30;
+
+/**
+ * How far a lake's own moisture spread is stretched when mapping it to width, as a multiplier on the
+ * standard deviation. Moisture varies far more between lakes (measured mean 0.22 to 0.67 across
+ * seeds) than along a single shoreline (standard deviation 0.01 to 0.13), so normalising against a
+ * single map-wide value gives each lake one nearly constant width.
+ *
+ * The multiplier is deliberately below 1. Dividing by the raw standard deviation drives nearly every
+ * vertex to the ends of the range, which renders as a bimodal shore that is either a hairline or the
+ * full width. Half a spread puts the bulk of a lake's shoreline in the middle of the range with a
+ * tapering tail, so width grades along the shore.
+ */
+const LAKE_SPREAD_MULTIPLIER = 0.5;
+
+/**
+ * Floor on a lake's own moisture spread, in moisture units. A lake sitting in near-uniform ground
+ * would otherwise divide by a near-zero spread and produce a rim that is uniformly full width.
+ */
+const MIN_LAKE_SPREAD = 0.06;
 
 function scoreField(fields: SpatialFields): number[] {
   return fields.terrain.map((value, index) => (value + fields.moisture[index]) / 2);
@@ -68,6 +85,8 @@ function generateRegions(
   level: number,
   kind: TerrainKind,
   config: ResolvedGenerationConfig,
+  /** Threshold published in metadata, in the units of the caller's own field. */
+  reportedLevel: number = level,
 ): TerrainRegion[] {
   const minimumArea = MIN_REGION_FRACTION * config.width * config.height;
   return gridToPolygons(columns, rows, values, level, config.width, config.height)
@@ -78,17 +97,111 @@ function generateRegions(
       kind,
       geometry,
       asset: { category: 'terrain.grass', variant: `${kind}-1` },
-      metadata: { scoreLevel: level },
+      metadata: { scoreLevel: reportedLevel },
     }));
 }
 
 /**
+ * Per-vertex beach offsets driven by the moisture field, so width varies continuously around every
+ * shoreline instead of following a single ring. Coarse bays are narrow, sheltered stretches are
+ * wide, which reads as sand building up in the lee of a bank.
+ */
+function beachWidths(
+  config: ResolvedGenerationConfig,
+  fields: SpatialFields,
+  water: PolygonGeometry,
+): number[] {
+  const moisture = water.points.map((point) =>
+    sampleField(fields, fields.moisture, point.x, point.y, config.width, config.height),
+  );
+  const mean = moisture.reduce((a, b) => a + b, 0) / moisture.length;
+  const deviation = Math.sqrt(moisture.reduce((a, v) => a + (v - mean) ** 2, 0) / moisture.length);
+  const spread = Math.max(MIN_LAKE_SPREAD, deviation * LAKE_SPREAD_MULTIPLIER);
+  return moisture.map((value) => {
+    const unit = Math.max(0, Math.min(1, 0.5 + ((value - mean) / spread) * 0.5));
+    return BEACH_MIN_WIDTH + (BEACH_MAX_WIDTH - BEACH_MIN_WIDTH) * unit;
+  });
+}
+
+/**
+ * Circular moving average over a closed ring, so neighbouring vertices share a width.
+ *
+ * Without this, adjacent vertices can jump from a hairline to the full width, and the offset ring
+ * folds through itself at each sharp turn. Grading the width along the shore is both what a beach
+ * does and what keeps the geometry simple.
+ */
+function smoothRing(values: number[], radius: number): number[] {
+  const count = values.length;
+  if (radius < 1 || count === 0) return [...values];
+  return values.map((_, index) => {
+    let total = 0;
+    let weight = 0;
+    for (let offset = -radius; offset <= radius; offset += 1) {
+      const at = (((index + offset) % count) + count) % count;
+      // A linear taper keeps the average local, so a wide bay is not flattened by narrow neighbours
+      // on the far side of the ring.
+      total += values[at] * (radius + 1 - Math.abs(offset));
+      weight += radius + 1 - Math.abs(offset);
+    }
+    return total / weight;
+  });
+}
+
+/**
+ * Builds a beach band along each lake. The band is the shoreline ring offset outward with the lake
+ * punched out as a hole, so it is a ring of land rather than a filled blob. Lakes whose offset folds
+ * through itself or would leave the map are skipped.
+ */
+function generateBeaches(
+  config: ResolvedGenerationConfig,
+  fields: SpatialFields,
+  water: WaterRegion[],
+): TerrainRegion[] {
+  const beaches: TerrainRegion[] = [];
+  for (const lake of water) {
+    const distances = smoothRing(
+      beachWidths(config, fields, lake.geometry),
+      BEACH_SMOOTHING_RADIUS,
+    );
+    const geometry = shorelineBand(lake.geometry, {
+      distances,
+      width: config.width,
+      height: config.height,
+    });
+    if (!geometry) continue;
+    // Report the widths the band actually has. shorelineBand may scale the band down to keep the
+    // ring simple, and a narrower band than requested is the correct thing to record.
+    const realised = geometry.points.map((point, index) =>
+      Math.hypot(point.x - lake.geometry.points[index].x, point.y - lake.geometry.points[index].y),
+    );
+    const min = Math.min(...realised);
+    const max = Math.max(...realised);
+    beaches.push({
+      id: `terrain-beach-${beaches.length + 1}`,
+      type: 'terrain',
+      kind: 'beach',
+      geometry,
+      asset: { category: 'terrain.grass', variant: 'beach-1' },
+      metadata: {
+        shorelineWidth: {
+          min,
+          max,
+          mean: realised.reduce((a, b) => a + b, 0) / realised.length,
+        },
+        source: lake.id,
+      },
+    });
+  }
+  return beaches;
+}
+
+/**
  * Classifies the generated fields into terrain overlays: `meadow` and `scrub` from the combined
- * terrain and moisture score, `rock` from elevation. The caller keeps the full-bounds `grass` base
- * region, which is why only overlays are returned.
+ * terrain and moisture score, `rock` from elevation, and `beach` bands around lakes. The caller
+ * keeps the full-bounds `grass` base region, which is why only overlays are returned.
  *
  * Emission order is a contract consumed by tests and the renderer: grass, then meadow, then scrub,
- * then rock, so later kinds take precedence over earlier ones.
+ * then rock, then beach, so later kinds take precedence over earlier ones.
  */
 export function generateTerrain(
   config: ResolvedGenerationConfig,
@@ -115,14 +228,18 @@ export function generateTerrain(
       'scrub',
       config,
     ),
+    // contourSegments selects cells at or below the level, so a high quantile on raw elevation
+    // would return the low ground. Negating the field asks for the high ground instead.
     ...generateRegions(
       fields.columns,
       fields.rows,
-      fields.elevation,
-      quantile(sortedElevation, ROCK_QUANTILE),
+      fields.elevation.map((value) => -value),
+      -quantile(sortedElevation, ROCK_QUANTILE),
       'rock',
       config,
+      // Publish the elevation threshold rather than the negated one the contour is traced against.
+      quantile(sortedElevation, ROCK_QUANTILE),
     ),
-    ...generateBeaches(config, water),
+    ...generateBeaches(config, fields, water),
   ];
 }

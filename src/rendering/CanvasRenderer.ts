@@ -184,9 +184,17 @@ export class CanvasRenderer {
       for (const water of map.water) {
         polygonPath(context, water.geometry);
         context.lineJoin = 'round';
-        context.lineWidth = 14;
-        context.strokeStyle = theme.water.shore;
-        if (styled) context.stroke();
+        // The shore margin is clipped inside the lake. Stroking it unclipped would paint half its
+        // width onto the beach and erase narrow beaches entirely.
+        if (styled) {
+          context.save();
+          context.clip('evenodd');
+          context.lineWidth = 14;
+          context.strokeStyle = theme.water.shore;
+          context.stroke();
+          context.restore();
+        }
+        polygonPath(context, water.geometry);
         context.fillStyle = view === 'water' ? '#559c9b' : theme.water.fill;
         context.fill('evenodd');
         context.lineWidth = 2;
