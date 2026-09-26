@@ -15,7 +15,7 @@ test('generation is byte-stable for the same config', () => {
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(
     stableHash(first),
-    'f822f0d1ef6ef205a67bdb95f3cdaeb397cbadc6123dfc5012a6b075a697e1b2',
+    'a43636d9eba2d527c4627df1f0de66cbdeec6c05f4891f2675faccc7028ec902',
   );
 });
 
@@ -86,6 +86,71 @@ test('water contours are unaffected by the shared contour module', () => {
     map.water.reduce((sum, lake) => sum + (lake.geometry.holes?.length ?? 0), 0),
     0,
   );
+});
+
+// Terrain overlays overlap freely and are NOT nested: on a typical map the scrub contour
+// encloses more area than the meadow contour, so the boundaries cross. What is contractual is the
+// emission order (grass, then meadow, then scrub) combined with last-match-wins resolution, which
+// yields scrub > meadow > grass precedence. These tests pin both, so a future change to region
+// ordering, kind assignment, or contouring cannot silently change which surface a consumer sees.
+test('terrain regions are emitted as grass, then meadow, then scrub', () => {
+  for (const seed of [583921, 42, 777, 7, 0, -91, 90210, 31337]) {
+    const map = generateMap({ seed, width: 768, height: 512 });
+    const kinds = map.terrain.map((region) => region.kind);
+    assert.equal(kinds[0], 'grass');
+    const firstScrub = kinds.indexOf('scrub');
+    if (firstScrub !== -1) {
+      assert.ok(
+        kinds.slice(firstScrub).every((kind) => kind === 'scrub'),
+        `seed ${seed} emitted a non-scrub region after scrub`,
+      );
+      assert.ok(
+        kinds.slice(0, firstScrub).every((kind) => kind !== 'scrub'),
+        `seed ${seed} emitted scrub before meadow`,
+      );
+    }
+  }
+});
+
+test('overlapping terrain resolves to one kind per point with scrub over meadow over grass', () => {
+  let overlapping = 0;
+  for (let index = 0; index < 8; index += 1) {
+    const map = generateMap({ seed: 100 + index * 53, width: 768, height: 512 });
+    for (let probe = 0; probe < 1500; probe += 1) {
+      const point = {
+        x: ((probe * 7919) % 997) * (map.bounds.width / 997),
+        y: ((probe * 104729) % 991) * (map.bounds.height / 991),
+      };
+      const matches = map.terrain.filter((region) => pointInPolygon(point, region.geometry));
+      if (matches.length === 0) continue;
+      if (matches.length > 1) overlapping += 1;
+
+      const inScrub = matches.some((region) => region.kind === 'scrub');
+      const inMeadow = matches.some((region) => region.kind === 'meadow');
+      const expected = inScrub ? 'scrub' : inMeadow ? 'meadow' : 'grass';
+      assert.equal(matches[matches.length - 1].kind, expected, 'last match must win');
+    }
+  }
+  assert.ok(overlapping > 0, 'expected the overlays to overlap in practice');
+});
+
+test('scrub and meadow regions overlap rather than nest', () => {
+  const map = generateMap({ seed: 583921, width: 768, height: 512 });
+  const meadow = map.terrain.find((region) => region.kind === 'meadow');
+  const scrub = map.terrain.find((region) => region.kind === 'scrub');
+  assert.ok(meadow && scrub, 'expected both meadow and scrub on the default seed');
+  const outside = scrub.geometry.points.filter(
+    (point) => !pointInPolygon(point, meadow.geometry),
+  ).length;
+  assert.ok(outside > 0, 'scrub is expected to extend beyond meadow');
+});
+
+test('the grass base region always covers the full bounds', () => {
+  for (const seed of [583921, 42, 777, 7, 0, -91]) {
+    const map = generateMap({ seed, width: 768, height: 512 });
+    assert.equal(map.terrain[0].kind, 'grass');
+    assert.equal(polygonArea(map.terrain[0].geometry), map.bounds.width * map.bounds.height);
+  }
 });
 
 test('generated entities, terrain, and collision geometry remain valid in world bounds', () => {
@@ -251,6 +316,88 @@ test('tree canopies stay out of water across seeds and extreme aspect ratios', (
         ),
       );
     }
+  }
+});
+
+// Coefficient of variation of trees per 100x100 world-unit cell. Lower means the
+// woodland is spread evenly; higher means it is concentrated into groves.
+const treeSpread = (map) => {
+  const cells = new Map();
+  for (const tree of map.vegetation) {
+    const key = `${Math.floor(tree.position.x / 100)},${Math.floor(tree.position.y / 100)}`;
+    cells.set(key, (cells.get(key) ?? 0) + 1);
+  }
+  const counts = [...cells.values()];
+  const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
+  const variance = counts.reduce((a, c) => a + (c - mean) ** 2, 0) / counts.length;
+  return { cells: counts.length, cv: Math.sqrt(variance) / mean };
+};
+
+test('clustering has a usable range instead of saturating', () => {
+  const spread = [0, 0.25, 0.5, 0.75, 1].map((clustering) =>
+    treeSpread(
+      generateMap({
+        seed: 583921,
+        vegetation: { density: 0.65, clustering },
+        water: { amount: 0.15 },
+      }),
+    ),
+  );
+  // Every step up in clustering should make the woodland measurably more concentrated.
+  for (let index = 1; index < spread.length; index += 1) {
+    assert.ok(
+      spread[index].cv > spread[index - 1].cv,
+      `clustering should concentrate trees; cv went ${spread[index - 1].cv.toFixed(3)} -> ${spread[index].cv.toFixed(3)}`,
+    );
+  }
+  // The control must span a real range, not a rounding difference.
+  assert.ok(spread[4].cv > spread[0].cv * 1.5, 'clustering range is too compressed to be useful');
+});
+
+test('clustering reaches the density target across most of its range', () => {
+  for (const density of [0.3, 0.65]) {
+    const target = Math.round((2048 * 1536 * density) / 1250);
+    for (const clustering of [0, 0.25, 0.5, 0.75]) {
+      const map = generateMap({
+        seed: 583921,
+        vegetation: { density, clustering },
+        water: { amount: 0.15 },
+      });
+      assert.equal(
+        map.vegetation.length,
+        target,
+        `density ${density} clustering ${clustering} should reach its target`,
+      );
+    }
+  }
+});
+
+test('moisture drives tree species rather than distributing them at random', () => {
+  for (const seed of [583921, 42, 777, 90210]) {
+    const map = generateMap({ seed, width: 1024, height: 768 });
+    const { fields } = map.metadataLayers;
+    const cellValue = (tree, field) => {
+      const column = Math.round((tree.position.x / map.bounds.width) * (fields.columns - 1));
+      const row = Math.round((tree.position.y / map.bounds.height) * (fields.rows - 1));
+      return field[row * fields.columns + column];
+    };
+    const oaks = map.vegetation.filter((tree) => tree.species === 'oak');
+    const birches = map.vegetation.filter((tree) => tree.species === 'birch');
+    assert.ok(oaks.length > 20 && birches.length > 20, 'expected both species on every map');
+
+    const mean = (trees) =>
+      trees.reduce((sum, tree) => sum + cellValue(tree, fields.moisture), 0) / trees.length;
+    // Birch is the wet-ground species, so it should sit on wetter ground than oak.
+    assert.ok(mean(birches) > mean(oaks), `birch should favour wet ground on seed ${seed}`);
+  }
+});
+
+test('species mix stays close to its base ratio', () => {
+  for (const seed of [583921, 42, 777]) {
+    const map = generateMap({ seed });
+    const birches = map.vegetation.filter((tree) => tree.species === 'birch').length;
+    const share = birches / map.vegetation.length;
+    assert.ok(share > 0.15 && share < 0.45, `birch share ${share.toFixed(3)} drifted too far`);
   }
 });
 

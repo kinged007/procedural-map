@@ -19,6 +19,12 @@ npm run check
 
 It runs formatting, linting, type checking, tests, and the demo build.
 
+The same gate runs automatically before every commit, via the hook in `.githooks/`. `core.hooksPath` is set in this repository's git config. Because that setting lives in `.git/config` rather than in a tracked file, a fresh clone needs it enabled once:
+
+```sh
+git config core.hooksPath .githooks
+```
+
 Build outputs are `dist/` for the library and `dist-demo/` for the browser studio:
 
 ```sh

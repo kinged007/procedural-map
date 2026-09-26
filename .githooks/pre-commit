@@ -1,0 +1,16 @@
+#!/bin/sh
+# Local quality gate. Runs the same checks CI would: format, lint, typecheck, tests, demo build.
+# Enabled by core.hooksPath in this repository's git config, so the hook is tracked in git and
+# survives a clone.
+set -e
+
+cd "$(git rev-parse --show-toplevel)"
+
+if [ ! -d node_modules ]; then
+  echo "pre-commit: node_modules is missing; run 'npm install' first." >&2
+  exit 1
+fi
+
+echo "pre-commit: running npm run check (format, lint, typecheck, tests, demo build)..."
+npm run check
+echo "pre-commit: all checks passed."

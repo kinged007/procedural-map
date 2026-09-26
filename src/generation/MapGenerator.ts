@@ -283,6 +283,14 @@ function sampleField(
   return top * (1 - ty) + bottom * ty;
 }
 
+/**
+ * Birch tolerates wetter ground, so its share of a woodland rises with local moisture. The bias is
+ * applied as an odds multiplier around the base ratio rather than by resampling, so it cannot
+ * silently drop below the base share in dry country.
+ */
+const BASE_BIRCH_SHARE = 0.28;
+const SPECIES_MOISTURE_BIAS = 1.4;
+
 function generateTrees(
   config: ResolvedGenerationConfig,
   fields: SpatialFields,
@@ -297,8 +305,9 @@ function generateTrees(
   const trees: VegetationEntity[] = [];
   const spatial = new Map<string, VegetationEntity[]>();
   const cellSize = 18;
-  const threshold = 0.56 - config.vegetation.clustering * 0.16;
-  const maxAttempts = Math.max(300, target * 18);
+  // High clustering rejects most of the map, so the attempt budget has to grow with selectivity or
+  // the loop runs dry before reaching the density target and the map silently thins out.
+  const maxAttempts = Math.max(300, target * (10 + config.vegetation.clustering * 40));
   const cellKey = (x: number, y: number) =>
     `${Math.floor(x / cellSize)},${Math.floor(y / cellSize)}`;
   for (let attempt = 0; attempt < maxAttempts && trees.length < target; attempt += 1) {
@@ -311,11 +320,22 @@ function generateTrees(
       config.width,
       config.height,
     );
-    const groveStrength = Math.max(
-      0,
-      Math.min(1, (fieldValue - threshold) * (3 + config.vegetation.clustering * 7)),
+    const moisture = sampleField(
+      fields,
+      fields.moisture,
+      position.x,
+      position.y,
+      config.width,
+      config.height,
     );
-    const acceptance = config.vegetation.density * (0.025 + groveStrength * 0.975);
+    // clustering is a single knob with two coupled effects. It raises the ground a tree needs to
+    // survive (a higher bar in weak ground) and sharpens the response (strong groves are favoured
+    // harder). Together these turn a full, even scatter into tight groves with real clearings
+    // between them, while leaving the total tree count set by density.
+    const bar = 0.34 + config.vegetation.clustering * 0.34;
+    const sharpness = 2.2 + config.vegetation.clustering * 5.8;
+    const groveStrength = Math.max(0, Math.min(1, (fieldValue - bar) * sharpness * 0.9 + 0.5));
+    const acceptance = config.vegetation.density * (0.015 + groveStrength * 0.985);
     if (random.next() > acceptance) continue;
     const radius = 10 + random.next() * 8;
     if (
@@ -338,7 +358,14 @@ function generateTrees(
       }
     }
     if (crowded) continue;
-    const species = random.next() < 0.72 ? 'oak' : 'birch';
+    // Birch gains ground on wet ground, oak holds dry ground, from the same base ratio.
+    const moistureOffset = (moisture - 0.5) * 2;
+    const birchOdds =
+      (BASE_BIRCH_SHARE / (1 - BASE_BIRCH_SHARE)) *
+      (moistureOffset >= 0
+        ? 1 + moistureOffset * SPECIES_MOISTURE_BIAS
+        : 1 / (1 - moistureOffset * SPECIES_MOISTURE_BIAS));
+    const species = random.next() < birchOdds / (1 + birchOdds) ? 'birch' : 'oak';
     const tree: VegetationEntity = {
       id: `tree-${trees.length + 1}`,
       type: 'tree',
