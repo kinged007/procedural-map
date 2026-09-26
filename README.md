@@ -118,3 +118,7 @@ renderer.render(map, { theme: defaultTheme, view: 'styled' });
 | [Generation](docs/generation.md)                   | How each layer is produced: fields, water, terrain classification, vegetation, and roads, and how the controls affect the result.                                   |
 | [Architecture](docs/architecture.md)               | Where the product boundary sits and how the modules divide up.                                                                                                      |
 | [PRD](../PRD.md)                                   | Requirements, design principles, and the roadmap.                                                                                                                   |
+
+## License
+
+MIT. See [LICENSE](LICENSE).
