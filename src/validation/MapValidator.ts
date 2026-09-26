@@ -409,7 +409,16 @@ export function validateMap(data: unknown): ValidationResult {
             collection === 'terrain' &&
             (entity.type !== 'terrain' ||
               !['grass', 'meadow', 'scrub', 'rock', 'beach'].includes(entity.kind as string) ||
-              !validator.polygon(entity.geometry, `${collection}[${index}].geometry`, bounds!))
+              !validator.polygon(entity.geometry, `${collection}[${index}].geometry`, bounds!) ||
+              // Collision is optional on terrain, but where it is present it must be a polygon.
+              (entity.collision !== undefined &&
+                (!isRecord(entity.collision) ||
+                  entity.collision.type !== 'polygon' ||
+                  !validator.polygon(
+                    entity.collision,
+                    `${collection}[${index}].collision`,
+                    bounds!,
+                  ))))
           )
             validator.error(`${collection}[${index}]`, 'must be a terrain region');
           if (

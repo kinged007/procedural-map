@@ -378,11 +378,22 @@ This should naturally create:
 
 ### Environmental obstructions
 
-Trees and water must expose collision/obstruction information.
+Trees, water, and impassable terrain must expose collision/obstruction information.
 
 The generator itself does not perform player collision.
 
 It simply describes the geometry.
+
+| Feature       | Collision shape | Notes                                                                     |
+| ------------- | --------------- | ------------------------------------------------------------------------- |
+| Trees         | circle          | Radius is smaller than the canopy, so the trunk blocks and not the leaves. |
+| Water         | polygon         | Same polygon as the region's geometry.                                     |
+| Rock terrain  | polygon         | Same polygon as the region's geometry.                                     |
+| Other terrain | none            | `grass`, `meadow`, `scrub`, and `beach` are passable.                       |
+
+Impassable terrain is identified by the presence of a `collision` on a terrain region, not by a separate list. Collision is therefore uniform across every collection: each blocking feature carries its own geometry, so a consumer does not need to know which kind of feature it is looking at.
+
+Trees do not spawn inside impassable terrain, for the same reason they do not spawn inside water.
 
 ---
 
@@ -1200,6 +1211,8 @@ No premature optimization is required in v0.1.
 - The regions are **not** nested. Each kind is contoured from a different field, so the boundaries cross and regions overlap freely.
 
 Consumers that need one surface per point must test the final match, or test kinds in `beach`, `rock`, `scrub`, `meadow`, `grass` order. Testing the first match will report `grass` almost everywhere and is incorrect.
+
+Obstruction is **not** resolved by that ordering. A `rock` region blocks movement across its whole polygon even where a later `beach` region draws over part of it, so a consumer walking the surface and a consumer walking the collision polygons can disagree about a given point. That disagreement is intended: sand drawn over the edge of a rock face does not make the rock walkable.
 
 A strict partition, in which every region is disjoint and covers the map exactly once, is a possible future alternative. It is not implemented, and changing to it would be a breaking change to how consumers read `terrain`.
 

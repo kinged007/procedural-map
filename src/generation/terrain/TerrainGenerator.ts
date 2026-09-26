@@ -85,9 +85,14 @@ function generateRegions(
   level: number,
   kind: TerrainKind,
   config: ResolvedGenerationConfig,
-  /** Threshold published in metadata, in the units of the caller's own field. */
-  reportedLevel: number = level,
+  options: {
+    /** Threshold published in metadata, in the units of the caller's own field. */
+    reportedLevel?: number;
+    /** True for terrain that cannot be walked on, which publishes a collision polygon. */
+    impassable?: boolean;
+  } = {},
 ): TerrainRegion[] {
+  const { reportedLevel = level, impassable = false } = options;
   const minimumArea = MIN_REGION_FRACTION * config.width * config.height;
   return gridToPolygons(columns, rows, values, level, config.width, config.height)
     .filter((geometry) => polygonArea(geometry) > minimumArea)
@@ -96,6 +101,9 @@ function generateRegions(
       type: 'terrain',
       kind,
       geometry,
+      // Rock is impassable, so it blocks movement over the same area it covers. The collision
+      // polygon is the region itself rather than an inset, matching how water blocks movement.
+      ...(impassable ? { collision: { type: 'polygon' as const, ...geometry } } : {}),
       asset: { category: 'terrain.grass', variant: `${kind}-1` },
       metadata: { scoreLevel: reportedLevel },
     }));
@@ -237,8 +245,11 @@ export function generateTerrain(
       -quantile(sortedElevation, ROCK_QUANTILE),
       'rock',
       config,
-      // Publish the elevation threshold rather than the negated one the contour is traced against.
-      quantile(sortedElevation, ROCK_QUANTILE),
+      {
+        // Publish the elevation threshold rather than the negated one the contour is traced against.
+        reportedLevel: quantile(sortedElevation, ROCK_QUANTILE),
+        impassable: true,
+      },
     ),
     ...generateBeaches(config, fields, water),
   ];

@@ -34,6 +34,8 @@ export interface TerrainRegion extends MapEntity {
   type: 'terrain';
   kind: 'grass' | 'meadow' | 'scrub' | 'rock' | 'beach';
   geometry: PolygonGeometry;
+  /** Present on impassable terrain, where the region matches the visible ground exactly. */
+  collision?: { type: 'polygon' } & PolygonGeometry;
 }
 
 export interface WaterRegion extends MapEntity {

@@ -16,7 +16,7 @@ test('generation is byte-stable for the same config', () => {
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(
     stableHash(first),
-    'c1a3dd296411643f67cf685a4816c388fb158e0165dc8197548d5387723b04ec',
+    '68090e0d210757e4f0da97f17b32f165e5ea472650b784de8133ffeea1ed4e44',
   );
 });
 
@@ -110,6 +110,58 @@ test('the emitted rock polygon covers the high ground, not the low ground', () =
       `seed ${seed}: rock polygon covers ${(actual * 100).toFixed(1)}% of the map, expected about ${(expected * 100).toFixed(1)}%`,
     );
   }
+});
+
+test('rock publishes a collision polygon covering the region', () => {
+  for (const seed of [583921, 42, 777, 7, 0, -91]) {
+    const map = generateMap({ seed, width: 1024, height: 768 });
+    const rock = map.terrain.filter((region) => region.kind === 'rock');
+    assert.ok(rock.length > 0, `expected rock on seed ${seed}`);
+    for (const region of rock) {
+      assert.ok(region.collision, 'rock should block movement');
+      assert.equal(region.collision.type, 'polygon');
+      assert.deepEqual(
+        region.collision.points,
+        region.geometry.points,
+        'rock collision should cover the same ground it draws',
+      );
+      assert.deepEqual(region.collision.holes, region.geometry.holes);
+    }
+  }
+});
+
+test('passable terrain carries no collision', () => {
+  // Only rock is impassable. Water and trees already block movement, and grass, meadow, scrub, and
+  // beach must stay walkable.
+  const map = generateMap({ seed: 583921, width: 1024, height: 768 });
+  for (const region of map.terrain) {
+    if (region.kind === 'rock') continue;
+    assert.equal(region.collision, undefined, `${region.kind} should be passable`);
+  }
+});
+
+test('trees do not grow on impassable terrain', () => {
+  for (const seed of [583921, 42, 777, 7, 0, -91, 5, 100]) {
+    const map = generateMap({ seed, width: 1024, height: 768 });
+    const rock = map.terrain.filter((region) => region.kind === 'rock');
+    for (const tree of map.vegetation)
+      for (const region of rock)
+        assert.ok(
+          !circleIntersectsPolygon(tree.position, tree.radius, region.geometry),
+          `seed ${seed}: tree ${tree.id} overlaps rock ${region.id}`,
+        );
+  }
+});
+
+test('the collision view has geometry for every blocking feature', () => {
+  // The renderer draws the collision view from per-entity collision, so every impassable feature
+  // has to carry it or it is silently walkable.
+  const map = generateMap({ seed: 583921, width: 1024, height: 768 });
+  for (const region of map.terrain)
+    if (region.kind === 'rock') assert.ok(region.collision, 'rock must draw in the collision view');
+  for (const lake of map.water) assert.ok(lake.collision, 'water must draw in the collision view');
+  for (const tree of map.vegetation)
+    assert.ok(tree.collision, 'trees must draw in the collision view');
 });
 
 test('beaches form a band that hugs each shoreline and excludes the lake', () => {

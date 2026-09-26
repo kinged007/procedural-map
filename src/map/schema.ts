@@ -132,6 +132,12 @@ export const gameMapSchema = {
             type: { const: 'terrain' },
             kind: { enum: ['grass', 'meadow', 'scrub', 'rock', 'beach'] },
             geometry: { $ref: '#/$defs/polygon' },
+            collision: {
+              allOf: [
+                { $ref: '#/$defs/polygon' },
+                { type: 'object', required: ['type'], properties: { type: { const: 'polygon' } } },
+              ],
+            },
           },
         },
       ],

@@ -2,6 +2,7 @@ import type {
   GameMap,
   PolygonGeometry,
   SpatialFields,
+  TerrainRegion,
   VegetationEntity,
   WaterRegion,
 } from '../map/GameMap.js';
@@ -275,6 +276,8 @@ function generateTrees(
   fields: SpatialFields,
   water: WaterRegion[],
   random: Random,
+  /** Terrain that cannot be walked on, and so cannot hold a tree. */
+  impassable: TerrainRegion[],
 ): VegetationEntity[] {
   if (config.vegetation.density === 0 || config.water.amount === 1) return [];
   const target = Math.min(
@@ -326,6 +329,11 @@ function generateTrees(
       continue;
     if (water.some((lake) => circleIntersectsPolygon(position, radius + 1, lake.geometry)))
       continue;
+    // Trees cannot root in impassable ground. Rock is the only such terrain today, and terrain is
+    // generated before vegetation, so the same test that keeps trees out of lakes keeps them off
+    // rock.
+    if (impassable.some((region) => circleIntersectsPolygon(position, radius + 1, region.geometry)))
+      continue;
     const gridX = Math.floor(position.x / cellSize);
     const gridY = Math.floor(position.y / cellSize);
     let crowded = false;
@@ -367,6 +375,8 @@ export function generateMap(config: GenerationConfig): GameMap {
   const fields = generateFields(resolved);
   const level = waterLevel(fields, resolved.water.amount);
   const water = generateWater(resolved, fields, level);
+  const terrain = generateTerrain(resolved, fields, water);
+  const impassable = terrain.filter((region) => region.collision !== undefined);
   const random = new Random(mixSeed(resolved.seed) ^ 0x51f15e);
   const map: GameMap = {
     version: '1.0',
@@ -391,10 +401,10 @@ export function generateMap(config: GenerationConfig): GameMap {
         },
         asset: { category: 'terrain.grass', variant: 'temperate-1' },
       },
-      ...generateTerrain(resolved, fields, water),
+      ...terrain,
     ],
     water,
-    vegetation: generateTrees(resolved, fields, water, random),
+    vegetation: generateTrees(resolved, fields, water, random, impassable),
     structures: [],
     roads: [],
     barriers: [],
