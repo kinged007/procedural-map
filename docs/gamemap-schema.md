@@ -23,7 +23,7 @@ Points are absolute `{ x, y }` world coordinates. Polygon `points` and every rin
 
 Collision geometry is a circle, polygon, or rectangle. Water lakes use their polygon for both visible geometry and collision. A tree has a visual canopy `radius` and a circle collision with `center` equal to the tree’s absolute `position`; its collision radius is smaller than the canopy radius.
 
-Terrain region kinds are `grass`, `meadow`, and `scrub`. The MVP water kind is `lake`. Entities include stable IDs, types, optional rotation/tags/assets/metadata, and the specialized fields required by their collection.
+Terrain region kinds are `grass`, `meadow`, `scrub`, `rock`, and `beach`. `grass` is always a single full-bounds region; the rest are overlays and may overlap. Regions are emitted in that order and the **last** matching region wins, so a consumer should resolve one surface per point by taking the final match rather than the first. A `beach` carries its own polygon with the lake punched out as a hole. The MVP water kind is `lake`. Entities include stable IDs, types, optional rotation/tags/assets/metadata, and the specialized fields required by their collection.
 
 ## Bounds and validation
 

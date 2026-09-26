@@ -412,7 +412,7 @@ export function generateMap(config: GenerationConfig): GameMap {
         },
         asset: { category: 'terrain.grass', variant: 'temperate-1' },
       },
-      ...generateTerrain(resolved, fields),
+      ...generateTerrain(resolved, fields, water),
     ],
     water,
     vegetation: generateTrees(resolved, fields, water, random),

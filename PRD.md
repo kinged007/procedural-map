@@ -1194,12 +1194,12 @@ No premature optimization is required in v0.1.
 
 `terrain` regions are generated as independent contours of a shared field, so a point may belong to more than one region. This is intentional, but it needs a rule so a consumer always gets the same answer.
 
-- Regions are emitted in a fixed order: the full-bounds `grass` base, then all `meadow`, then all `scrub`.
+- Regions are emitted in a fixed order: the full-bounds `grass` base, then all `meadow`, then all `scrub`, then all `rock`, then all `beach`.
 - A point belongs to every region whose polygon contains it.
-- The surface is the **last** matching region, which gives `scrub` precedence over `meadow`, and `meadow` over `grass`.
-- The regions are **not** nested. On a typical map the `scrub` contour encloses more area than the `meadow` contour, so the boundaries cross and some `scrub` area lies outside every `meadow` area.
+- The surface is the **last** matching region, giving precedence `beach` over `rock`, `rock` over `scrub`, `scrub` over `meadow`, and `meadow` over `grass`.
+- The regions are **not** nested. Each kind is contoured from a different field, so the boundaries cross and regions overlap freely.
 
-Consumers that need one surface per point must test the final match, or test kinds in `scrub`, `meadow`, `grass` order. Testing the first match will report `grass` almost everywhere and is incorrect.
+Consumers that need one surface per point must test the final match, or test kinds in `beach`, `rock`, `scrub`, `meadow`, `grass` order. Testing the first match will report `grass` almost everywhere and is incorrect.
 
 A strict partition, in which every region is disjoint and covers the map exactly once, is a possible future alternative. It is not implemented, and changing to it would be a breaking change to how consumers read `terrain`.
 

@@ -130,7 +130,7 @@ export const gameMapSchema = {
           required: ['kind', 'geometry'],
           properties: {
             type: { const: 'terrain' },
-            kind: { enum: ['grass', 'meadow', 'scrub'] },
+            kind: { enum: ['grass', 'meadow', 'scrub', 'rock', 'beach'] },
             geometry: { $ref: '#/$defs/polygon' },
           },
         },

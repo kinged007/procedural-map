@@ -408,7 +408,7 @@ export function validateMap(data: unknown): ValidationResult {
           if (
             collection === 'terrain' &&
             (entity.type !== 'terrain' ||
-              !['grass', 'meadow', 'scrub'].includes(entity.kind as string) ||
+              !['grass', 'meadow', 'scrub', 'rock', 'beach'].includes(entity.kind as string) ||
               !validator.polygon(entity.geometry, `${collection}[${index}].geometry`, bounds!))
           )
             validator.error(`${collection}[${index}]`, 'must be a terrain region');

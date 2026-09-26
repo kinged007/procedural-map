@@ -32,7 +32,7 @@ export interface MapEntity {
 
 export interface TerrainRegion extends MapEntity {
   type: 'terrain';
-  kind: 'grass' | 'meadow' | 'scrub';
+  kind: 'grass' | 'meadow' | 'scrub' | 'rock' | 'beach';
   geometry: PolygonGeometry;
 }
 

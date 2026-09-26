@@ -19,13 +19,30 @@ Generation creates normalized terrain, elevation, moisture, and vegetation field
 
 ## Terrain classification
 
-`terrain` always begins with one full-bounds `grass` region, followed by `meadow` and `scrub` overlays contoured from the combined terrain and moisture fields. The regions overlap freely and are not nested: on a typical map the scrub contour encloses more area than the meadow contour, so the two boundaries cross and some scrub areas sit outside every meadow area.
+`terrain` always begins with one full-bounds `grass` region, followed by four overlay kinds. They are emitted in a fixed order and are **not** nested: because each kind is contoured from a different field, the boundaries cross and regions freely overlap.
 
-Regions are emitted in a fixed order — all `meadow` first, then all `scrub` — and this ordering is part of the contract. A point matches every region containing it, and the surface is resolved by **last match wins**, which yields the precedence `scrub` over `meadow` over `grass`. A consumer that needs one surface per point should find the final matching region rather than the first, or test kinds in that order.
+| Kind     | Driven by                         | Coverage        |
+| -------- | --------------------------------- | --------------- |
+| `meadow` | terrain + moisture score          | top 25% of land |
+| `scrub`  | terrain + moisture score          | top 10% of land |
+| `rock`   | elevation                         | top 6% of land  |
+| `beach`  | shoreline offset around each lake | 7-unit band     |
 
-Levels are per-map quantiles of the score rather than fixed constants. The score is the mean of two fractal noise fields and clusters tightly around 0.5 (measured median 0.500, 90th percentile 0.596 across seeds), so a fixed threshold would give anywhere from 20% to 30% coverage depending on the seed. Taking each map's own 75th and 90th percentiles instead holds the split near 75% grass, 15% meadow, and 10% scrub on every seed. The result remains a pure function of the seed, so determinism is unaffected.
+`meadow` and `scrub` share one score, the mean of the terrain and moisture fields, so `scrub` is a subset of the same land that reads as meadow. Both use per-map quantiles, because that score clusters tightly around 0.5 and a fixed threshold would swing coverage between 20% and 30% depending on the seed.
 
-Regions below 0.25% of the map area are dropped. Each overlay's `asset.variant` names its kind, so `MapTheme.terrain` colours apply directly.
+`rock` uses the elevation field directly, at the 94th percentile. It is the same field that places lakes, so highland sits above the waterline rather than being scattered independently of it. Rock regions may extend under a lake; the renderer draws water over terrain, so this reads as a lake bed and the validator permits it.
+
+A `beach` is the lake outline offset 7 units outward, with the lake itself punched out as a hole, so it is a ring of land rather than a filled blob. `metadata.shorelineWidth` and `metadata.source` record the offset and the lake it came from. A lake whose offset would fold through itself or leave the map gets no beach — a 128-unit map and a fully flooded map both produce none, which is why beach count can be lower than lake count.
+
+## Resolution rule
+
+Regions are emitted as `grass`, then `meadow`, then `scrub`, then `rock`, then `beach`. A point matches every region containing it, and the surface is the **last** match, giving precedence:
+
+```
+beach > rock > scrub > meadow > grass
+```
+
+Consumers that need one surface per point must take the final match, or test kinds in that order. Testing the first match reports `grass` almost everywhere and is incorrect.
 
 ## Vegetation
 

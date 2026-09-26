@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
-import { exportMap, generateMap, importMap } from '../dist/index.js';
+import { exportMap, generateMap, importMap, validateMap } from '../dist/index.js';
 import { circleIntersectsPolygon, pointInPolygon, polygonArea } from '../dist/map/geometry.js';
 
 const stableHash = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -15,7 +15,7 @@ test('generation is byte-stable for the same config', () => {
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(
     stableHash(first),
-    'a43636d9eba2d527c4627df1f0de66cbdeec6c05f4891f2675faccc7028ec902',
+    '216069de461c1b44b37526ae18040b23d81a5af30da3b5c33dff5ca9ccb9751d',
   );
 });
 
@@ -32,7 +32,7 @@ test('different seeds produce different semantic maps', () => {
   );
 });
 
-test('terrain classification produces bounded, valid meadow and scrub regions', () => {
+test('terrain classification produces bounded, valid regions for every kind', () => {
   for (const seed of [583921, 42, 777, 7, 0, -91]) {
     const map = generateMap({ seed, width: 768, height: 512 });
     const base = map.terrain[0];
@@ -43,7 +43,7 @@ test('terrain classification produces bounded, valid meadow and scrub regions', 
     assert.ok(new Set(overlays.map((region) => region.kind)).size > 0);
 
     for (const region of overlays) {
-      assert.ok(['meadow', 'scrub'].includes(region.kind));
+      assert.ok(['meadow', 'scrub', 'rock', 'beach'].includes(region.kind));
       assert.ok(polygonArea(region.geometry) > 0);
       for (const ring of [region.geometry.points, ...(region.geometry.holes ?? [])])
         for (const point of ring) {
@@ -51,6 +51,97 @@ test('terrain classification produces bounded, valid meadow and scrub regions', 
           assert.ok(point.y >= 0 && point.y <= map.bounds.height);
         }
     }
+  }
+});
+
+test('rock follows elevation and lands above the waterline', () => {
+  for (const seed of [583921, 42, 777, 90210]) {
+    const map = generateMap({ seed, width: 1024, height: 768, water: { amount: 0.25 } });
+    const rock = map.terrain.filter((region) => region.kind === 'rock');
+    assert.ok(rock.length > 0, `expected rock on seed ${seed}`);
+
+    const { fields } = map.metadataLayers;
+    const elevationAt = (point) => {
+      const column = Math.round((point.x / map.bounds.width) * (fields.columns - 1));
+      const row = Math.round((point.y / map.bounds.height) * (fields.rows - 1));
+      return fields.elevation[row * fields.columns + column];
+    };
+
+    // Rock is the high ground, so its interior should sit above the water level.
+    const level = map.metadataLayers.waterLevel;
+    const interior = rock
+      .map((region) => region.geometry.points)
+      .flat()
+      .map(elevationAt);
+    const mean = interior.reduce((a, b) => a + b, 0) / interior.length;
+    assert.ok(mean > level, `rock should sit above the waterline on seed ${seed}`);
+  }
+});
+
+test('rock covers a small, stable share of the map', () => {
+  for (const seed of [583921, 42, 777, 7, 0, -91, 90210, 31337]) {
+    const map = generateMap({ seed, width: 1024, height: 768, vegetation: { density: 0 } });
+    const { fields } = map.metadataLayers;
+    const level = map.terrain.find((region) => region.kind === 'rock').metadata.scoreLevel;
+    const share =
+      fields.elevation.filter((value) => value >= level).length / fields.elevation.length;
+    assert.ok(share > 0.02 && share < 0.12, `rock share ${share.toFixed(3)} out of range`);
+  }
+});
+
+test('beaches form a band that hugs each shoreline and excludes the lake', () => {
+  const map = generateMap({ seed: 583921, width: 1024, height: 768, water: { amount: 0.2 } });
+  const beaches = map.terrain.filter((region) => region.kind === 'beach');
+  assert.equal(beaches.length, map.water.length, 'each lake should get a beach');
+
+  for (const beach of beaches) {
+    const lake = map.water.find((candidate) => candidate.id === beach.metadata.source);
+    assert.ok(lake, 'beach should reference its source lake');
+    assert.equal(beach.geometry.holes.length, 1, 'the lake should be punched out of the band');
+
+    // The band is the lake grown by the shoreline width, so every outer-ring point sits that far
+    // from the lake outline, and the band area is the difference between the two rings.
+    const width = beach.metadata.shorelineWidth;
+    const closest = Math.min(
+      ...beach.geometry.points.map((point) =>
+        Math.min(
+          ...lake.geometry.points.map((vertex) =>
+            Math.hypot(point.x - vertex.x, point.y - vertex.y),
+          ),
+        ),
+      ),
+    );
+    assert.ok(
+      Math.abs(closest - width) < 0.5,
+      `band offset ${closest.toFixed(2)} should be ${width}`,
+    );
+    assert.ok(polygonArea(beach.geometry) > 0, 'beach should enclose a positive area');
+
+    // The lake interior is a hole, so a lake vertex must not be inside the beach polygon.
+    assert.ok(
+      !pointInPolygon(lake.geometry.points[0], beach.geometry),
+      'the lake interior should be outside its own beach band',
+    );
+  }
+});
+
+test('beaches are skipped rather than emitted outside the map or self-intersecting', () => {
+  // Tiny maps and full water leave no room for a band; the generator must omit the beach rather
+  // than emit geometry that fails validation.
+  for (const config of [
+    { seed: 1, water: { amount: 1 } },
+    { seed: 2, water: { amount: 0 } },
+    { seed: 4, width: 128, height: 128, water: { amount: 0.5 } },
+  ]) {
+    const map = generateMap(config);
+    const result = validateMap(map);
+    assert.ok(result.valid, result.errors.join('; '));
+    for (const beach of map.terrain.filter((region) => region.kind === 'beach'))
+      for (const ring of [beach.geometry.points, ...beach.geometry.holes])
+        for (const point of ring) {
+          assert.ok(point.x >= 0 && point.x <= map.bounds.width);
+          assert.ok(point.y >= 0 && point.y <= map.bounds.height);
+        }
   }
 });
 
@@ -93,26 +184,24 @@ test('water contours are unaffected by the shared contour module', () => {
 // emission order (grass, then meadow, then scrub) combined with last-match-wins resolution, which
 // yields scrub > meadow > grass precedence. These tests pin both, so a future change to region
 // ordering, kind assignment, or contouring cannot silently change which surface a consumer sees.
-test('terrain regions are emitted as grass, then meadow, then scrub', () => {
+test('terrain regions are emitted grass, meadow, scrub, rock, beach', () => {
   for (const seed of [583921, 42, 777, 7, 0, -91, 90210, 31337]) {
     const map = generateMap({ seed, width: 768, height: 512 });
     const kinds = map.terrain.map((region) => region.kind);
     assert.equal(kinds[0], 'grass');
-    const firstScrub = kinds.indexOf('scrub');
-    if (firstScrub !== -1) {
-      assert.ok(
-        kinds.slice(firstScrub).every((kind) => kind === 'scrub'),
-        `seed ${seed} emitted a non-scrub region after scrub`,
-      );
-      assert.ok(
-        kinds.slice(0, firstScrub).every((kind) => kind !== 'scrub'),
-        `seed ${seed} emitted scrub before meadow`,
-      );
+    // The array must stay grouped in precedence order, whatever mix of kinds a seed produces.
+    const order = ['grass', 'meadow', 'scrub', 'rock', 'beach'];
+    let previous = -1;
+    for (const kind of kinds) {
+      const position = order.indexOf(kind);
+      assert.ok(position >= 0, `unexpected terrain kind ${kind}`);
+      assert.ok(position >= previous, `seed ${seed} emitted ${kind} out of precedence order`);
+      previous = position;
     }
   }
 });
 
-test('overlapping terrain resolves to one kind per point with scrub over meadow over grass', () => {
+test('overlapping terrain resolves to one kind per point by emission order', () => {
   let overlapping = 0;
   for (let index = 0; index < 8; index += 1) {
     const map = generateMap({ seed: 100 + index * 53, width: 768, height: 512 });
@@ -125,10 +214,15 @@ test('overlapping terrain resolves to one kind per point with scrub over meadow 
       if (matches.length === 0) continue;
       if (matches.length > 1) overlapping += 1;
 
-      const inScrub = matches.some((region) => region.kind === 'scrub');
-      const inMeadow = matches.some((region) => region.kind === 'meadow');
-      const expected = inScrub ? 'scrub' : inMeadow ? 'meadow' : 'grass';
-      assert.equal(matches[matches.length - 1].kind, expected, 'last match must win');
+      // Precedence follows emission order, so the last match decides: beach, then rock, then
+      // scrub, then meadow, then grass.
+      const kinds = ['beach', 'rock', 'scrub', 'meadow', 'grass'];
+      const matched = kinds.filter((kind) => matches.some((region) => region.kind === kind));
+      assert.equal(
+        matches[matches.length - 1].kind,
+        matched[0],
+        'last match must equal the highest-precedence match',
+      );
     }
   }
   assert.ok(overlapping > 0, 'expected the overlays to overlap in practice');
