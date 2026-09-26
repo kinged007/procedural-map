@@ -44,6 +44,7 @@ const map = generateMap({
   height: 1536,
   water: { amount: 0.2 },
   vegetation: { density: 0.65, clustering: 0.8 },
+  roads: { density: 0.5 },
 });
 
 const json = exportMap(map);
@@ -65,4 +66,12 @@ const renderer = new CanvasRenderer(document.querySelector('canvas'));
 renderer.render(map, { theme: defaultTheme, view: 'styled' });
 ```
 
-See [the architecture](docs/architecture.md), [the GameMap schema](docs/gamemap-schema.md), and [generation](docs/generation.md).
+## Documentation
+
+| Document                                           | What it covers                                                                                                                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Consuming generated maps](docs/consuming-maps.md) | **Start here if you are consuming a map in a game.** What the generator produces, what it expects your engine to do, cost and limits, and what is not produced yet. |
+| [GameMap v1.0 schema](docs/gamemap-schema.md)      | Field-by-field structure of the exported JSON, with worked examples taken from a real generated map, and every validation rule.                                     |
+| [Generation](docs/generation.md)                   | How each layer is produced: fields, water, terrain classification, vegetation, and roads, and how the controls affect the result.                                   |
+| [Architecture](docs/architecture.md)               | Where the product boundary sits and how the modules divide up.                                                                                                      |
+| [PRD](../PRD.md)                                   | Requirements, design principles, and the roadmap.                                                                                                                   |

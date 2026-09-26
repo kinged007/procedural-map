@@ -249,6 +249,12 @@ test('road tiers are distinct and each has a sensible width', () => {
   // A primary must be wider than a secondary, which must be wider than a path.
   assert.ok(widths.get('primary') > widths.get('secondary'), 'primary should be widest');
   assert.ok(widths.get('secondary') > widths.get('path'), 'secondary should be wider than a path');
+  // Restated from docs/gamemap-schema.md, so a width change has to land in the docs too.
+  assert.deepEqual([...widths].sort(), [
+    ['path', 7],
+    ['primary', 22],
+    ['secondary', 14],
+  ]);
 });
 
 test('roads stay apart from each other except where they branch', () => {

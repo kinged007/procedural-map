@@ -7,6 +7,7 @@ export { importMap, NativeMapImporter } from './importers/NativeMapImporter.js';
 export { WatabouImporter } from './importers/WatabouImporter.js';
 export type { MapImporter } from './importers/MapImporter.js';
 export { exportMap } from './exporters/JsonExporter.js';
+export { boundsOf, circleIntersectsPolygon, pointInPolygon, polygonArea } from './map/geometry.js';
 export { gameMapSchema } from './map/schema.js';
 export type { MapTheme } from './themes/MapTheme.js';
 export { defaultTheme } from './themes/DefaultTheme.js';
