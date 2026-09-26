@@ -6,7 +6,7 @@ import type {
   TerrainRegion,
   WaterRegion,
 } from '../../map/GameMap.js';
-import { pointInPolygon, polygonArea } from '../../map/geometry.js';
+import { boundsOf, pointInPolygon, polygonArea } from '../../map/geometry.js';
 import { ringIsSimple } from '../terrain/Shoreline.js';
 import type { ResolvedGenerationConfig } from '../GenerationConfig.js';
 import { sampleField } from '../sampleField.js';
@@ -23,24 +23,11 @@ const EDGE_MARGIN = 16;
 /** Minimum road length, in world units. A shorter stub is dropped rather than published. */
 const MIN_ROAD_LENGTH = 40;
 
-/**
- * Cost added to water and impassable terrain when routing. Roads prefer open ground, and these values
- * make crossing expensive rather than forbidden: a road still reaches the far bank, but only where
- * there is no reasonable alternative. River crossings and bridges are v0.7 work.
- */
-const WATER_COST = 9;
-const ROCK_COST = 6;
-
 /** Share of the map covered by water and rock at which road generation is skipped. */
 const BLOCKED_SHARE = 0.55;
 
-/**
- * Accumulated cost at which a road stops growing, and the per-step cost above which a step is refused.
- * Water alone costs more than a step allows, so a road cannot push through a lake even though crossing
- * is only expensive rather than forbidden.
- */
+/** Accumulated cost at which a road stops growing. */
 const ROAD_BUDGET = 2600;
-const MAX_STEP_COST = 14;
 
 /** Candidates tried per step, as an angle either side of straight ahead. */
 const FAN = [-0.7, -0.42, -0.2, 0, 0.2, 0.42, 0.7];
@@ -136,20 +123,6 @@ class SpatialIndex<T> {
     }
     return [...found];
   }
-}
-
-function boundsOf(points: Point[]): { minX: number; minY: number; maxX: number; maxY: number } {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const point of points) {
-    if (point.x < minX) minX = point.x;
-    if (point.x > maxX) maxX = point.x;
-    if (point.y < minY) minY = point.y;
-    if (point.y > maxY) maxY = point.y;
-  }
-  return { minX, minY, maxX, maxY };
 }
 
 /**
@@ -287,16 +260,21 @@ function covered(index: SpatialIndex<PolygonGeometry>, point: Point): boolean {
 }
 
 /**
- * Cost of standing at a point, before the turn penalty. Water and rock dominate the value so a route
- * bends around them, while the terrain field adds a gentle preference so roads follow the land
- * instead of running dead straight.
+ * True where a road cannot stand: open water or impassable terrain. A road that runs into either ends
+ * or turns away; it never crosses. Bridges and fords are v0.7 work.
+ */
+function blocked(point: Point, cost: RouteCost): boolean {
+  return covered(cost.water, point) || covered(cost.rock, point);
+}
+
+/**
+ * Cost of standing at a point, before the turn penalty. The terrain field adds a gentle preference so
+ * roads follow the land instead of running dead straight.
  */
 function terrainCost(point: Point, cost: RouteCost): number {
-  let value =
-    sampleField(cost.fields, cost.fields.terrain, point.x, point.y, cost.width, cost.height) * 1.2;
-  if (covered(cost.water, point)) value += WATER_COST;
-  if (covered(cost.rock, point)) value += ROCK_COST;
-  return value;
+  return (
+    sampleField(cost.fields, cost.fields.terrain, point.x, point.y, cost.width, cost.height) * 1.2
+  );
 }
 
 function insideMap(config: ResolvedGenerationConfig, point: Point): boolean {
@@ -313,8 +291,9 @@ function insideMap(config: ResolvedGenerationConfig, point: Point): boolean {
  *
  * The walk is a greedy step over a small fan of headings, not a shortest-path search. Each step takes
  * the cheapest heading available, which produces the meander and long detours of a surveyed road
- * rather than a taut path between endpoints. Cost is charged against a budget so the road terminates,
- * and a step that is too expensive to justify aborts the branch rather than pushing through.
+ * rather than a taut path between endpoints. Cost is charged against a budget so the road terminates.
+ * Water and rock are refused outright, so a road bends around an obstruction for as long as it takes
+ * and ends where the ground runs out.
  */
 function growRoad(
   start: Point,
@@ -325,6 +304,8 @@ function growRoad(
   step: number,
   budget: number,
 ): Point[] {
+  // A seed inside water or rock cannot be rescued by steering, so the road is abandoned there.
+  if (blocked(start, cost)) return [];
   const path: Point[] = [start];
   let heading = Math.atan2(direction.y, direction.x);
   let spent = 0;
@@ -339,7 +320,7 @@ function growRoad(
         x: clamp(here.x + Math.cos(candidate) * step, 0, config.width),
         y: clamp(here.y + Math.sin(candidate) * step, 0, config.height),
       };
-      if (!insideMap(config, probe)) continue;
+      if (!insideMap(config, probe) || blocked(probe, cost)) continue;
       // Turning sharply is discouraged, so a road bends rather than zigzags.
       const value = terrainCost(probe, cost) + Math.abs(offset) * 0.9 + random() * 0.25;
       if (value < bestCost) {
@@ -347,8 +328,8 @@ function growRoad(
         bestHeading = candidate;
       }
     }
+    // Every heading was refused, so the road ends here rather than pushing through the obstruction.
     if (!Number.isFinite(bestCost)) break;
-    if (bestCost > MAX_STEP_COST) break;
     const next = {
       x: clamp(here.x + Math.cos(bestHeading) * step, 0, config.width),
       y: clamp(here.y + Math.sin(bestHeading) * step, 0, config.height),

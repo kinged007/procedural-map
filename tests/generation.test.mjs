@@ -16,7 +16,7 @@ test('generation is byte-stable for the same config', () => {
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   assert.equal(
     stableHash(first),
-    '1c9eb2c92ee5a729ad9d39e31aedfae61484df12de95a30e414307e3fd5f2cab',
+    '1483a6d8f017df45b017c6d406a94059f6ac9c08fd647e8113a3881b56726dcc',
   );
 });
 
@@ -139,6 +139,49 @@ test('roads form a valid network on every seed and map size', () => {
         assert.ok(point.y >= 0 && point.y <= map.bounds.height, `road ${road.id} leaves the map`);
       }
     }
+  }
+});
+
+test('a road never crosses water or impassable rock', () => {
+  for (const config of [
+    { seed: 583921 },
+    { seed: 42, width: 1024, height: 768 },
+    { seed: 7, width: 800, height: 600 },
+    { seed: 12345, width: 640, height: 480 },
+  ]) {
+    const map = generateMap(config);
+    const rock = map.terrain.filter((region) => region.kind === 'rock');
+    for (const road of map.roads) {
+      for (const point of road.path) {
+        for (const lake of map.water)
+          assert.ok(
+            !pointInPolygon(point, lake.geometry),
+            `${road.id} runs through ${lake.id} on seed ${config.seed}`,
+          );
+        for (const region of rock)
+          assert.ok(
+            !pointInPolygon(point, region.geometry),
+            `${road.id} runs through rock on seed ${config.seed}`,
+          );
+      }
+    }
+  }
+});
+
+test('no tree is planted on or overhanging a road', () => {
+  for (const config of [
+    { seed: 583921 },
+    { seed: 42, width: 1024, height: 768 },
+    { seed: 7, vegetation: { density: 0.9, clustering: 0.2 } },
+  ]) {
+    const map = generateMap(config);
+    if (map.roads.length === 0) continue;
+    for (const tree of map.vegetation)
+      for (const road of map.roads)
+        assert.ok(
+          !circleIntersectsPolygon(tree.position, tree.radius + 3, road.collision),
+          `${tree.id} overhangs ${road.id}`,
+        );
   }
 });
 

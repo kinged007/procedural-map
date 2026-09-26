@@ -80,6 +80,26 @@ export function circleIntersectsPolygon(
   );
 }
 
+/** Axis-aligned bounds of a point list, as `{minX, minY, maxX, maxY}`. */
+export function boundsOf(points: Point[]): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+} {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const point of points) {
+    if (point.x < minX) minX = point.x;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.y > maxY) maxY = point.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
 export function polygonArea(geometry: PolygonGeometry): number {
   return (
     Math.abs(ringArea(geometry.points)) -

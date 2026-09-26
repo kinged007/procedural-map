@@ -1,12 +1,13 @@
 import type {
   GameMap,
   PolygonGeometry,
+  RoadEntity,
   SpatialFields,
   TerrainRegion,
   VegetationEntity,
   WaterRegion,
 } from '../map/GameMap.js';
-import { circleIntersectsPolygon, polygonArea } from '../map/geometry.js';
+import { boundsOf, circleIntersectsPolygon, polygonArea } from '../map/geometry.js';
 import { assertValidMap } from '../validation/MapValidator.js';
 import { gridToPolygons } from './contours.js';
 import { generateRoads } from './roads/RoadGenerator.js';
@@ -17,6 +18,12 @@ import {
   type GenerationConfig,
   type ResolvedGenerationConfig,
 } from './GenerationConfig.js';
+
+/**
+ * Space kept between a tree canopy and the edge of a road, in world units. A road needs open ground
+ * beside it, so a trunk is not placed where its canopy would hang over the verge.
+ */
+const ROAD_CLEARANCE = 3;
 
 const MIN_DIMENSION = 128;
 const MAX_DIMENSION = 4096;
@@ -288,6 +295,8 @@ function generateTrees(
   random: Random,
   /** Terrain that cannot be walked on, and so cannot hold a tree. */
   impassable: TerrainRegion[],
+  /** Road surfaces, whose verges are kept clear of trees. */
+  roads: RoadEntity[],
 ): VegetationEntity[] {
   if (config.vegetation.density === 0 || config.water.amount === 1) return [];
   const target = Math.min(
@@ -295,6 +304,10 @@ function generateTrees(
     Math.max(1, Math.round((config.width * config.height * config.vegetation.density) / 1250)),
   );
   const trees: VegetationEntity[] = [];
+  const corridors = roads.map((road) => ({
+    road,
+    bounds: boundsOf(road.collision.points),
+  }));
   const spatial = new Map<string, VegetationEntity[]>();
   const cellSize = 18;
   // High clustering rejects most of the map, so the attempt budget has to grow with selectivity or
@@ -343,6 +356,20 @@ function generateTrees(
     // generated before vegetation, so the same test that keeps trees out of lakes keeps them off
     // rock.
     if (impassable.some((region) => circleIntersectsPolygon(position, radius + 1, region.geometry)))
+      continue;
+    // A road is cut through the wood, so the trees it would pass through are not placed at all. The
+    // corridor includes the clearance, so the canopy stays off the verge instead of overhanging it.
+    const reach = radius + ROAD_CLEARANCE;
+    if (
+      corridors.some(
+        ({ road, bounds }) =>
+          position.x + reach >= bounds.minX &&
+          position.x - reach <= bounds.maxX &&
+          position.y + reach >= bounds.minY &&
+          position.y - reach <= bounds.maxY &&
+          circleIntersectsPolygon(position, reach, road.collision),
+      )
+    )
       continue;
     const gridX = Math.floor(position.x / cellSize);
     const gridY = Math.floor(position.y / cellSize);
@@ -416,7 +443,7 @@ export function generateMap(config: GenerationConfig): GameMap {
       ...terrain,
     ],
     water,
-    vegetation: generateTrees(resolved, fields, water, random, impassable),
+    vegetation: generateTrees(resolved, fields, water, random, impassable, roads),
     structures: [],
     roads,
     barriers: [],
