@@ -4,7 +4,24 @@
 
 A procedural map generator for games and other projects. It started as a way to get good-looking maps generated from a seed for a game I was building, and it is general enough for any project that needs a world. The work is inspired by [Watabou](https://watabou.github.io), which showed what this kind of tool can do. Thanks.
 
-`@fieldwork/procedural-map` creates deterministic, semantic `GameMap` worlds. It is a Node ESM library with no DOM dependency. The repository also includes a browser map studio for generation, import/export, and debug views.
+`fieldwork-map` creates deterministic, semantic `GameMap` worlds. It is a Node ESM library with no DOM dependency and no runtime dependencies. The repository also includes a browser map studio for generation, import/export, and debug views.
+
+## Install
+
+From a git checkout, which builds the library on install:
+
+```sh
+npm install github:kinged007/procedural-map
+```
+
+From a published tarball:
+
+```sh
+npm install fieldwork-map
+```
+
+A git install runs the `prepare` script, so `dist/` is built for you and you do not need a global
+TypeScript. Only `dist/` ships in the tarball, about 55KB.
 
 ## Setup
 
@@ -60,11 +77,33 @@ if (!result.valid) throw new Error(result.errors.join('; '));
 
 `generateMap(config)` returns a validated, deterministic `GameMap`. `exportMap(map)` returns canonical JSON, `importMap(jsonOrObject)` validates and clones native canonical maps, and `validateMap(value)` returns `{ valid, errors }`.
 
-The Canvas renderer is available from the `@fieldwork/procedural-map/rendering` subpath. Supply it with an HTML canvas and either the built-in `defaultTheme` or a custom `MapTheme`.
+For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 
 ```js
-import { CanvasRenderer } from '@fieldwork/procedural-map/rendering';
-import { defaultTheme } from '@fieldwork/procedural-map';
+import {
+  generateMap,
+  rasterizeWalkability,
+  chunkTile,
+  navigableRegions,
+  spawnCandidates,
+} from 'fieldwork-map';
+
+const raster = rasterizeWalkability(map, { cellSize: 32 });
+const chunk = chunkTile(raster, map, chunkX, chunkY, { chunkSize: 32 });
+chunk[y * chunkSize + x]; // 0 open, 1 blocked
+
+navigableRegions(raster); // the areas a character can walk between
+spawnCandidates(raster, map, { count: 8, minSeparation: 200 });
+```
+
+A cell is blocked if any part of it is covered by water or rock. The rule is stated, with its
+consequences, in [Consuming generated maps](docs/consuming-maps.md).
+
+The Canvas renderer is available from the `fieldwork-map/rendering` subpath. Supply it with an HTML canvas and either the built-in `defaultTheme` or a custom `MapTheme`.
+
+```js
+import { CanvasRenderer } from 'fieldwork-map/rendering';
+import { defaultTheme } from 'fieldwork-map';
 
 const renderer = new CanvasRenderer(document.querySelector('canvas'));
 renderer.render(map, { theme: defaultTheme, view: 'styled' });

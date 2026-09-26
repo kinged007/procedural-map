@@ -4,18 +4,20 @@ What the generator gives you, and what it expects your game to do with it.
 
 ## The one rule
 
-The map describes geometry. It does not implement collision, navigation, or rendering.
+The map describes geometry. The generator also bakes a walkability grid from that geometry, so the
+two can never quietly disagree, but it does not implement collision, navigation meshes, or rendering.
 
-There is no collision map, no rasterised walkability grid, and no baked navigation mesh. Every
-blocking feature carries its own geometry, and turning that into physics is your engine's job. This is
-deliberate: it keeps the output independent of your physics system, so the same map can drive a
-kinematic character controller, a rigid-body vehicle, and a server-authoritative movement check without
-regenerating.
+Every blocking feature carries its own geometry, and turning that into physics is your engine's job.
+This is deliberate: it keeps the output independent of your physics system, so the same map can drive
+a kinematic character controller, a rigid-body vehicle, and a server-authoritative movement check
+without regenerating. `rasterizeWalkability` reads that same geometry, so the baked grid and your
+engine's collision agree about what blocks, and the grid is one thing to keep in step rather than
+three.
 
 ## Getting a map
 
 ```js
-import { generateMap, exportMap, importMap, validateMap } from '@fieldwork/procedural-map';
+import { generateMap, exportMap, importMap, validateMap } from 'fieldwork-map';
 
 const map = generateMap({
   seed: 583921,
@@ -61,7 +63,7 @@ and the surface is the **last** region that contains the point, giving precedenc
 for the first match reports `grass` almost everywhere and is wrong.
 
 ```js
-import { generateMap, pointInPolygon } from '@fieldwork/procedural-map';
+import { generateMap, pointInPolygon } from 'fieldwork-map';
 
 const KIND_ORDER = ['grass', 'meadow', 'scrub', 'rock', 'beach'];
 
@@ -131,6 +133,107 @@ Roads never cross water or rock, and are kept 20 world units clear of any shorel
 out of open ground simply ends. There are no bridges and no fords, so a road network is a connected
 graph that never crosses a river, not a fully connected one.
 
+## Walking on the map
+
+For a per-frame movement check, do not walk the geometry. Bake it once and read a byte.
+
+```js
+import { generateMap, rasterizeWalkability, chunkTile } from 'fieldwork-map';
+
+const map = generateMap({ seed: 583921, width: 2048, height: 1536 });
+const raster = rasterizeWalkability(map, { cellSize: 32 });
+
+raster.cells[row * raster.columns + column]; // 0 open, 1 blocked
+```
+
+`cellSize` is yours to pick, so bake at whatever your own tile size is. The raster covers the map in
+`columns` by `rows` cells, row-major, one byte per cell.
+
+### The fill rule, stated once
+
+**A cell is blocked if any part of it is covered by a water polygon or a rock region.**
+
+Three consequences follow, and all of them are deliberate:
+
+- **Conservative.** A cell the shoreline merely clips is blocked, even where its centre is dry. The
+  rule can mark a cell blocked whose centre is open; it can never mark a covered cell open, so a
+  movement check driven by the raster cannot step into a lake.
+- **A beach drawn over rock is still blocked.** The rock is still there, and obstruction is
+  independent of what is drawn on top.
+- **Feature size is measured against `cellSize`.** A lake 20 units across disappears at `cellSize`
+  32, because the dilation around it swallows the whole thing. Pick a `cellSize` comfortably smaller
+  than the smallest feature you need to keep walkable.
+
+Trees are **not** in the raster. A tree blocks a small trunk circle inside a large canopy, and baking
+the canopy would seal the clearings a player is meant to walk through between trees. Trunks are
+resolved on top, per chunk, which is what keeps a grove walkable.
+
+That has a consequence worth planning around: **`cellSize` is also the granularity of tree
+collision.** A trunk marks every cell its circle touches, so a trunk 4 units across blocks a 32x32
+square at `cellSize: 32`. On the default 2048x1536 map, adding trunks to a central chunk moves it
+from 18% blocked to 62% at `cellSize: 32`, and from 18% to 18% at `cellSize: 4`. A dense wood reads
+as solid at a coarse `cellSize` and as walkable at a fine one, so pick `cellSize` against your tree
+density, not just against your tile size.
+
+### The read path
+
+`chunkTile` bakes one chunk: the raster cells the chunk covers, with the trunks that fall in it marked
+on top. A chunk outside the map is entirely blocked, so a character cannot walk off the edge.
+
+```js
+const chunk = chunkTile(raster, map, chunkX, chunkY, { chunkSize: 32 });
+chunk[y * chunkSize + x]; // 0 open, 1 blocked
+```
+
+Bake a chunk once, when the camera first reaches it, and keep the result. The bake is the expensive
+part; the lookup afterwards is an array read. That split is what keeps the per-frame cost
+independent of how much map you generated. On a 4096x4096 map at the 8,000 tree ceiling, a chunk
+bake is around 0.4ms and a lookup is a byte fetch.
+
+The trunk step currently tests every tree in the map, so a bake costs a few hundred microseconds
+rather than a fixed amount. If your tree count grows past the generator's ceiling, that is the first
+thing to replace with a broadphase.
+
+### Where can a character actually go
+
+`navigableRegions` splits the raster's open cells into the areas a character can walk between, and
+`spawnCandidates` picks the roomiest points on the map.
+
+```js
+import { navigableRegions, spawnCandidates } from 'fieldwork-map';
+
+const regions = navigableRegions(raster); // largest first
+regions[0].area; // open ground, in world units squared
+regions[0].clearance; // the roomiest ground in the region
+regions[0].representativeOpenPoint; // where a base goes
+regions[0].centroid; // geometric centre, can sit on blocked ground
+
+spawnCandidates(raster, map, { count: 8, minSeparation: 200 });
+```
+
+Connectivity is four-way, which is the conservative reading: the raster already blocks any cell a
+blocker touches, so a gap it leaves is at least a cell wide, and a character wider than a cell cannot
+cross a diagonal pinch. Two open areas meeting at a corner stay two regions.
+
+That is the answer to "is that base on an island". One region is one walkable landmass, so two points
+in the same region are reachable from each other by construction, and the largest region is the main
+continent. `clearance` is a real distance to the nearest blocked cell, so `representativeOpenPoint` is
+the roomiest ground in the region rather than merely a point inside it. Spawn candidates come back in
+descending clearance, at least `minSeparation` apart, and are fully deterministic: the same raster
+gives the same list in the same order.
+
+The map goes in alongside the raster so that a candidate is never placed inside a tree. Clearance is
+measured against the raster, which holds water and rock but not trees, so on a wooded map the roomiest
+ground is very often the inside of a trunk.
+
+Two things to know about the ordering. Candidates are ranked by raster clearance, so a point next to a
+grove is chosen on the ground's merits and then kept or dropped, which means the order does not
+account for trees. And the roomiest ground on a map is often in a corner, because a corner is furthest
+from anything. That is a correct answer to the question asked, so if you want bases inland, filter on
+`centroid` or on `region.cells` yourself. For the same reason a large `minSeparation` can return every
+candidate from the largest region: one base per landmass means walking `regions` and taking each
+region's `representativeOpenPoint`.
+
 ## Size and cost
 
 Measured on a single modern laptop core, single-threaded. The 900x700 row uses the smaller
@@ -175,9 +278,10 @@ So the map is not mistaken for more than it is:
 - **No rivers or bridges.** Water is lakes only, and roads stop at the bank.
 - **No heightmap or 3D data.** The map is flat. Elevation is available as a debug field, not as
   geometry, and no region carries a height.
-- **No navigation, spawn points, or region naming.** No region has a name or a unique identity beyond
-  its `id`.
-- **No chunking.** One map is one flat rectangle, bounded at 4096x4096.
+- **No navigation mesh, and no pathfinding.** A* or whatever you use runs over the walkability grid.
+- **No region naming.** Regions are numbered by size. No region has a name.
+- **No chunking.** One map is one flat rectangle, bounded at 4096x4096. The walkability grid is baked
+  in chunks for reading, but the map itself is not divided into tile-sized worlds.
 
 ## Debugging a map that looks wrong
 

@@ -1,12 +1,15 @@
 {
-  "name": "@fieldwork/procedural-map",
+  "name": "fieldwork-map",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Deterministic semantic world generation with a Canvas map studio.",
   "engines": {
     "node": ">=22.12.0"
   },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -20,6 +23,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build:lib": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build:lib",
     "build:demo": "vite build",
     "build": "npm run build:lib && npm run build:demo",
     "preview": "vite preview --host 127.0.0.1",
