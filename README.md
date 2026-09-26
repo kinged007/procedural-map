@@ -1,5 +1,9 @@
 # Procedural Map Generator
 
+![The Fieldwork map studio showing an illustrated temperate landscape with lakes, roads, and woodland](docs/images/studio.png)
+
+A procedural map generator for games and other projects. It started as a way to get good-looking maps generated from a seed for a game I was building, and it is general enough for any project that needs a world. The work is inspired by [Watabou](https://watabou.github.io), which showed what this kind of tool can do. Thanks.
+
 `@fieldwork/procedural-map` creates deterministic, semantic `GameMap` worlds. It is a Node ESM library with no DOM dependency. The repository also includes a browser map studio for generation, import/export, and debug views.
 
 ## Setup
