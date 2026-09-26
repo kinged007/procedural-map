@@ -294,7 +294,25 @@ function changeZoom(factor: number, anchor?: Point) {
 
 element('zoom-in').addEventListener('click', () => changeZoom(1.25));
 element('zoom-out').addEventListener('click', () => changeZoom(0.8));
-element('fit-map').addEventListener('click', fit);
+const focusButton = element<HTMLButtonElement>('fit-map');
+function setFocusMode(on: boolean) {
+  document.body.classList.toggle('map-focus', on);
+  focusButton.classList.toggle('active', on);
+  focusButton.setAttribute('aria-pressed', String(on));
+  const label = on ? 'Exit full screen map' : 'Full screen map';
+  focusButton.title = label;
+  focusButton.setAttribute('aria-label', label);
+}
+focusButton.addEventListener('click', () => {
+  setFocusMode(!document.body.classList.contains('map-focus'));
+  requestRender();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && document.body.classList.contains('map-focus')) {
+    setFocusMode(false);
+    focusButton.focus();
+  }
+});
 canvas.addEventListener('dblclick', fit);
 canvas.addEventListener(
   'wheel',

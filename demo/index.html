@@ -24,8 +24,8 @@
         <path d="m17 3 4 4-4 4M3 7h3c5 0 7 10 12 10h3M17 13l4 4-4 4M3 17h3c2 0 4-3 6-5s4-5 6-5h3" />
       </symbol>
       <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6" /></symbol>
-      <symbol id="icon-fit" viewBox="0 0 24 24">
-        <path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5" />
+      <symbol id="icon-expand" viewBox="0 0 24 24">
+        <path d="M4 9V4h5m11 5V4h-5M4 15v5h5m11-5v5h-5" />
       </symbol>
       <symbol id="icon-tree" viewBox="0 0 24 24">
         <path d="m12 3-6 8h3l-5 6h7v4h2v-4h7l-5-6h3z" />
@@ -188,6 +188,25 @@
             <p class="eyebrow">YOUR WORLD, IN VIEW</p>
             <h2 id="map-title">Temperate landscape <span class="theme-badge">TEMPERATE</span></h2>
           </div>
+          <div class="map-summary">
+            <div class="stat">
+              <span class="stat-label">TREES</span><strong id="tree-count">—</strong
+              ><span class="stat-detail">individual entities</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong
+              ><span class="stat-detail">polygon geometry</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">WATER COVERAGE</span><strong id="water-coverage">—</strong
+              ><span class="stat-detail">of total map area</span>
+            </div>
+            <div class="map-legend">
+              <span><i class="legend-land"></i>Grassland</span
+              ><span><i class="legend-forest"></i>Woodland</span
+              ><span><i class="legend-water"></i>Water</span>
+            </div>
+          </div>
           <div class="map-identifier">
             <span id="map-source">PROCEDURAL</span><span id="seed-display">SEED 583921</span>
           </div>
@@ -231,8 +250,13 @@
               <button id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button
               ><output id="zoom-value">100%</output
               ><button id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button><span></span
-              ><button id="fit-map" aria-label="Fit map to view" title="Fit map to view">
-                <svg class="icon"><use href="#icon-fit" /></svg>
+              ><button
+                id="fit-map"
+                aria-label="Full screen map"
+                title="Full screen map"
+                aria-pressed="false"
+              >
+                <svg class="icon"><use href="#icon-expand" /></svg>
               </button>
             </div>
             <div class="empty-field" id="empty-field" hidden>
@@ -245,25 +269,6 @@
               ><span id="map-status-text">Preparing your landscape…</span></span
             ><span class="coordinates" id="coordinates">X — &nbsp; Y —</span
             ><span id="dimensions-display">2,048 × 1,536 units</span>
-          </div>
-        </div>
-        <div class="map-summary">
-          <div class="stat">
-            <span class="stat-label">TREES</span><strong id="tree-count">—</strong
-            ><span class="stat-detail">individual entities</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong
-            ><span class="stat-detail">polygon geometry</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">WATER COVERAGE</span><strong id="water-coverage">—</strong
-            ><span class="stat-detail">of total map area</span>
-          </div>
-          <div class="map-legend">
-            <span><i class="legend-land"></i>Grassland</span
-            ><span><i class="legend-forest"></i>Woodland</span
-            ><span><i class="legend-water"></i>Water</span>
           </div>
         </div>
         <p class="workspace-footer">

@@ -468,15 +468,16 @@ input[type='range']::-moz-range-thumb {
   height: 4px;
 }
 .workspace {
-  padding: 31px 36px 20px;
+  padding: 20px 24px 14px;
   min-width: 0;
 }
 .workspace-heading {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 26px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-bottom: 14px;
 }
 .workspace-heading .eyebrow {
   margin-bottom: 9px;
@@ -574,8 +575,21 @@ input[type='range']::-moz-range-thumb {
   width: 4px;
   height: 4px;
 }
+.workspace-heading .map-summary {
+  margin: 0 auto;
+}
+.workspace-heading .stat {
+  padding-right: 20px;
+  margin-right: 20px;
+}
+.workspace-heading .stat strong {
+  font-size: 18px;
+}
+.workspace-heading .stat-detail {
+  display: none;
+}
 .map-viewport {
-  height: clamp(400px, calc(100vh - 335px), 800px);
+  height: clamp(480px, calc(100vh - 250px), 900px);
   position: relative;
   overflow: hidden;
   background: #f0f1e7;
@@ -695,7 +709,6 @@ canvas.dragging {
 .map-summary {
   display: flex;
   align-items: center;
-  margin-top: 25px;
   gap: 0;
 }
 .stat {
@@ -852,6 +865,16 @@ canvas.dragging {
   .workspace-heading h2 {
     font-size: 21px;
   }
+  .workspace-heading .map-summary {
+    order: 3;
+    width: 100%;
+    margin: 0;
+    justify-content: flex-start;
+  }
+  .workspace-heading .map-legend {
+    max-width: none;
+    margin-left: auto;
+  }
 }
 @media (max-width: 800px) {
   .app-header {
@@ -889,9 +912,17 @@ canvas.dragging {
   }
   .workspace-heading {
     align-items: flex-start;
-    gap: 9px;
+    gap: 12px;
     flex-direction: column;
-    margin-bottom: 17px;
+    margin-bottom: 14px;
+  }
+  .workspace-heading .map-summary {
+    order: 0;
+    width: auto;
+    margin: 0;
+  }
+  .workspace-heading .map-legend {
+    margin-left: 0;
   }
   .map-identifier {
     flex-direction: row;
@@ -1096,11 +1127,57 @@ canvas.dragging {
     overflow-y: auto;
   }
   .map-viewport {
-    height: clamp(300px, calc(100dvh - 390px), 900px);
+    height: clamp(420px, calc(100dvh - 295px), 1000px);
   }
 }
 @media (min-width: 601px) and (max-width: 800px) {
   .studio {
     height: calc(100dvh - 76px);
   }
+}
+
+/* Full window map: everything but the panel is hidden. Escape or the button leaves it. */
+body.map-focus {
+  overflow: hidden;
+}
+body.map-focus .app-header,
+body.map-focus .settings,
+body.map-focus .workspace-heading,
+body.map-focus .map-caption,
+body.map-focus .map-status,
+body.map-focus .workspace-footer {
+  display: none;
+}
+body.map-focus .studio {
+  display: block;
+  height: 100dvh;
+  min-height: 0;
+}
+body.map-focus .workspace {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+body.map-focus .map-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+body.map-focus .map-viewport {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+body.map-focus canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#fit-map.active {
+  background: #e9efdd;
+  color: #3e5b31;
 }
