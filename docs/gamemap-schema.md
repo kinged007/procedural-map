@@ -403,6 +403,8 @@ Optional, and never required to render or play a map. A generated map always inc
       "seed": 7,
       "width": 900,
       "height": 700,
+      "origin": { "x": 0, "y": 0 },
+      "world": { "width": 900, "height": 700 },
       "terrain": { "variation": 0.35, "scale": 0.004 },
       "water": { "amount": 0.15, "scale": 0.003 },
       "vegetation": { "density": 0.65, "clustering": 0.8 },
@@ -417,6 +419,13 @@ Optional, and never required to render or play a map. A generated map always inc
 four arrays are row-major, normalised to `[0, 1]`, each of length `columns * rows`. `generation` is the
 fully resolved configuration, which is why an imported map can be regenerated exactly. `waterLevel` is
 the elevation threshold the lakes were cut at, and is `null` when the map has no water.
+
+`generation.origin` and `generation.world` place the map in a larger landscape. `world` is measured
+from `(0, 0)`; `origin` is where this tile sits inside it. The terrain is sampled at `origin + local`
+and the thresholds are quantiles of a sample of the whole world, so tiles of one world agree at their
+shared edges. Coordinates in the map itself stay tile-local and inside `bounds`, whatever `origin` says,
+so nothing else in the document changes when a map is a tile. A map generated with neither an `origin`
+nor a `world` has `origin` at `{ 0, 0 }` and `world` equal to its own `bounds`.
 
 Sampling a field is a one-liner over the plain array, with the index clamped so an edge coordinate
 cannot read past the end:

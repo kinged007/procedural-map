@@ -82,6 +82,26 @@ Two invariants keep the network readable. A road that branches from another is r
 
 Road generation is skipped entirely when water and rock together cover more than 55% of the map, since routing has no meaningful result there. A fully flooded map therefore has no roads at all.
 
+## Tiles
+
+The four fields are sampled at `origin + local`, so a tile is a window onto one landscape rather than
+its own world, and every threshold that decides where water, rock, meadow and scrub begin is a quantile
+of a sample of the whole `world` rather than of the tile. Two tiles of one world therefore agree on
+their shared edge exactly, and agree on the height of the waterline exactly.
+
+The field grid is capped at 64 samples across whatever the world measures. A tile 2048 wide gets 64
+samples, about 32 units apart, and a world 64,000 wide gets the same 64, about 1,000 units apart. The
+cost is linear in samples, so the cap is the only thing standing between a large world and a slow one;
+raise it when a world that large is actually generated.
+
+Placement draws from a stream keyed on the tile's origin as well as the seed, so tiles of one world do
+not repeat each other's groves, and a tile's id carries its origin so a world assembled from tiles has
+no duplicate entity ids.
+
+With no `origin` and no `world`, a tile is its own world and the map is unchanged.
+
 ## Debug metadata
 
-The generator stores its complete resolved configuration and water threshold in `metadataLayers`, so exported native JSON preserves the debugging context as well as the semantic world.
+The generator stores its complete resolved configuration, the tile's placement, and the water threshold
+in `metadataLayers`, so exported native JSON preserves the debugging context as well as the semantic
+world.

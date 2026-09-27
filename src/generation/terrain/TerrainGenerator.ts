@@ -215,10 +215,15 @@ export function generateTerrain(
   config: ResolvedGenerationConfig,
   fields: SpatialFields,
   water: WaterRegion[],
+  reference: SpatialFields = fields,
 ): TerrainRegion[] {
   const scores = scoreField(fields);
-  const sortedScores = [...scores].sort((a, b) => a - b);
-  const sortedElevation = [...fields.elevation].sort((a, b) => a - b);
+  // The quantiles come from `reference`, a sample of the whole world, while the geometry is cut from
+  // `fields`, the tile. A threshold read off the tile would move with the window, putting every
+  // tile's rock and meadow line at a different height and stepping it at every seam.
+  const referenceScores = reference === fields ? scores : scoreField(reference);
+  const sortedScores = [...referenceScores].sort((a, b) => a - b);
+  const sortedElevation = [...reference.elevation].sort((a, b) => a - b);
   return [
     ...generateRegions(
       fields.columns,

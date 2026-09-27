@@ -501,6 +501,31 @@ input[type='range']::-moz-range-thumb {
   padding: 5px 7px;
   font-weight: 500;
 }
+.origin-fields {
+  display: grid;
+  grid-template-columns: 58px 58px;
+  gap: 6px;
+  margin-top: 14px;
+}
+.origin-fields label {
+  grid-column: 1 / -1;
+  font-size: 9px;
+  color: #77816e;
+}
+.origin-fields input {
+  width: 100%;
+  border: 1px solid #dfe4d4;
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #3e5b31;
+  background: #fff;
+}
+.origin-fields input:focus-visible {
+  outline: 2px solid #9cb27f;
+  outline-offset: 1px;
+}
 .map-identifier {
   display: flex;
   flex-direction: column;

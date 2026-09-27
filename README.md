@@ -77,6 +77,22 @@ if (!result.valid) throw new Error(result.errors.join('; '));
 
 `generateMap(config)` returns a validated, deterministic `GameMap`. `exportMap(map)` returns canonical JSON, `importMap(jsonOrObject)` validates and clones native canonical maps, and `validateMap(value)` returns `{ valid, errors }`.
 
+A map is one tile, bounded at 4096 by 4096. For a larger world, pass `origin` and `world`: the tile
+becomes a window onto one landscape, sharing its neighbours' terrain at the edges and the same
+waterline and rock line throughout, instead of a world of its own.
+
+```js
+const world = { width: 8192, height: 6144 };
+const tiles = [];
+for (let y = 0; y < world.height; y += 2048)
+  for (let x = 0; x < world.width; x += 2048)
+    tiles.push(generateMap({ seed: 583921, width: 2048, height: 1536, origin: { x, y }, world }));
+```
+
+A map still reports its own bounds and carries tile-local coordinates, so the read path and the
+walkability grid need no knowledge of the world. Left alone, `origin` is zero and `world` is the tile's
+own size, and a single-tile map is unchanged.
+
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 
 ```js

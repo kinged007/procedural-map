@@ -13,8 +13,8 @@ resolved game-side), and buildings, road collision, heightmap, navmesh, region n
 | P0 installable package                    | done, `6efdc30` | tarball installs and generates a map from a separate project |
 | C1 walkability raster                     | done, `6efdc30` | `tests/worstcase.test.mjs`, raster vs `pointInPolygon`       |
 | C2 navigable regions and spawn candidates | done, `6efdc30` | `tests/navigation.test.mjs`, 15 tests                        |
-| C3 forest entity                          | done            | `tests/forests.test.mjs`, 13 tests                           |
-| C4 world-space fields and tile origin     | next            | seam continuity                                              |
+| C3 forest entity                          | done, `86dd475` | `tests/forests.test.mjs`, 13 tests                           |
+| C4 world-space fields and tile origin     | done            | `tests/tiling.test.mjs`, 10 tests                            |
 
 ## Recorded baseline
 
@@ -129,6 +129,37 @@ generateMap({ ..., origin?: { x, y }, world?: { width, height } })
   subtracts `origin`.
 - The world extent is bounded by field resolution rather than by a size check: the field grid stays
   capped at 64x64, so a very large world gets visibly blocky terrain. Raise the cap when that bites.
+
+## What C4 turned out to need
+
+Three things the design above did not say, all found by measuring rather than by reading the code.
+
+- **The byte-identical claim needed a caveat, and the caveat turned out to be small.** The resolved
+  config is exported in `metadataLayers.generation`, so adding `origin` and `world` to it moved the
+  stability hash even though no geometry changed. The gate is now split in two:
+  `tests/tiling.test.mjs` holds the pre-C4 hash of the map with those two fields deleted, which is
+  the assertion that matters, and `tests/generation.test.mjs` pins the current full map. A tolerance
+  would have hidden the real failure, so the seam test asserts exact equality instead: the field
+  values on both sides of a seam are the same numbers, not close ones.
+- **Tiling needed more than the fields, or a world repeated itself.** Placement was seeded from the
+  map seed alone, so every tile of a world drew the identical random sequence and a tiled world showed
+  the same grove in the same corner of every tile. The stream is now keyed on the tile's origin, and
+  the map id carries the origin so assembling a world does not produce duplicate entity ids.
+- **A tile that does not fit its world has to be rejected.** Otherwise the world-wide quantile sample
+  describes a rectangle the tile is not inside, and the thresholds are measuring a landscape that is
+  not there. This is a config error, not a tuning knob, so it throws.
+
+One thing deliberately not built: the read path has no notion of a tile's position in the world, so a
+consumer walking a character across a seam has to do that arithmetic itself. A map reports its own
+`bounds` and its `metadataLayers.generation.origin`, and the raster stays tile-local, which is the
+right default for a self-contained tile. Add a world-space lookup when a consumer actually assembles
+a world and asks for it.
+
+Contours are still extracted per tile from that tile's own grid, so a water body that straddles a seam
+is published as two polygons meeting there. Both sides agree about the waterline, because the level is
+shared and the field is continuous; the vertices along the seam come from each tile's own columns, so
+they can sit up to one grid spacing apart, about 28 world units on a tile under 1792 wide. Joining the
+two into one polygon is a stitching step for whoever owns the world.
 
 ## Open questions
 

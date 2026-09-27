@@ -14,9 +14,13 @@ test('generation is byte-stable for the same config', () => {
   const second = generateMap(config);
 
   assert.equal(JSON.stringify(first), JSON.stringify(second));
+  // Pinned over the whole exported map, placement fields included, so a change to how a map is
+  // serialised is caught here. This moved from the previous value when `origin` and `world` joined
+  // the resolved config; `tests/tiling.test.mjs` holds the pre-existing value for the map with those
+  // two fields removed, which is the assertion that the terrain itself did not move.
   assert.equal(
     stableHash(first),
-    'aa1ff565bf3c12f340b0a46c69e436b13c29fa2d49cd4d3160f8e0c23f7bcd76',
+    '9dfa41b2fc691ae4f95f0516d99147a6dc5d0fd1417b0d0e826805d4b3674e3c',
   );
 });
 

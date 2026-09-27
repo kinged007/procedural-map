@@ -107,10 +107,17 @@ function refreshRanges() {
 
 function configFromControls(): GenerationConfig {
   const [width, height] = sizeInput.value.split('x').map(Number);
+  const originX = element<HTMLInputElement>('origin-x').valueAsNumber;
+  const originY = element<HTMLInputElement>('origin-y').valueAsNumber;
   return {
     seed: seedInput.valueAsNumber,
     width,
     height,
+    // Left at zero and at the tile's own size, the tile is a whole world to itself, which is what the
+    // controls mean by default. Moving an origin makes the world as big as the origin plus the tile,
+    // so a second tile generated at the next origin joins this one.
+    origin: { x: originX, y: originY },
+    world: { width: Math.max(width, originX + width), height: Math.max(height, originY + height) },
     terrain: {
       variation: element<HTMLInputElement>('variation').valueAsNumber / 100,
       scale: element<HTMLInputElement>('terrain-scale').valueAsNumber,
@@ -141,6 +148,8 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('roads').value = String(config.roads.density * 100);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);
+  element<HTMLInputElement>('origin-x').value = String(config.origin.x);
+  element<HTMLInputElement>('origin-y').value = String(config.origin.y);
   refreshRanges();
 }
 
@@ -180,6 +189,19 @@ function showMap(nextMap: GameMap, source: string, elapsed?: number) {
     map.metadata.seed !== undefined ? `SEED ${map.metadata.seed}` : 'AUTHORED MAP';
   element('map-source').textContent = source;
   element('map-version').textContent = `GameMap ${map.version}`;
+  const placement = element('placement-display');
+  const stored = map.metadataLayers?.generation;
+  // The layer is an extension bag, so it arrives as unknown, and it came from a file the user chose.
+  // Anything unexpected in it leaves the label saying what is certainly true, the map's own bounds.
+  try {
+    const { origin, world } = resolveGenerationConfig(stored as GenerationConfig);
+    placement.textContent =
+      origin.x === 0 && origin.y === 0
+        ? `SELF-CONTAINED ${world.width} × ${world.height}`
+        : `TILE @ ${origin.x}, ${origin.y} IN ${world.width} × ${world.height}`;
+  } catch {
+    placement.textContent = `SELF-CONTAINED ${width} × ${height}`;
+  }
   element('map-status-text').textContent =
     elapsed === undefined ? 'Imported · validated' : `Generated in ${Math.round(elapsed)} ms`;
   canvas.setAttribute(

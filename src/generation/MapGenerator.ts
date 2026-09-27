@@ -132,10 +132,37 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
   );
   if (!Number.isInteger(width) || !Number.isInteger(height))
     throw new TypeError('width and height must be integers');
+  const origin = {
+    x: resolveNumber(config.origin?.x, 0, 'origin.x', -MAX_DIMENSION, MAX_DIMENSION),
+    y: resolveNumber(config.origin?.y, 0, 'origin.y', -MAX_DIMENSION, MAX_DIMENSION),
+  };
+  // The world defaults to the tile, which is the whole of what a single-tile map needs. A caller who
+  // passes one is claiming the tile is a window onto it, and the window has to fit.
+  const world = {
+    width: resolveNumber(config.world?.width, width, 'world.width', MIN_DIMENSION, MAX_DIMENSION),
+    height: resolveNumber(
+      config.world?.height,
+      height,
+      'world.height',
+      MIN_DIMENSION,
+      MAX_DIMENSION,
+    ),
+  };
+  if (
+    origin.x < 0 ||
+    origin.y < 0 ||
+    origin.x + width > world.width ||
+    origin.y + height > world.height
+  )
+    throw new RangeError(
+      `a ${width} by ${height} tile at origin ${origin.x},${origin.y} does not fit inside a ${world.width} by ${world.height} world`,
+    );
   return {
     seed: config.seed,
     width,
     height,
+    origin,
+    world,
     terrain: {
       variation: resolveNumber(
         config.terrain?.variation,
@@ -196,9 +223,33 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
   };
 }
 
-function generateFields(config: ResolvedGenerationConfig): SpatialFields {
-  const columns = Math.max(20, Math.min(64, Math.round(config.width / 28)));
-  const rows = Math.max(20, Math.min(64, Math.round(config.height / 28)));
+function gridSize(extent: number) {
+  return Math.max(20, Math.min(64, Math.round(extent / 28)));
+}
+
+/**
+ * Samples the four fields over a rectangle of world space.
+ *
+ * `left` and `top` are the rectangle's position in the world, not its local origin. That is the whole
+ * of the seam fix: a tile at `origin` reads the same noise the neighbouring tile reads at the same
+ * world coordinate, so the two share one landscape. Sampling in local space instead would give every
+ * tile its own private copy of the terrain, and adjacent tiles would be two worlds that happen to
+ * abut.
+ *
+ * `ponytail:` the grid is capped at 64 samples across, whatever the extent. A world of 64,000 units
+ * gets 1,000-unit samples and visibly blocky terrain. Raise the cap when a world that large is
+ * actually generated; the cost is linear in samples, so the cap is the only thing standing between a
+ * big world and a slow one.
+ */
+function fieldGrid(
+  config: ResolvedGenerationConfig,
+  left: number,
+  top: number,
+  extentWidth: number,
+  extentHeight: number,
+): SpatialFields {
+  const columns = gridSize(extentWidth);
+  const rows = gridSize(extentHeight);
   const terrain: number[] = [];
   const elevation: number[] = [];
   const moisture: number[] = [];
@@ -206,8 +257,8 @@ function generateFields(config: ResolvedGenerationConfig): SpatialFields {
   const seed = mixSeed(config.seed);
   for (let row = 0; row < rows; row += 1) {
     for (let column = 0; column < columns; column += 1) {
-      const x = (column * config.width) / (columns - 1);
-      const y = (row * config.height) / (rows - 1);
+      const x = left + (column * extentWidth) / (columns - 1);
+      const y = top + (row * extentHeight) / (rows - 1);
       const terrainRaw = fractalNoise(
         x * config.terrain.scale,
         y * config.terrain.scale,
@@ -226,6 +277,32 @@ function generateFields(config: ResolvedGenerationConfig): SpatialFields {
     }
   }
   return { columns, rows, terrain, elevation, moisture, vegetation };
+}
+
+function generateFields(config: ResolvedGenerationConfig): SpatialFields {
+  return fieldGrid(config, config.origin.x, config.origin.y, config.width, config.height);
+}
+
+/**
+ * The field grid every threshold is measured against.
+ *
+ * A threshold taken from the tile's own grid is a threshold that moves with the window: a lake filled
+ * to the tile's 20th percentile sits at a different height in every tile, so the waterline steps at
+ * every seam. Measuring against the world instead puts every tile's waterline at the same height,
+ * because they are all reading the same number.
+ *
+ * When the world is exactly the tile this returns the tile's own grid, unchanged, so a config with no
+ * `origin` and no `world` generates the map it always did.
+ */
+function referenceFields(config: ResolvedGenerationConfig, fields: SpatialFields): SpatialFields {
+  if (
+    config.origin.x === 0 &&
+    config.origin.y === 0 &&
+    config.world.width === config.width &&
+    config.world.height === config.height
+  )
+    return fields;
+  return fieldGrid(config, 0, 0, config.world.width, config.world.height);
 }
 
 function waterLevel(fields: SpatialFields, amount: number): number | null {
@@ -420,19 +497,33 @@ function generateTrees(
 export function generateMap(config: GenerationConfig): GameMap {
   const resolved = resolveGenerationConfig(config);
   const fields = generateFields(resolved);
-  const level = waterLevel(fields, resolved.water.amount);
+  const reference = referenceFields(resolved, fields);
+  const level = waterLevel(reference, resolved.water.amount);
   const water = generateWater(resolved, fields, level);
-  const terrain = generateTerrain(resolved, fields, water);
+  const terrain = generateTerrain(resolved, fields, water, reference);
   const impassable = terrain.filter((region) => region.collision !== undefined);
-  const random = new Random(mixSeed(resolved.seed) ^ 0x51f15e);
-  const roadRandom = new Random(mixSeed(resolved.seed) ^ 0x2f1c93);
+  // Placement draws from a stream keyed on the tile's position in the world, not just the seed. One
+  // seed for the whole world would give every tile the identical draw sequence, and a tiled world
+  // would show the same grove in the same corner of every tile.
+  const placement =
+    mixSeed(resolved.seed) ^
+    (Math.round(resolved.origin.x) * 0x9e3779b1) ^
+    (Math.round(resolved.origin.y) * 0x85ebca6b);
+  const random = new Random(placement ^ 0x51f15e);
+  const roadRandom = new Random(placement ^ 0x2f1c93);
   const roads = generateRoads(resolved, fields, water, terrain, () => roadRandom.next());
   const vegetation = generateTrees(resolved, fields, water, random, impassable, roads);
   const forests: ForestEntity[] = generateForests(vegetation);
+  // A tile at an origin needs to be distinguishable from the same tile at the origin, or assembling
+  // a world puts duplicate entity ids in it. The single-tile id is left as it was.
+  const placementTag =
+    resolved.origin.x === 0 && resolved.origin.y === 0
+      ? ''
+      : `@${resolved.origin.x},${resolved.origin.y}`;
   const map: GameMap = {
     version: '1.1',
     metadata: {
-      id: `generated-${resolved.seed}-${resolved.width}x${resolved.height}`,
+      id: `generated-${resolved.seed}-${resolved.width}x${resolved.height}${placementTag}`,
       seed: resolved.seed,
       generator: 'procedural-map-mvp',
     },

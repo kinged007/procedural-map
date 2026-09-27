@@ -44,6 +44,11 @@ Origin top-left, x right, y down, in world units, all absolute. The map is a sin
 with no world offset, no cell grid, and no coordinate compression. Feed these straight into a 2D
 physics or rendering system. If your engine is y-up, flip y on import and nothing else changes.
 
+A map generated at a non-zero `origin` still reports its own `bounds` and carries tile-local
+coordinates, so every number in it is measured from the tile's own top-left corner. The read path, the
+walkability grid and the chunks all work in those coordinates and need no knowledge of the world. A
+consumer placing the tile in a larger world adds `origin` itself.
+
 The generator has no fixed world scale. Its constants are tuned so a 2048x1536 map looks right, which
 in practice means one world unit reads as roughly one metre in a top-down game. Pick a global scale
 factor at import time if you need a different unit.
@@ -282,8 +287,48 @@ marginal per frame. There is no need for a spatial index at this scale; bake ins
 
 The 4096x4096 case is the ceiling worth knowing about. Tree count saturates at 8,000 there, which
 means the woodland visibly thins relative to its area, and generation takes over two seconds on the
-calling thread. Above 4096 in either axis the config is rejected, so if you need a larger world,
-generate tiles and place them side by side.
+calling thread. Above 4096 in either axis the config is rejected, so a larger world is built from
+tiles.
+
+## Building a world from tiles
+
+Pass `origin` and `world` and the tile is a window onto a larger landscape rather than a world of its
+own. The same seed, the same settings, the same `world`, and origins that tile the world without gaps
+give tiles that join.
+
+```js
+const world = { width: 8192, height: 6144 };
+const tiles = [];
+for (let y = 0; y < world.height; y += 2048)
+  for (let x = 0; x < world.width; x += 2048)
+    tiles.push(generateMap({ seed: 583921, width: 2048, height: 1536, origin: { x, y }, world }));
+```
+
+Two things happen that do not happen without them, and both are the reason this is worth two config
+fields.
+
+- **The fields are one function of world position.** A tile samples noise at `origin + local`, so its
+  edge carries the same numbers as its neighbour's edge at the same world coordinate. The values are
+  equal, not close.
+- **Every threshold is measured against the world.** The water level, and the rock, meadow and scrub
+  levels, are quantiles of a sample of the whole world rather than of the tile. That matters for all
+  four and not just the water: rock is the high ground at the 94th percentile, so a tile measuring it
+  locally seams exactly as badly as a tile measuring the waterline locally.
+
+Placement is seeded from the tile's position as well as the map seed, so tiles do not repeat each
+other's groves, and the map id carries the origin so a world assembled from tiles has no duplicate
+entity ids.
+
+Left alone, `origin` is zero and `world` is the tile's own size, and a single-tile map is unchanged
+byte for byte. `world` and `origin` are recorded in `metadataLayers.generation`, so a tile saved as
+JSON remembers where it came from.
+
+Two limits worth knowing. The field grid is capped at 64 samples across whatever the world measures, so
+a world of 64,000 units gets 1,000-unit samples and visibly blocky terrain. And contours are still
+traced per tile from that tile's own grid, so a lake that straddles a seam is published as two
+polygons meeting there: both sides agree where the waterline is, but the vertices along the seam can
+sit up to one grid spacing apart, about 28 world units. Joining them into one polygon is a stitching
+step for whoever owns the world.
 
 ## Determinism
 
@@ -309,8 +354,9 @@ So the map is not mistaken for more than it is:
   geometry, and no region carries a height.
 - **No navigation mesh, and no pathfinding.** A* or whatever you use runs over the walkability grid.
 - **No region naming.** Regions are numbered by size. No region has a name.
-- **No chunking.** One map is one flat rectangle, bounded at 4096x4096. The walkability grid is baked
-  in chunks for reading, but the map itself is not divided into tile-sized worlds.
+- **No stitched world.** A map is one tile. `origin` and `world` make a tile continuous with its
+  neighbours, but nothing merges two tiles into one geometry: a lake across a seam stays two polygons,
+  and joining them is the consumer's step.
 
 ## Debugging a map that looks wrong
 

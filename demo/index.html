@@ -104,6 +104,22 @@
               Cell size sets walkability granularity. A feature smaller than a cell still blocks
               that cell, so pick it under your smallest obstacle.
             </p>
+            <div class="origin-fields">
+              <label for="origin-x">Tile origin</label>
+              <input id="origin-x" type="number" min="0" step="128" value="0" />
+              <input
+                id="origin-y"
+                type="number"
+                min="0"
+                step="128"
+                value="0"
+                aria-label="Tile origin y"
+              />
+            </div>
+            <p class="field-help">
+              Zero makes the tile a whole world. Move it and generate again at the next origin: the
+              two tiles share one landscape and one waterline.
+            </p>
           </div>
           <div class="form-section environment-section">
             <div class="section-heading">
@@ -222,7 +238,8 @@
             </div>
           </div>
           <div class="map-identifier">
-            <span id="map-source">PROCEDURAL</span><span id="seed-display">SEED 583921</span>
+            <span id="map-source">PROCEDURAL</span><span id="seed-display">SEED 583921</span
+            ><span id="placement-display">SELF-CONTAINED 2048 × 1536</span>
           </div>
         </div>
         <div class="map-panel">
