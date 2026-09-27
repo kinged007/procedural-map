@@ -175,6 +175,11 @@ export interface SpatialFields {
 
 export interface SettlementEntity extends MapEntity {
   type: 'settlement';
+  /**
+   * What the settlement is by size, read off the number of buildings it holds. A consumer that wants
+   * a different name for a place of this size changes the names, not the generator.
+   */
+  kind: 'hamlet' | 'village' | 'town';
   /** The settlement's centre, on the road network. */
   position: Point;
   /**

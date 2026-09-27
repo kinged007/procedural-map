@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateMap, validateMap } from '../dist/index.js';
+import { generateMap, rasterizeWalkability, spawnCandidates, validateMap } from '../dist/index.js';
 
 const MAP = { seed: 583921, width: 2048, height: 1536 };
 const settlements = (count) => generateMap({ ...MAP, settlements: { count } }).settlements;
@@ -30,6 +30,7 @@ test('settlements are published as typed entities, and the map is valid with the
   assert.equal(map.version, '1.4');
   for (const settlement of map.settlements) {
     assert.equal(settlement.type, 'settlement');
+    assert.ok(['hamlet', 'village', 'town'].includes(settlement.kind));
     assert.ok(settlement.id.length > 0);
     assert.ok(Number.isFinite(settlement.position.x) && Number.isFinite(settlement.position.y));
     assert.ok(settlement.radius > 0, 'a settlement has to reach somewhere');
@@ -92,6 +93,92 @@ test('a settlement with no buildings is valid, and mixing the counts produces on
     'every settlement is dead',
   );
   assert.equal(validateMap(dead).valid, true, 'an empty settlement is a settlement');
+});
+
+test('a settlement names its size by the buildings it holds, and it is not a knob', () => {
+  const sizes = new Map();
+  for (const seed of [583921, 42, 99, 1234, 20250816, 31337, 5, 777, 8, 61])
+    for (const count of [1, 2, 4, 6, 9, 12]) {
+      const map = generateMap({ seed, width: 2048, height: 1536, settlements: { count } });
+      for (const settlement of map.settlements)
+        sizes.set(`${seed}/${count}/${settlement.id}`, [
+          settlement.kind,
+          settlement.metadata.buildingIds.length,
+        ]);
+    }
+
+  // The kind is read off the membership, so the two cannot disagree.
+  for (const [kind, count] of sizes.values()) {
+    const expected = count < 4 ? 'hamlet' : count < 9 ? 'village' : 'town';
+    assert.equal(kind, expected, `${count} buildings is a ${expected}`);
+  }
+  // Every kind is reachable on a default map, or the field would be decoration.
+  const kinds = new Set([...sizes.values()].map(([kind]) => kind));
+  assert.deepEqual([...kinds].sort(), ['hamlet', 'town', 'village'], 'all three kinds occur');
+  // There is no config to set it with, so the only way to change it is to change the housing.
+  const kinded = generateMap({ ...MAP, buildings: { density: 0 }, settlements: { count: 6 } });
+  assert.ok(
+    kinded.settlements.every((settlement) => settlement.kind === 'hamlet'),
+    'a dead settlement is a hamlet, because it holds nothing',
+  );
+});
+
+test('a settlement is offered as a spawn point when one is asked for', () => {
+  const map = generateMap({ ...MAP, settlements: { count: 6 } });
+  const raster = rasterizeWalkability(map, { cellSize: 16 });
+  const wanted = Math.max(map.settlements.length, 4);
+  const candidates = spawnCandidates(raster, map, {
+    count: wanted,
+    minSeparation: 200,
+    preferSettlements: true,
+  });
+
+  assert.equal(candidates.length, wanted, 'asking for settlements never returns fewer points');
+  const offered = new Set(
+    candidates
+      .filter((candidate) => candidate.settlementId)
+      .map((candidate) => candidate.settlementId),
+  );
+  for (const settlement of map.settlements)
+    assert.ok(offered.has(settlement.id), `a settlement is always offered: ${settlement.id}`);
+
+  // A candidate is a place a character can stand, so it is on open ground, clear of trees, and in a
+  // region the walkability analysis actually found.
+  for (const candidate of candidates) {
+    const column = Math.floor(candidate.point.x / raster.cellSize);
+    const row = Math.floor(candidate.point.y / raster.cellSize);
+    assert.equal(raster.cells[row * raster.columns + column], 0, 'on open ground');
+    assert.ok(candidate.region >= 0, 'in a navigable region');
+    assert.ok(
+      !map.vegetation.some(
+        (tree) =>
+          (tree.position.x - candidate.point.x) ** 2 + (tree.position.y - candidate.point.y) ** 2 <=
+          tree.collision.radius ** 2,
+      ),
+      'not inside a tree',
+    );
+  }
+});
+
+test('spawn candidates are unchanged unless a settlement is asked for', () => {
+  const map = generateMap({ ...MAP, settlements: { count: 6 } });
+  const raster = rasterizeWalkability(map, { cellSize: 16 });
+  const plain = spawnCandidates(raster, map, { count: 4, minSeparation: 200 });
+  assert.ok(
+    plain.every((candidate) => candidate.settlementId === undefined),
+    'the roomiest ground is still the roomiest ground',
+  );
+  const once = spawnCandidates(raster, map, {
+    count: 6,
+    minSeparation: 200,
+    preferSettlements: true,
+  });
+  const twice = spawnCandidates(raster, map, {
+    count: 6,
+    minSeparation: 200,
+    preferSettlements: true,
+  });
+  assert.deepEqual(once, twice, 'deterministic');
 });
 
 test('a membership naming a building that is not on the map is rejected', () => {

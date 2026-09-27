@@ -12,16 +12,16 @@ Ordered by what unblocks the most, not by what is most fun to build.
 
 ## Status
 
-| Item                                    | State | Gate                                                                                |
-| --------------------------------------- | ----- | ----------------------------------------------------------------------------------- |
-| S1 centre, membership, and a count knob | done  | `tests/settlement.test.mjs`, count, membership, empties                             |
-| S2 settlement boundaries                |       | a building is inside or outside, and the answer is stable                           |
-| S3 central square                       |       | a square is walkable, central, and not on a road                                    |
-| S4 settlement kind from density         |       | kind tracks the building count, and is not a config knob                            |
-| S5 which categories a settlement places |       | two settlements of different kind draw different categories                         |
-| S6 shoreline settlement and a pier      |       | a pier stands in water, is attached to a settlement, and a building never does      |
-| S7 ruins, from the PRD settlement note  |       | a ruined building is a building that a building never was, and ruins do not collide |
-| S8 a settlement as a player base        |       | `spawnCandidates` can prefer a settlement centre, and one is always offered         |
+| Item                                    | State      | Gate                                                                                                       |
+| --------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| S1 centre, membership, and a count knob | done       | `tests/settlement.test.mjs`, count, membership, empties                                                    |
+| S2 settlement boundaries                | not needed | a radius and a membership list already answer it, and a polygon would contradict the no-collision decision |
+| S3 central square                       | not needed | a consumer can draw one from `position` and `radius`; the gate I wrote for it was wrong                    |
+| S4 settlement kind from density         | done       | `kind` is read off the membership, and there is no knob for it                                             |
+| S5 which categories a settlement places |            | two settlements of different kind draw different categories                                                |
+| S6 shoreline settlement and a pier      |            | a pier stands in water, is attached to a settlement, and a building never does                             |
+| S7 ruins, from the PRD settlement note  |            | a ruined building is a building that a building never was, and ruins do not collide                        |
+| S8 a settlement as a player base        | done       | `spawnCandidates({ preferSettlements: true })` offers every settlement, on open ground                     |
 
 ## S1 — centre, membership, and a count knob
 
@@ -75,12 +75,71 @@ spawn is S8.
   generator must name one. A consumer picks the settlement it starts from, so the field would be
   written by nobody and read by nobody until S8.
 
-## Open questions
+## Measured before building
 
-- A centre on a road is a good place and not always the right one: a long switchback climbing a cliff
-  is frontage nobody settled on. Whether the site test has to consider the terrain under the road is
-  untested and is the first thing to measure in S2.
+Two of the planned items were measured rather than built, and both measurements said not to.
+
+**The cliff question is already answered upstream.** S1 carried a note that a centre could land on a
+switchback climbing a cliff, and that the site test should look at the ground under the road. Across
+64 centres on 16 maps, none landed on rock, in water, or on a beach, and the steepest had an elevation
+gradient of 0.005 against a threshold of 0.5; 99.4% of road candidates are clear of rock and water.
+The reason is that the road generator already refuses to cross a lake or impassable rock and keeps a
+minimum distance from a shoreline, so every point on a road is good ground by construction. A site
+test would have re-checked an invariant the roads already hold. It is not in the code.
+
+**A settlement's size is bounded by its reach.** Membership tops out at about a dozen buildings
+because the 260-unit radius is what bounds it: p50 is 5, p90 is 11, and the largest measured is 12.
+The `kind` thresholds are set to that range so all three values occur on a default map, and the limit
+is stated rather than hidden. Raising the radius is what a caller who wants a real town needs first.
+
+## S2 and S3 — not built, and why
+
+**S2 asked for a boundary, and the radius already is one.** Its gate was "a building is inside or
+outside, and the answer is stable", which the radius and `buildingIds` answer together, and they
+answer it more cheaply than a polygon: a point-in-polygon test per building against a distance test.
+Publishing a boundary polygon would also have contradicted the decision already written into the
+schema, that a settlement is a distance and not a shape, so it would have had to be unpicked.
+
+**S3 asked for a central square, and its gate was wrong.** The gate said the square must not be on a
+road, which was an assumption rather than a finding: a square on the main street is an ordinary thing,
+and the settlement centre is already on one. With the gate corrected the item reduces to "a consumer
+draws a plaza at `position`, sized from `radius` and `kind`", which needs nothing from the generator.
+A plaza that blocks movement, or that reserves the ground around it, is a different item and is not
+planned.
+
+## S4 — settlement kind from density
+
+`kind` is `hamlet`, `village`, or `town`, read off the membership: under 4 buildings is a hamlet, under
+9 a village, 9 or more a town. It is not a configuration value, because a settlement that could be
+called a hamlet while holding a town's buildings is a name the map contradicts. A caller wanting
+different names for a place of that size changes the names.
+
+A dead settlement reads as a hamlet, because it holds nothing. That is a consequence of deriving the
+kind rather than a rule stated for it, and it is the honest answer: there is no housing, so it is the
+smallest thing a settlement can be.
+
+1.4 was never published, so `kind` joined `settlements` under the same version rather than starting a
+1.5 that no consumer had ever seen. The previous commit's map is reproduced exactly by deleting the
+`kind` field, which is what shows the change was additive and nothing else moved.
+
+## S8 — a settlement as a player base
+
+`spawnCandidates` takes `preferSettlements`, which puts each settlement's centre first and tags the
+candidate with `settlementId`. The count is still filled from the roomiest ground afterwards, so asking
+for settlements never returns fewer points, and omitting the option changes nothing.
+
+A centre is on a road, so it is open ground, but the raster's conservative fill blocks a cell that
+water touches anywhere inside it, and a road running a shore is inside such a cell. Across 210 centres
+on 40 maps at a cell size of 16, 94% were already open and the rest moved at most two cells, so the
+nearest open cell is used. A settlement with no open ground at all is skipped rather than offered on
+blocked ground, and the snap is capped at four cells.
+
+## Still open
+
 - Ruins change what a building is: a ruined building should stop colliding, or it is a wall around
   rubble, but it also changes the density a caller asked for. S7 has to decide whether a ruin is a
-  building that no longer counts, because the count is what a settlement's kind and a dead
-  settlement are both read from.
+  building that no longer counts, because the count is what a settlement's kind and a dead settlement
+  are both read from. A ruin that still counts makes a ruined settlement a `town`, which is a label
+  contradicting the ground.
+- S5 needs a category weight per kind, and S6 needs a shoreline site. Both are content decisions
+  rather than mechanics, and both are held until there is a settlement worth putting them in.

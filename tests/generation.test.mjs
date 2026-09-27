@@ -22,12 +22,14 @@ test('generation is byte-stable for the same config', () => {
   // cut at a water body's shore and `rivers` joined the config, again when every course and road
   // centreline was curve-fitted so the channels are not staircases, and again when a course was
   // rejoined into one reach that runs to the water rather than one leg of it, and again when
-  // buildings were published into `structures` and the format moved to 1.3, and again when
-  // settlements were published into `settlements` and the format moved to 1.4;
+  // buildings were published into `structures` and the format moved to 1.3, again when
+  // settlements were published into `settlements` and the format moved to 1.4, and again when a
+  // settlement gained the `kind` read off its membership; 1.4 was never published, so the shape
+  // moved under the same version rather than starting a 1.5 that no consumer had ever seen;
   // `tests/tiling.test.mjs` holds the matching value for the map with those two fields removed.
   assert.equal(
     stableHash(first),
-    '260bdcd301e38cf1a040efb6d6bab426c24f53dd31340abd1eb1950dff2a0744',
+    '3ce51653d93abc73c7a9c1282ad0476e8232146b36d768edbd2d71d84773aa06',
   );
 });
 

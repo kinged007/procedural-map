@@ -1,6 +1,24 @@
 import type { BuildingEntity, Point, RoadEntity, SettlementEntity } from '../map/GameMap.js';
 import { distance } from './ribbon.js';
 
+/** What a settlement is by size. Derived from how many buildings it holds, never configured. */
+export type SettlementKind = 'hamlet' | 'village' | 'town';
+
+/**
+ * How many buildings make a village rather than a hamlet, and how many make a town.
+ *
+ * Membership is bounded by the radius below, so on a default map a settlement holds at most about a
+ * dozen buildings and a town is a large village rather than a city. The thresholds are set to the
+ * range the generator actually produces rather than to a real settlement's headcount, so every
+ * value is reachable on a default map.
+ *
+ * `ponytail:` the size ceiling is the reach, not the kind. Raise `RADIUS` and a settlement can hold
+ * more buildings and the thresholds follow; a caller who wants a real town needs a knob on the
+ * radius before they need one on the kind.
+ */
+const VILLAGE_AT = 4;
+const TOWN_AT = 9;
+
 /**
  * How far a settlement reaches, in world units. A building further than this from a centre is not in
  * that settlement, which is what stops one wide-open map from being a single settlement with the
@@ -63,15 +81,23 @@ export function generateSettlements(
     centres.push(candidate);
   }
 
-  return centres.map((centre, index) => ({
-    id: `settlement-${index + 1}`,
-    type: 'settlement',
-    position: centre,
-    radius: RADIUS,
-    metadata: {
-      buildingIds: buildings
-        .filter((building) => distance(centre, building.position) <= RADIUS)
-        .map((building) => building.id),
-    },
-  }));
+  return centres.map((centre, index) => {
+    const buildingIds = buildings
+      .filter((building) => distance(centre, building.position) <= RADIUS)
+      .map((building) => building.id);
+    return {
+      id: `settlement-${index + 1}`,
+      type: 'settlement',
+      kind: kindFor(buildingIds.length),
+      position: centre,
+      radius: RADIUS,
+      metadata: { buildingIds },
+    };
+  });
+}
+
+function kindFor(buildingCount: number): SettlementKind {
+  if (buildingCount < VILLAGE_AT) return 'hamlet';
+  if (buildingCount < TOWN_AT) return 'village';
+  return 'town';
 }

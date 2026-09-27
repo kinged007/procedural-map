@@ -466,6 +466,7 @@ export function validateMap(data: unknown): ValidationResult {
           if (
             collection === 'settlements' &&
             (entity.type !== 'settlement' ||
+              !['hamlet', 'village', 'town'].includes(entity.kind as string) ||
               !validator.finite(entity.radius, `${collection}[${index}].radius`) ||
               (entity.radius as number) <= 0 ||
               !isRecord(entity.metadata) ||
@@ -474,7 +475,7 @@ export function validateMap(data: unknown): ValidationResult {
           )
             validator.error(
               `${collection}[${index}]`,
-              'must be a settlement with a radius and a list of building ids',
+              'must be a settlement with a kind, a radius, and a list of building ids',
             );
           // A settlement names the buildings it holds, so a name that resolves to nothing is a
           // membership a consumer cannot act on. A settlement with no buildings is valid; one that

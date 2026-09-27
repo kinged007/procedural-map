@@ -18,7 +18,7 @@ one at a time against a road and nothing said which of them belonged together.
 
 | Change                                | Kind                    | What a consumer does                                                                                                                |
 | ------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `settlements` holds places            | new required collection | Iterate it. Each entry is a settlement with a `position`, a `radius`, and the buildings inside it.                                  |
+| `settlements` holds places            | new required collection | Iterate it. Each entry is a settlement with a `kind`, a `position`, a `radius`, and the buildings inside it.                        |
 | `settlements` membership is by id     | new                     | `metadata.buildingIds` names the buildings, and may be empty: a settlement nobody built in is still one.                            |
 | A settlement carries no collision     | new                     | Its `radius` says how far the place reaches. It is not a wall, so a consumer testing the ground it covers uses the distance itself. |
 | Generation config gains `settlements` | new optional config     | `settlements: { count }`. Unset is `count: 2`, and a map with no roads publishes none.                                              |
@@ -539,6 +539,8 @@ around it. A settlement answers "where is the village", which `structures` on it
 interface SettlementEntity {
   id: string;
   type: 'settlement';
+  /** What the settlement is by size, read off `metadata.buildingIds.length`. */
+  kind: 'hamlet' | 'village' | 'town';
   /** The centre, which stands on the road network. */
   position: Point;
   /** How far the settlement reaches from its centre, in world units. */
@@ -558,6 +560,15 @@ the same way it tests a forest hull rather than treating one as movement blockin
 polygon here, because a settlement is a distance and not a shape: a circle of 260 units around a
 centre in a square world either overflows the map or leaves corners of the map unreachable from it,
 and neither is a thing a consumer should have to reconcile.
+
+**`kind` is derived, not configured.** It is read off the membership: under 4 buildings is a
+`hamlet`, under 9 a `village`, and 9 or more a `town`. There is no knob for it, because a settlement
+that could be called a hamlet while holding a town's buildings would be a name the map contradicts,
+and a caller who wants different names for a place of a given size changes the names rather than the
+generator. A dead settlement therefore reads as a `hamlet`, since it holds nothing. The thresholds are
+set to the range the generator actually reaches rather than to a real settlement's headcount: on a
+default map a settlement holds at most about a dozen buildings, so a `town` here is a large village
+and not a city.
 
 **Membership is by id, and is on the settlement.** `metadata.buildingIds` names the buildings inside it,
 and each id resolves to a `structures` entry. Validation rejects an id that does not, so a consumer can
@@ -658,8 +669,9 @@ A map is rejected when:
 - A terrain, water, or road entity is missing a field its collection requires, or carries a `kind`
   outside the allowed set.
 - Collision is present on a terrain region but is not a valid polygon.
-- A settlement is missing a positive `radius` or a `metadata.buildingIds` list, or carries an id that
-  names no building in `structures`. An empty list is valid.
+- A settlement is missing a `kind` outside the allowed set, a positive `radius`, or a
+  `metadata.buildingIds` list, or carries an id that names no building in `structures`. An empty list
+  is valid.
 
 Nothing is checked about whether the world makes sense. Two roads may run in parallel, a road may stop
 short of anything, and a beach may be a few units wide. Those are design outcomes, not errors.

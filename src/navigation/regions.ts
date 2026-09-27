@@ -24,6 +24,8 @@ export interface SpawnCandidate {
   region: number;
   /** World units to the nearest blocked cell. */
   clearance: number;
+  /** The settlement this candidate is the centre of, when it was asked for by settlement. */
+  settlementId?: string;
 }
 
 const UNVISITED = -1;
@@ -202,11 +204,19 @@ export function navigableRegions(raster: WalkabilityRaster): NavigableRegion[] {
  *
  * Ranking is by raster clearance, so a candidate next to a grove is chosen on the ground's merits and
  * then accepted or rejected, which means the order does not account for trees.
+ *
+ * `preferSettlements` puts each settlement's centre first, which is the answer to "where does the
+ * player start" when a settlement is meant to be a base. A centre stands on a road, and the raster
+ * blocks a cell that water or rock touches anywhere inside it, so a centre on a road running a shore
+ * can land in a blocked cell; the nearest open cell is used instead, so a settlement is offered
+ * wherever it has open ground at all. Across 210 centres on 40 maps at a cell size of 16, 94% were
+ * already open and the rest moved at most 2 cells. The remaining candidates fill the count from the
+ * roomiest ground as usual, so asking for settlements never returns fewer points.
  */
 export function spawnCandidates(
   raster: WalkabilityRaster,
   map: GameMap,
-  options: { count: number; minSeparation: number },
+  options: { count: number; minSeparation: number; preferSettlements?: boolean },
 ): SpawnCandidate[] {
   const { count, minSeparation } = options;
   if (!Number.isInteger(count) || count < 0)
@@ -230,6 +240,29 @@ export function spawnCandidates(
     );
 
   const candidates: SpawnCandidate[] = [];
+  if (options.preferSettlements)
+    for (const settlement of map.settlements) {
+      if (candidates.length >= count) break;
+      const cell = openCellNear(raster, labels, settlement.position);
+      if (cell === null) continue;
+      const column = cell % raster.columns;
+      const point = cellCentre(column, (cell - column) / raster.columns, raster.cellSize);
+      if (
+        candidates.some((existing) => {
+          const deltaX = existing.point.x - point.x;
+          const deltaY = existing.point.y - point.y;
+          return deltaX * deltaX + deltaY * deltaY < separationSquared;
+        }) ||
+        underTrunk(point)
+      )
+        continue;
+      candidates.push({
+        point,
+        region: labels[cell],
+        clearance: clearance[cell] * raster.cellSize,
+        settlementId: settlement.id,
+      });
+    }
   for (const index of ranked) {
     if (candidates.length >= count) break;
     const column = index % raster.columns;
@@ -247,4 +280,36 @@ export function spawnCandidates(
     });
   }
   return candidates;
+}
+
+/**
+ * The open cell containing a point, or the nearest one if that cell is blocked. Returns null only
+ * when the point is outside the raster or the search finds nothing within `MAX_SNAP` cells.
+ *
+ * A settlement centre is on a road, and a road keeps clear of water by a margin that is smaller than
+ * a raster cell at the small cell sizes, so the centre itself can fall in a cell the conservative
+ * fill blocked for touching a shoreline. Snapping is what makes "a settlement is always offered"
+ * true rather than nearly true.
+ *
+ * `ponytail:` two cells is the furthest any measured centre had to move, and four is the ceiling
+ * here. Raise it only for a cell size small enough that a road's clearance from water is a larger
+ * share of one cell.
+ */
+const MAX_SNAP = 4;
+
+function openCellNear(raster: WalkabilityRaster, labels: Int32Array, point: Point): number | null {
+  const originColumn = Math.floor(point.x / raster.cellSize);
+  const originRow = Math.floor(point.y / raster.cellSize);
+  for (let ring = 0; ring <= MAX_SNAP; ring += 1)
+    for (let deltaRow = -ring; deltaRow <= ring; deltaRow += 1)
+      for (let deltaColumn = -ring; deltaColumn <= ring; deltaColumn += 1) {
+        // Only the new ring, so each cell is tested once rather than once per ring.
+        if (Math.max(Math.abs(deltaColumn), Math.abs(deltaRow)) !== ring) continue;
+        const column = originColumn + deltaColumn;
+        const row = originRow + deltaRow;
+        if (column < 0 || row < 0 || column >= raster.columns || row >= raster.rows) continue;
+        const index = row * raster.columns + column;
+        if (labels[index] !== BLOCKED) return index;
+      }
+  return null;
 }

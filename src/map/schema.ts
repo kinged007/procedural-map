@@ -153,9 +153,10 @@ export const gameMapSchema = {
         { $ref: '#/$defs/entity' },
         {
           type: 'object',
-          required: ['type', 'position', 'radius', 'metadata'],
+          required: ['type', 'kind', 'position', 'radius', 'metadata'],
           properties: {
             type: { const: 'settlement' },
+            kind: { enum: ['hamlet', 'village', 'town'] },
             radius: { type: 'number', exclusiveMinimum: 0 },
             metadata: {
               type: 'object',

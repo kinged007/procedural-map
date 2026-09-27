@@ -1413,7 +1413,14 @@ Delivered in v0.5 so far:
   places and no buildings at all.
 - The generator does not designate a player base. The note above says a settlement *may* be one, which
   is a consumer's choice of where to start, so a settlement carries no `role` field until something
-  writes one. Wiring `spawnCandidates` to offer a settlement centre is listed below.
+  writes one. A caller asks for one instead: `spawnCandidates(..., { preferSettlements: true })` puts
+  each settlement centre first and tags it with `settlementId`, and the rest of the count is filled
+  from the roomiest ground as usual.
+- A settlement carries a `kind` of `hamlet`, `village`, or `town`, read off how many buildings it
+  holds rather than configured, so a dead settlement reads as a hamlet. The thresholds match the range
+  the generator actually reaches, which the settlement radius bounds: a settlement holds at most about
+  a dozen buildings, so a `town` here is a large village, and a caller wanting a real town needs a
+  knob on the radius first.
 
 Carried over from v0.4 and deferred here on purpose: plots and parcels, and choosing which categories
 get placed rather than drawing from a fixed weighted set. A shoreline is v0.5 work too, because v0.4
@@ -1422,8 +1429,21 @@ stand.
 
 Ruins, the second half of the settlement note, are not started. A ruin is a property of a building
 rather than of a settlement's emptiness, so it changes what a building is: a ruined building has to
-stop being a collider or it is a wall around rubble, and it has to stop counting or it contradicts the
-density the caller asked for. It is tracked in `plans/settlement-plan.md` as S7.
+stop being a collider or it is a wall around rubble, and it has to stop counting or a ruined settlement
+still reads as a `town`, which is a label contradicting the ground. It is tracked in
+`plans/settlement-plan.md` as S7.
+
+Measured and deliberately not built, so the reasons are on the record rather than implied:
+
+- A settlement needs no terrain site test. Across 64 centres on 16 maps, none landed on rock, in water,
+  or on a beach, and none on steep ground, because the road generator already refuses to cross water
+  or impassable rock and keeps a margin from a shoreline. Every point on a road is good ground by
+  construction, so a site test would re-check an invariant the roads already hold.
+- A settlement publishes no boundary polygon. The radius and the membership list already answer whether
+  a building is inside a place, and a polygon would contradict the decision that a settlement is a
+  distance and not a shape.
+- There is no central square. A consumer draws one from `position`, `radius`, and `kind`. A plaza that
+  reserves ground or blocks movement would be a different feature and is not planned.
 
 Generation parameters might include:
 
