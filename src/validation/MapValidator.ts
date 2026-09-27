@@ -364,7 +364,7 @@ export function validateMap(data: unknown): ValidationResult {
     const validator = new Validator();
     if (!isRecord(data)) return { valid: false, errors: ['map: must be an object'] };
     validator.jsonValue(data, 'map');
-    if (data.version !== '1.1') validator.error('version', 'must be supported version "1.1"');
+    if (data.version !== '1.2') validator.error('version', 'must be supported version "1.2"');
     if (!isRecord(data.metadata)) validator.error('metadata', 'must be an object');
     else {
       if (typeof data.metadata.id !== 'string' || data.metadata.id.length === 0)
@@ -447,7 +447,7 @@ export function validateMap(data: unknown): ValidationResult {
           if (
             collection === 'water' &&
             (entity.type !== 'water' ||
-              entity.kind !== 'lake' ||
+              !['lake', 'river'].includes(entity.kind as string) ||
               !validator.polygon(entity.geometry, `${collection}[${index}].geometry`, bounds!) ||
               !isRecord(entity.collision) ||
               entity.collision.type !== 'polygon' ||
@@ -455,7 +455,7 @@ export function validateMap(data: unknown): ValidationResult {
           )
             validator.error(
               `${collection}[${index}]`,
-              'must be a lake water region with polygon collision',
+              'must be a lake or river water region with polygon collision',
             );
           if (collection === 'vegetation') {
             const treeValid =

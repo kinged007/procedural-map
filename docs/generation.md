@@ -51,6 +51,72 @@ Consumers that need one surface per point must take the final match, or test kin
 
 Surface and obstruction are independent. A `beach` is emitted last and so is drawn over a `rock` region that lies beneath a lake, but the rock is still impassable there. Emission order resolves which surface is visible, not whether the ground can be walked on.
 
+## Rivers
+
+A river is the channel of a course walked down the drainage of the elevation field, offset to a fixed
+width of 12 units. It is published in the same `water` collection as a lake, with `kind: 'river'`, so
+everything that treats water as water treats a river as water: the walkability raster blocks it and no
+tree is planted in it. A road is the exception and goes over a channel rather than around it, which is
+what the crossings below are about.
+
+Rivers are a compromise between the two named things in a map: they are worth generating because a road
+that has to go around a valley is a road that does not connect two places, and the channel gives a road
+somewhere to bridge. `rivers.density` scales the count from 0 to 1 and `rivers.width` sets the channel
+in world units, which also fixes the width of the marker at a mouth and the span recorded at a
+crossing. `density: 0` publishes no river at all, for a map where water is only standing.
+
+The drainage comes from a flood that starts at the map border, where water leaves the world, and works
+inward. A cell is raised to the level its water would have to reach to get out, and the cell that
+reached it becomes its parent. Those parents are the drainage: a course is a path through the tree
+they form, so it cannot cross itself, cannot come back to a cell it has used, and ends where the water
+does, which is in a lake or off the edge of the map. Ground the flood fills is raised a hair above the
+cell that filled it rather than level with it, so a filled basin still slopes the way its water would
+have gone. The flood also counts how many cells drain through each one, and that count is what says
+where a channel belongs: a cell holds the whole catchment above it, so the most flow in the map is on
+its main channel.
+
+A course is the main channel of a catchment rather than the shortest way off a hill. From a source it
+climbs the child with the most flow in it, to where the ground divides, and then follows parents down
+to the water. Climbing the largest tributary is what makes a river long: the shortest path to the
+border is direct and a few hundred units at most, which on a large map is a stub no road ever reaches.
+Sources are ranked by flow and spread across the ranking, and there are more candidates than rivers
+wanted, because most of them turn out to be a reach of a longer one. Courses are taken longest first,
+and a course that would lie on a river already published is cut back to the junction and published as
+the tributary it is, so the map has a river network rather than several rivers drawn over each other.
+One river is drawn per 260 units of the map's shorter side, up to eight.
+
+Every river runs to water. A course is one reach, from the divide above its source all the way down to
+the lake it reaches or off the edge of the world, and the head and the tail are joined into that one
+reach rather than published as the longer of the two: a river that stops part-way down a catchment is
+a stripe, not a river. The one exception is a course that reaches a river already published, which is
+cut back to the junction and published as the tributary it is, because below the junction the water
+belongs to the river that is already there.
+
+A course is cut where it first reaches standing water, and the site is published as a mouth:
+`metadata.mouths` on the river names the water body, the point on the shore where the channel met it,
+and a small square one channel wide there. A mouth is where a delta, a silt bank or an estuary asset
+goes, and it is the one place a consumer is told that a river met something. The cut is where the
+_channel_ reaches the water rather than where its centreline does, because a course running along a
+shore arrives there half a channel before its centreline does, and the end is then slid onto the shore
+itself, because an end left where the channel's edge merely touches leaves up to a whole step of
+course between the two bodies of water, which reads as a river stopping in the field short of a lake.
+The two overlap by half a channel at the join, which is what a mouth is: the channel widens where it
+meets standing water.
+
+Both a traced course and a walked road are staircases: one point per grid cell or per step, each joined
+to the next by a straight line, so the surface offset from either reads as a chain of flat facets
+however wide it is drawn. Both centrelines are curve-fitted before the channel or the ribbon is built,
+by cutting the corners off twice, which rounds every joint and leaves the two ends exactly where they
+were. A course is fitted before it is cut at the water, so the cut still lands on the shoreline. A road
+is fitted once, because a second pass bows it further in than the margin it is held clear of the water,
+and the curve is discarded where it would come closer to a shore or enter rock than the walk itself
+went.
+
+A course whose channel does not close on itself is eased with a moving average and retried, and dropped
+if it still does not. Rivers are traced from the tile's own field grid, so on a tiled world a river is
+traced per tile and the two sides of a seam do not join up, the same caveat that already applies to
+lake contours.
+
 ## Vegetation
 
 Trees are sampled from the `vegetation` field. `density: 0` creates no trees.
@@ -76,9 +142,9 @@ Roads are grown in three tiers, widest and longest first: `primary` at width 22,
 
 Routing is a greedy walk over a small fan of headings, each step taking the cheapest heading available, rather than a shortest-path search. That produces the meander and long detours of a surveyed road instead of a taut line between two endpoints. The cost is charged against a budget, so every road terminates on its own.
 
-Water and impassable rock are refused outright rather than made expensive, and a step is refused 20 world units short of a water edge. A road therefore bends around an obstruction for as long as the fan of headings allows, then stops on open ground, and it never crosses a lake. Bridges and fords are v0.7 work.
+Lakes and impassable rock are refused outright rather than made expensive, and a step is refused 20 world units short of a lake's edge. A road therefore bends around an obstruction for as long as the fan of headings allows, then stops on open ground, and it never crosses a lake. A river is not refused, because a channel is narrow enough to bridge: a road goes over it. Where the road's surface reaches the channel, `metadata.crossings` names the river, the point on its surface closest to the road, and the span of the channel there, which is the channel's width from `rivers.width`. That is the site a bridge or a ford is built from. The renderer draws nothing there: a road is drawn over the water, so a road crossing a river already reads as one, and a marker laid on top of it only obscures the road it is meant to explain. A consumer sizes a bridge from the part of the road's centreline that is over the channel, with the road ribbon and the river polygon, which are both on the map. The key is absent when a road's surface reached no river.
 
-Two invariants keep the network readable. A road that branches from another is required to touch it, while every other pair of roads is held apart by a per-tier minimum gap, so a consumer can tell a junction from two roads running alongside each other. And a road whose centreline retraces itself is rejected before publication, because the offset ribbon around a fold crosses itself and produces geometry validation refuses.
+Two invariants keep the network readable. A road that branches from another is required to touch it, while every other pair of roads is held apart by a per-tier minimum gap, so a consumer can tell a junction from two roads running alongside each other. The gap is enforced in both directions, from the new road's points to the roads already placed and back again, because a point is only as far from a line as the nearest vertex of that line is. And a road whose centreline retraces itself is rejected before publication, because the offset ribbon around a fold crosses itself and produces geometry validation refuses.
 
 Road generation is skipped entirely when water and rock together cover more than 55% of the map, since routing has no meaningful result there. A fully flooded map therefore has no roads at all.
 

@@ -4,6 +4,7 @@ import type {
   Point,
   PolygonGeometry,
   RoadEntity,
+  WaterRegion,
 } from '../map/GameMap.js';
 import type { MapTheme } from '../themes/MapTheme.js';
 import { defaultTheme } from '../themes/DefaultTheme.js';
@@ -139,6 +140,89 @@ function drawRoads(context: CanvasRenderingContext2D, roads: RoadEntity[], theme
       context.stroke();
     }
   }
+}
+
+/**
+ * Draws where each river's channel becomes standing water, as a delta.
+ *
+ * The format publishes the site and nothing is built there. What a river does as it reaches a lake is
+ * spread out and drop what it is carrying, so the marker is a fan of silt opening downstream from the
+ * mouth with the channels that made it running through it. The fan is sized from the marker's own
+ * width, which is the width of the channel, so a wide river makes a wide delta and a game that owns
+ * the mouth asset can use the same footprint.
+ *
+ * The direction and the width both come out of the published marker: its first point is a channel
+ * width across from its second, and a channel width downstream of its fourth.
+ */
+function drawMouths(
+  context: CanvasRenderingContext2D,
+  water: WaterRegion[],
+  theme: MapTheme,
+): void {
+  for (const region of water) {
+    for (const mouth of region.metadata?.mouths ?? []) {
+      const corners = mouth.polygon.points;
+      if (corners.length < 4) continue;
+      const across = { x: corners[0].x - corners[1].x, y: corners[0].y - corners[1].y };
+      const width = Math.hypot(across.x, across.y) || 1;
+      const down = { x: corners[0].x - corners[3].x, y: corners[0].y - corners[3].y };
+      const length = Math.hypot(down.x, down.y) || 1;
+      const along = { x: (down.x / length) * 1, y: (down.y / length) * 1 };
+      const side = { x: -along.y, y: along.x };
+      // A delta is a small fan at the shore, a third of the channel-scaled size it was, and never
+      // smaller than the narrowest channel makes today, so a thin river still gets a visible mouth.
+      const reach = Math.max((width * 5.5) / 3, 5.5);
+      const spread = Math.max((width * 3.2) / 3, 3.2);
+      const at = (forward: number, acrossBy: number) => ({
+        x: mouth.point.x + along.x * forward + side.x * acrossBy,
+        y: mouth.point.y + along.y * forward + side.y * acrossBy,
+      });
+
+      // The silt fan, wider than the channel and shorter than the water it reaches into.
+      context.beginPath();
+      context.moveTo(mouth.point.x, mouth.point.y);
+      context.quadraticCurveTo(
+        at(reach * 0.35, spread * 0.8).x,
+        at(reach * 0.35, spread * 0.8).y,
+        at(reach, spread).x,
+        at(reach, spread).y,
+      );
+      context.quadraticCurveTo(
+        at(reach * 0.6, 0).x,
+        at(reach * 0.6, 0).y,
+        at(reach, -spread).x,
+        at(reach, -spread).y,
+      );
+      context.quadraticCurveTo(
+        at(reach * 0.35, -spread * 0.8).x,
+        at(reach * 0.35, -spread * 0.8).y,
+        mouth.point.x,
+        mouth.point.y,
+      );
+      context.closePath();
+      context.globalAlpha = 0.5;
+      context.fillStyle = theme.terrain.beach;
+      context.fill();
+
+      // The channels the fan is built of, running out into it and fading as they go.
+      context.globalAlpha = 0.8;
+      context.strokeStyle = theme.riverMouths ?? theme.water.line;
+      context.lineWidth = Math.max((width * 0.16) / 3, 0.6);
+      context.lineCap = 'round';
+      for (const share of [-0.66, -0.22, 0.22, 0.66]) {
+        context.beginPath();
+        context.moveTo(mouth.point.x, mouth.point.y);
+        context.quadraticCurveTo(
+          at(reach * 0.4, spread * share * 0.5).x,
+          at(reach * 0.4, spread * share * 0.5).y,
+          at(reach * 0.92, spread * share).x,
+          at(reach * 0.92, spread * share).y,
+        );
+        context.stroke();
+      }
+    }
+  }
+  context.globalAlpha = 1;
 }
 
 function drawCollision(context: CanvasRenderingContext2D, collision: CollisionGeometry) {
@@ -355,8 +439,10 @@ export class CanvasRenderer {
         polygonPath(context, water.geometry);
         context.lineJoin = 'round';
         // The shore margin is clipped inside the lake. Stroking it unclipped would paint half its
-        // width onto the beach and erase narrow beaches entirely.
-        if (styled) {
+        // width onto the beach and erase narrow beaches entirely. It is a lake's margin: fourteen
+        // units of it is a beach, and fourteen units of it on a twelve-unit channel is the whole
+        // river, so a river keeps its own edge and gets none.
+        if (styled && water.kind !== 'river') {
           context.save();
           context.clip('evenodd');
           context.lineWidth = 14;
@@ -388,7 +474,12 @@ export class CanvasRenderer {
         }
       }
 
+      // Roads are drawn over the water, so a road crossing a river reads as a road crossing a river.
+      // Nothing marks the crossings: the road ribbon and the channel polygon are both on the map, and
+      // a game that wants a bridge finds the part of one centreline that is over the other. A marker
+      // here was a square of a deck in the wrong place, which is worse than no marker.
       if (styled && map.roads.length > 0) drawRoads(context, map.roads, theme);
+      if (styled) drawMouths(context, map.water, theme);
 
       if (styled) {
         for (const tree of [...map.vegetation].sort((a, b) => a.position.y - b.position.y)) {

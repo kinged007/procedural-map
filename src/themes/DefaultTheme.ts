@@ -12,6 +12,7 @@ export const defaultTheme: MapTheme = {
     detail: '#99ac80',
   },
   water: { fill: '#a8cdcc', shore: '#faf6e6', line: '#5d8f8c', ripple: '#d3e5d9' },
+  riverMouths: '#4f7f7c',
   roads: { primary: '#c9b596', secondary: '#cfc0a6', path: '#d6cbb4', casing: '#8f7f63' },
   vegetation: {
     canopy: ['#98b184', '#adc392', '#859e73', '#bdcda1', '#91aa80'],

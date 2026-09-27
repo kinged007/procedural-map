@@ -108,13 +108,15 @@ const blockers = [
 | Feature       | Collision shape | Radius vs. visible       |
 | ------------- | --------------- | ------------------------ |
 | Lake          | polygon         | identical ring           |
+| River         | polygon         | identical ring           |
 | Rock          | polygon         | identical ring           |
 | Tree          | circle          | 3.5-5.5 vs. 10-18 canopy |
 | Other terrain | none            | passable                 |
 
 Note what is **not** in that list: a tree's collision circle is much smaller than its canopy, so a
-player walks under the leaves and into the trunk. Rock and water are impassable. Grass, meadow, scrub
-and beach are passable regardless of what is drawn on top of them.
+player walks under the leaves and into the trunk. Rock and water are impassable, a river included, so
+a character wades no further than the bank. Grass, meadow, scrub and beach are passable regardless of
+what is drawn on top of them.
 
 One case needs a decision. A beach band can be drawn over a rock region, because a beach is emitted
 last and wins the surface. The rock is still impassable underneath it. Obstruction and surface are
@@ -134,9 +136,70 @@ A junction is not an entity. Two centrelines meet and that is the whole model. I
 that a point is on a road, test the ribbons; if you need to know which road, find the nearest
 centreline.
 
-Roads never cross water or rock, and are kept 20 world units clear of any shoreline. A road that runs
-out of open ground simply ends. There are no bridges and no fords, so a road network is a connected
-graph that never crosses a river, not a fully connected one.
+Roads never cross a lake or rock, and are kept 20 world units clear of any shoreline. A road that runs
+out of open ground simply ends. There are no bridges and no fords, so a road network is connected
+across a river only where something is built on the published site.
+
+Where a road's surface reaches a river, `road.metadata.crossings` names the river, the point on its
+surface closest to the road, and the span of the channel there. It is a _hint that the two surfaces
+touch_, published so a consumer can find the site without scanning the whole map — not proof the road
+spans the channel. A road running along a bank with its edge in the water also produces a record. For
+the asset decision, derive the real overlap from the bundle rather than trusting the marker: `road.path`
+is the full centreline, every river publishes its full channel as `geometry`, and `pointInPolygon` is
+exported, so any contiguous run of centreline over channel is a bridge the road genuinely spans. That
+is the footprint a deck, ford, or ferry asset goes on. The key is absent on a road whose surface
+reached no river, so `road.metadata.crossings ?? []` is safe to iterate.
+
+`span` is the channel's width, not the length of a bridge, and a road crossing a river at an angle
+needs a deck longer than the channel is wide. A consumer that has to size a bridge takes the part of
+the centreline that is over the channel, which is the length of the deck:
+
+```js
+import { pointInPolygon } from 'fieldwork-map';
+
+// Every stretch of road a river runs under, which is where a bridge is built.
+function bridgeSites(map) {
+  const sites = [];
+  for (const road of map.roads) {
+    for (const river of map.water) {
+      if (river.kind !== 'river') continue;
+      let over = [];
+      const runs = [];
+      for (const point of road.path) {
+        if (pointInPolygon(point, river.geometry)) over.push(point);
+        else {
+          if (over.length >= 2) runs.push(over);
+          over = [];
+        }
+      }
+      if (over.length >= 2) runs.push(over);
+      // A run of two points or more is a road that genuinely goes across the channel. One point is
+      // a graze, where the road's edge clips the water and it never gets to the far bank.
+      for (const run of runs) {
+        const deckLength = run
+          .slice(1)
+          .reduce(
+            (total, point, index) =>
+              total + Math.hypot(point.x - run[index].x, point.y - run[index].y),
+            0,
+          );
+        sites.push({ road, river, centreline: run, deckLength });
+      }
+    }
+  }
+  return sites;
+}
+```
+
+A run is a deck, not a point: place the asset along `centreline`, as wide as `road.width`. The
+illustrated renderer draws no bridge and no marker at a crossing, because a road is drawn over the water
+and a marker there only ever gets in the way of the road it is meant to explain.
+
+Where a river meets standing water, `water.metadata.mouths` on the river names the water body, the point
+where the channel met its edge, and a small square one channel wide at that point. That is where a
+delta, a silt bank, an estuary, or a waterfall asset goes, and it is the only place a map says a river
+met something: a channel runs from its source in the hills, which is the other end of the ring and is
+not marked, to the water or off the edge of the map. Iterate `river.metadata?.mouths ?? []`.
 
 ## Walking on the map
 
@@ -349,8 +412,11 @@ So the map is not mistaken for more than it is:
 
 - **No structures or barriers.** Both collections are empty on a generated map.
 - **No buildings, plots, settlements, or resources.** These are the v0.4 to v0.6 roadmap.
-- **No rivers or bridges.** Water is lakes only, and roads stop at the bank.
-- **No heightmap or 3D data.** The map is flat. Elevation is available as a debug field, not as
+- **No bridges or fords.** Rivers are published, and a road records the site of each crossing its
+  surface reached, but nothing is built there. A river also blocks the walkability raster where a road
+  goes over it, so a character cannot walk the crossing until you make those cells walkable. A river
+  also meets a water body on a published site rather than running over it, and a river's channel is
+  its geometry, so a bridge deck is drawn by you.- **No heightmap or 3D data.** The map is flat. Elevation is available as a debug field, not as
   geometry, and no region carries a height.
 - **No navigation mesh, and no pathfinding.** A* or whatever you use runs over the walkability grid.
 - **No region naming.** Regions are numbered by size. No region has a name.
@@ -372,6 +438,6 @@ The studio in `demo/` exposes all of these as tabs, with sliders for every gener
 
 ## See also
 
-- [GameMap v1.1 schema](gamemap-schema.md) — field-by-field structure
+- [GameMap v1.2 schema](gamemap-schema.md) — field-by-field structure
 - [Generation](generation.md) — how the map is produced
 - [Architecture](architecture.md) — where the boundary sits

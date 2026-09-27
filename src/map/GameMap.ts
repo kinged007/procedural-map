@@ -38,11 +38,33 @@ export interface TerrainRegion extends MapEntity {
   collision?: { type: 'polygon' } & PolygonGeometry;
 }
 
+/**
+ * Where a river's water leaves its channel and becomes standing water.
+ *
+ * A river is cut at a water body's shore rather than drawn over it, so this is the site where a delta,
+ * an estuary or a waterfall belongs, and where a consumer widens the channel or swaps the asset for
+ * the mouth. `polygon` is a marker as wide as the channel there, carrying no collision and drawn by
+ * nothing: it is a footprint to place an asset on, not surface.
+ */
+export interface RiverMouth {
+  /** The `water` entity the river flows into. */
+  waterId: string;
+  /** Where the centreline meets that body's edge. */
+  point: Point;
+  polygon: PolygonGeometry;
+}
+
 export interface WaterRegion extends MapEntity {
   type: 'water';
-  kind: 'lake';
+  /**
+   * `lake` is a body of standing water contoured from the elevation field. `river` is the channel of
+   * a course walked downhill across the same field, and is narrow enough for a road to meet it.
+   */
+  kind: 'lake' | 'river';
   geometry: PolygonGeometry;
   collision: { type: 'polygon' } & PolygonGeometry;
+  /** On a river, the sites where its channel reaches standing water. */
+  metadata?: { mouths?: RiverMouth[] };
 }
 
 export interface VegetationEntity extends MapEntity {
@@ -76,6 +98,16 @@ export interface ForestEntity extends MapEntity {
   };
 }
 
+/** A river a road runs into, and the span a crossing there has to cover. */
+export interface RoadCrossing {
+  /** Id of the `river` water region the road meets. */
+  riverId: string;
+  /** Nearest point of the river's surface to where the road stopped. */
+  point: Point;
+  /** Full width of the river channel there, in world units. */
+  span: number;
+}
+
 export interface RoadEntity extends MapEntity {
   type: 'road';
   kind: 'primary' | 'secondary' | 'path';
@@ -84,6 +116,15 @@ export interface RoadEntity extends MapEntity {
   /** Full width of the road surface, in world units. */
   width: number;
   collision: { type: 'polygon' } & PolygonGeometry;
+  metadata: {
+    /** Centreline length, in world units. */
+    length: number;
+    /**
+     * Rivers this road ends against, where the bridge goes. Absent when the road meets none: a road
+     * that turns along a bank and carries on has not crossed anything.
+     */
+    crossings?: RoadCrossing[];
+  };
 }
 
 export interface SpatialFields {
@@ -96,7 +137,7 @@ export interface SpatialFields {
 }
 
 export interface GameMap {
-  version: '1.1';
+  version: '1.2';
   metadata: {
     id: string;
     seed?: number;

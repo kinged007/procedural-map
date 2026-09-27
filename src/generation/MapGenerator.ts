@@ -11,9 +11,10 @@ import type {
 import { boundsOf, circleIntersectsPolygon, polygonArea } from '../map/geometry.js';
 import { rasterizeWalkability } from '../navigation/walkability.js';
 import { assertValidMap } from '../validation/MapValidator.js';
-import { gridToPolygons } from './contours.js';
+import { gridToEdgePolygons } from './contours.js';
 import { generateForests, markWalkableInside } from './forests.js';
 import { generateRoads } from './roads/RoadGenerator.js';
+import { generateRivers } from './rivers.js';
 import { generateTerrain } from './terrain/TerrainGenerator.js';
 import { sampleField } from './sampleField.js';
 import {
@@ -220,6 +221,24 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         1,
       ),
     },
+    rivers: {
+      density: resolveNumber(
+        config.rivers?.density,
+        DEFAULT_CONFIG.rivers.density,
+        'rivers.density',
+        0,
+        1,
+      ),
+      // A channel has to stay narrower than a road is wide, or a road cannot span it and the water
+      // stops being crossable at all. The ceiling is the widest road doubled.
+      width: resolveNumber(
+        config.rivers?.width,
+        DEFAULT_CONFIG.rivers.width,
+        'rivers.width',
+        1,
+        44,
+      ),
+    },
   };
 }
 
@@ -356,7 +375,7 @@ function generateWater(
     ];
   }
   return ringsToWater(
-    gridToPolygons(
+    gridToEdgePolygons(
       fields.columns,
       fields.rows,
       fields.elevation,
@@ -499,9 +518,13 @@ export function generateMap(config: GenerationConfig): GameMap {
   const fields = generateFields(resolved);
   const reference = referenceFields(resolved, fields);
   const level = waterLevel(reference, resolved.water.amount);
-  const water = generateWater(resolved, fields, level);
-  const terrain = generateTerrain(resolved, fields, water, reference);
+  const lakes = generateWater(resolved, fields, level);
+  const terrain = generateTerrain(resolved, fields, lakes, reference);
   const impassable = terrain.filter((region) => region.collision !== undefined);
+  // Rivers are traced after the terrain is classified, so a river cuts a channel through ground that
+  // is already drawn rather than being given a beach band of its own. Both are published as water.
+  // The lakes go in with them so a course can be cut where it reaches standing water.
+  const water = [...lakes, ...generateRivers(resolved, fields, level, lakes)];
   // Placement draws from a stream keyed on the tile's position in the world, not just the seed. One
   // seed for the whole world would give every tile the identical draw sequence, and a tiled world
   // would show the same grove in the same corner of every tile.
@@ -521,7 +544,7 @@ export function generateMap(config: GenerationConfig): GameMap {
       ? ''
       : `@${resolved.origin.x},${resolved.origin.y}`;
   const map: GameMap = {
-    version: '1.1',
+    version: '1.2',
     metadata: {
       id: `generated-${resolved.seed}-${resolved.width}x${resolved.height}${placementTag}`,
       seed: resolved.seed,

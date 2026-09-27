@@ -1,6 +1,7 @@
 import type {
   Point,
   PolygonGeometry,
+  RoadCrossing,
   RoadEntity,
   SpatialFields,
   TerrainRegion,
@@ -9,6 +10,7 @@ import type {
 import { boundsOf, circleIntersectsPolygon, polygonArea } from '../../map/geometry.js';
 import { ringIsSimple } from '../terrain/Shoreline.js';
 import type { ResolvedGenerationConfig } from '../GenerationConfig.js';
+import { distance, pathLength, roadRibbon, simplifyPath, smoothPath } from '../ribbon.js';
 import { sampleField } from '../sampleField.js';
 
 /**
@@ -65,10 +67,6 @@ type RoadKind = RoadEntity['kind'];
 
 function clamp(value: number, low: number, high: number): number {
   return Math.max(low, Math.min(high, value));
-}
-
-function distance(a: Point, b: Point): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 function distanceToSegment(point: Point, a: Point, b: Point): number {
@@ -133,26 +131,6 @@ class SpatialIndex<T> {
 }
 
 /**
- * Drops points that lie on the straight line between their neighbours. Greedy routing emits a point
- * per step whether or not the heading changed, so an untrimmed centreline is mostly redundant.
- */
-function simplifyPath(path: Point[]): Point[] {
-  if (path.length < 3) return [...path];
-  const kept: Point[] = [path[0]];
-  for (let index = 1; index < path.length - 1; index += 1) {
-    const previous = kept[kept.length - 1];
-    const cross =
-      (path[index].x - previous.x) * (path[index + 1].y - previous.y) -
-      (path[index].y - previous.y) * (path[index + 1].x - previous.x);
-    const span = distance(previous, path[index + 1]);
-    // Skip the point when removing it displaces the line by less than a unit over the span.
-    if (Math.abs(cross) / (span || 1) > 0.75) kept.push(path[index]);
-  }
-  kept.push(path[path.length - 1]);
-  return kept;
-}
-
-/**
  * Keeps at most `limit` points by sampling the path evenly, endpoints included. Simplification alone
  * cannot bound the count on a long meandering road.
  */
@@ -199,42 +177,15 @@ function cleanPath(path: Point[]): Point[] {
   return dropReversals(simplifyPath(path));
 }
 
-/**
- * Builds the ribbon polygon for a road: the centreline offset to each side, closed at both ends.
- * Returns null when the centreline is too short or degenerate to have an area.
- */
-export function roadRibbon(path: Point[], width: number): PolygonGeometry | null {
-  if (path.length < 2) return null;
-  const half = width / 2;
-  const left: Point[] = [];
-  const right: Point[] = [];
-  for (let index = 0; index < path.length; index += 1) {
-    const previous = path[Math.max(0, index - 1)];
-    const next = path[Math.min(path.length - 1, index + 1)];
-    const dx = next.x - previous.x;
-    const dy = next.y - previous.y;
-    const length = Math.hypot(dx, dy) || 1;
-    const point = path[index];
-    left.push({ x: point.x + (-dy / length) * half, y: point.y + (dx / length) * half });
-    right.push({ x: point.x + (dy / length) * half, y: point.y - (dx / length) * half });
-  }
-  const points = [...left, ...right.reverse()];
-  const area = polygonArea({ points });
-  if (!Number.isFinite(area) || area === 0) return null;
-  return { points };
-}
-
-/** Total length of a centreline. */
-export function pathLength(path: Point[]): number {
-  let total = 0;
-  for (let index = 1; index < path.length; index += 1)
-    total += distance(path[index - 1], path[index]);
-  return total;
-}
-
 interface RouteCost {
-  /** Water polygons, which roads cross only at high cost. */
-  water: SpatialIndex<PolygonGeometry>;
+  /** Standing water, which a road is kept clear of and never enters. */
+  lakes: SpatialIndex<PolygonGeometry>;
+  /** Rivers, indexed whole rather than as polygons so a crossing can name the one it crossed. A road is
+   * not kept clear of these: a channel is narrow enough to bridge, and where a road meets one the
+   * crossing is recorded. */
+  rivers: SpatialIndex<WaterRegion>;
+  /** Full width of a river channel, which is the span a crossing has to cover. */
+  channelWidth: number;
   /** Impassable terrain polygons, indexed the same way. */
   rock: SpatialIndex<PolygonGeometry>;
   fields: SpatialFields;
@@ -244,8 +195,9 @@ interface RouteCost {
 
 /**
  * Builds the polygon index. Water and rock rings are indexed by their bounding box, so a step near the
- * middle of the map only pays for contours that actually overlap that area. Each water ring is
- * inserted over its bounds grown by the shore clearance, because a road is refused before it arrives.
+ * middle of the map only pays for contours that actually overlap that area. Lake rings are inserted
+ * over their bounds grown by the shore clearance, because a road is refused before it arrives. River
+ * rings are inserted over their own bounds, because a road reaches them.
  */
 function buildRouteCost(
   config: ResolvedGenerationConfig,
@@ -254,41 +206,101 @@ function buildRouteCost(
   rock: TerrainRegion[],
 ): RouteCost {
   const cell = Math.max(24, Math.round(Math.min(config.width, config.height) * 0.05));
-  const waterIndex = new SpatialIndex<PolygonGeometry>(config.width, config.height, cell);
+  const lakeIndex = new SpatialIndex<PolygonGeometry>(config.width, config.height, cell);
+  const riverIndex = new SpatialIndex<WaterRegion>(config.width, config.height, cell);
   const rockIndex = new SpatialIndex<PolygonGeometry>(config.width, config.height, cell);
-  for (const lake of water) {
-    const bounds = boundsOf(lake.geometry.points);
-    waterIndex.insert(
+  for (const region of water) {
+    const bounds = boundsOf(region.geometry.points);
+    if (region.kind === 'river') {
+      riverIndex.insert(bounds, region);
+      continue;
+    }
+    lakeIndex.insert(
       {
         minX: bounds.minX - SHORE_CLEARANCE,
         minY: bounds.minY - SHORE_CLEARANCE,
         maxX: bounds.maxX + SHORE_CLEARANCE,
         maxY: bounds.maxY + SHORE_CLEARANCE,
       },
-      lake.geometry,
+      region.geometry,
     );
   }
   for (const region of rock) rockIndex.insert(boundsOf(region.geometry.points), region.geometry);
-  return { water: waterIndex, rock: rockIndex, fields, width: config.width, height: config.height };
+  return {
+    lakes: lakeIndex,
+    rivers: riverIndex,
+    rock: rockIndex,
+    fields,
+    width: config.width,
+    height: config.height,
+    channelWidth: config.rivers.width,
+  };
 }
 
 /**
- * True when a point is within `clearance` of any indexed polygon, counting the polygon interior. A
+ * True when a point is within `clearance` of any indexed geometry, counting the polygon interior. A
  * clearance of zero reduces to "inside", which is what impassable terrain wants. Only the contours
  * overlapping the query box are measured, so a step in open country pays for a few rings.
  */
-function nearAny(index: SpatialIndex<PolygonGeometry>, point: Point, clearance: number): boolean {
+function nearAny<T>(
+  index: SpatialIndex<T>,
+  point: Point,
+  clearance: number,
+  geometryOf: (item: T) => PolygonGeometry,
+): boolean {
   return index
     .query(point.x - clearance, point.y - clearance, point.x + clearance, point.y + clearance)
-    .some((geometry) => circleIntersectsPolygon(point, clearance, geometry));
+    .some((item) => circleIntersectsPolygon(point, clearance, geometryOf(item)));
 }
 
 /**
- * True where a road cannot stand: open water or impassable terrain. A road that runs into either ends
- * or turns away; it never crosses. Bridges and fords are v0.7 work.
+ * True where a road cannot stand: a lake or impassable terrain. A road that runs into either ends or
+ * turns away, and it never crosses a lake. A river is not in this set: a road goes over a channel, and
+ * `riverCrossings` records where.
  */
 function blocked(point: Point, cost: RouteCost): boolean {
-  return nearAny(cost.water, point, SHORE_CLEARANCE) || nearAny(cost.rock, point, 0);
+  return (
+    nearAny(cost.lakes, point, SHORE_CLEARANCE, (geometry) => geometry) ||
+    nearAny(cost.rock, point, 0, (geometry) => geometry)
+  );
+}
+
+/**
+ * The rivers this road's surface reaches, as published crossings.
+ *
+ * A road goes over a river rather than stopping at the bank, so a crossing is where the road reaches
+ * the channel. The road's surface is its centreline a half-width either side, so a centreline point
+ * within a half-width of the river is a point the surface covers: that catches a road crossing the
+ * water and a road running along the bank with its edge in it, which are the two ways a road meets a
+ * river. The site recorded is the closest the road comes, because that is the narrowest reach to
+ * bridge and where a ford goes.
+ */
+function riverCrossings(path: Point[], width: number, cost: RouteCost): RoadCrossing[] {
+  const reach = width / 2;
+  const bounds = boundsOf(path);
+  const crossings: RoadCrossing[] = [];
+  for (const river of cost.rivers.query(
+    bounds.minX - reach,
+    bounds.minY - reach,
+    bounds.maxX + reach,
+    bounds.maxY + reach,
+  )) {
+    let site = river.geometry.points[0];
+    let nearest = Infinity;
+    for (const point of path) {
+      if (!circleIntersectsPolygon(point, reach, river.geometry)) continue;
+      for (const vertex of river.geometry.points) {
+        const squared = (vertex.x - point.x) ** 2 + (vertex.y - point.y) ** 2;
+        if (squared < nearest) {
+          nearest = squared;
+          site = vertex;
+        }
+      }
+    }
+    if (nearest < Infinity)
+      crossings.push({ riverId: river.id, point: site, span: cost.channelWidth });
+  }
+  return crossings;
 }
 
 /**
@@ -316,8 +328,10 @@ function insideMap(config: ResolvedGenerationConfig, point: Point): boolean {
  * The walk is a greedy step over a small fan of headings, not a shortest-path search. Each step takes
  * the cheapest heading available, which produces the meander and long detours of a surveyed road
  * rather than a taut path between endpoints. Cost is charged against a budget so the road terminates.
- * Water and rock are refused outright, and a step is refused short of the shoreline rather than at it,
- * so a road bends around an obstruction for as long as it takes and stops with room to spare.
+ * Lakes and rock are refused outright, and a step is refused short of a lake rather than at it, so a
+ * road bends around an obstruction for as long as it takes and stops with room to spare. A river is
+ * neither refused nor cheap: a road goes over the channel, and the crossing is found from the ribbon
+ * afterwards.
  */
 function growRoad(
   start: Point,
@@ -328,7 +342,7 @@ function growRoad(
   step: number,
   budget: number,
 ): Point[] {
-  // A seed inside water or rock cannot be rescued by steering, so the road is abandoned there.
+  // A seed inside a lake or on rock cannot be rescued by steering, so the road is abandoned there.
   if (blocked(start, cost)) return [];
   const path: Point[] = [start];
   let heading = Math.atan2(direction.y, direction.x);
@@ -344,7 +358,8 @@ function growRoad(
         x: clamp(here.x + Math.cos(candidate) * step, 0, config.width),
         y: clamp(here.y + Math.sin(candidate) * step, 0, config.height),
       };
-      if (!insideMap(config, probe) || blocked(probe, cost)) continue;
+      if (!insideMap(config, probe)) continue;
+      if (blocked(probe, cost)) continue;
       // Turning sharply is discouraged, so a road bends rather than zigzags.
       const value = terrainCost(probe, cost) + Math.abs(offset) * 0.9 + random() * 0.25;
       if (value < bestCost) {
@@ -432,9 +447,14 @@ class NetworkIndex {
   }
 
   /**
-   * True when no point of `path` lies within `gap` of any placed road's centreline. Only segments
-   * the index reports for the query box are measured, so the cost scales with the neighbourhood of
-   * the candidate rather than with the size of the network.
+   * True when `path` stays at least `gap` from every placed road's centreline, in both directions.
+   *
+   * The candidate is measured from its own points, and the roads it passes are measured back from
+   * theirs. Both are needed because a point is only ever as far from a line as the nearest vertex of
+   * that line is: a long road is a long way between vertices, so measuring only the candidate's side
+   * lets a pair pass at two thirds of the gap the contract promises. Only segments the index reports
+   * are measured, so the cost scales with the neighbourhood of the candidate rather than with the size
+   * of the network.
    */
   isClear(path: Point[], gap: number, parent?: RoadEntity): boolean {
     for (let i = 0; i < path.length; i += 1) {
@@ -448,8 +468,34 @@ class NetworkIndex {
         if (distanceToSegment(point, segment.a, segment.b) <= gap) return false;
       }
     }
+    const bounds = boundsOf(path);
+    for (const segment of this.index.query(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY)) {
+      if (parent && segment.road === parent) continue;
+      if (tooClose(segment.a, path, gap, bounds) || tooClose(segment.b, path, gap, bounds))
+        return false;
+    }
     return true;
   }
+}
+
+/** True when a point of a placed road is within `gap` of the candidate's own centreline. The bounds
+ * test is the cheap reject: a point further than `gap` outside the candidate's box cannot be near it. */
+function tooClose(
+  point: Point,
+  path: Point[],
+  gap: number,
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+): boolean {
+  if (
+    point.x < bounds.minX - gap ||
+    point.x > bounds.maxX + gap ||
+    point.y < bounds.minY - gap ||
+    point.y > bounds.maxY + gap
+  )
+    return false;
+  for (let i = 1; i < path.length; i += 1)
+    if (distanceToSegment(point, path[i - 1], path[i]) <= gap) return true;
+  return false;
 }
 
 /**
@@ -505,10 +551,12 @@ export function generateRoads(
   random: () => number,
 ): RoadEntity[] {
   const rock = terrain.filter((region) => region.kind === 'rock');
-  const blocked =
+  // Share of the map no road can be laid across. Named for the ground, not the road: `blocked` is the
+  // predicate that asks whether a single point is refused.
+  const covered =
     (totalArea(water.map((lake) => lake.geometry)) + totalArea(rock.map((r) => r.geometry))) /
     (config.width * config.height);
-  if (blocked > BLOCKED_SHARE) return [];
+  if (covered > BLOCKED_SHARE) return [];
 
   const cost = buildRouteCost(config, fields, water, rock);
   const network = new NetworkIndex(config.width, config.height);
@@ -551,7 +599,15 @@ export function generateRoads(
           (kind === 'primary' ? 1 : kind === 'secondary' ? 0.6 : 0.35) *
           (0.7 + random() * 0.6),
       );
-      const path = capPoints(cleanPath(raw), MAX_ROAD_POINTS);
+      const straight = capPoints(cleanPath(raw), MAX_ROAD_POINTS);
+      // A greedy walk is a staircase, and a staircase reads as a staircase whatever width it is drawn
+      // at. The curve is only kept where it is still clear of the same things the walk refused: cutting
+      // a corner rounds the joints but can bow the line towards a shore the walk turned along, and a
+      // road that runs through a lake is worse than a road that runs straight. Re-simplifying after
+      // thinning: corner cutting quadruples the points, and the result is straight wherever the curve
+      // is, so the collinear ones drop straight back out and a smooth road stays a small road.
+      const curved = capPoints(simplifyPath(smoothPath(straight, 1)), MAX_ROAD_POINTS);
+      const path = curved.every((point) => !blocked(point, cost)) ? curved : straight;
       if (path.length < 2 || pathLength(path) < MIN_ROAD_LENGTH) continue;
       if (!network.isClear(path, shortSide * TIER_GAPS[kind], seed.parent)) continue;
       const width = ROAD_WIDTHS[kind] * 2;
@@ -559,6 +615,9 @@ export function generateRoads(
       // A ribbon whose ring crosses itself is not a usable surface. Reject it here rather than
       // publishing a road that map validation would refuse.
       if (!ribbon || !ringIsSimple(ribbon.points)) continue;
+      // Where the road reaches a river, the crossing is recorded: the site a bridge or a ford is built
+      // on, and the width of channel it has to cover.
+      const crossings = riverCrossings(path, width, cost);
       const road: RoadEntity = {
         id: `road-${roads.length + 1}`,
         type: 'road',
@@ -567,7 +626,7 @@ export function generateRoads(
         width,
         collision: { type: 'polygon', ...ribbon },
         asset: { category: `road.${kind}`, variant: `${kind}-1` },
-        metadata: { length: pathLength(path) },
+        metadata: { length: pathLength(path), ...(crossings.length ? { crossings } : {}) },
       };
       roads.push(road);
       network.add(road);

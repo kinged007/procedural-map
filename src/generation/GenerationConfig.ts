@@ -19,6 +19,14 @@ export interface GenerationConfig {
   water?: { amount?: number; scale?: number };
   vegetation?: { density?: number; clustering?: number };
   roads?: { density?: number };
+  /**
+   * The rivers traced down the drainage of the same field the water is contoured from.
+   *
+   * `density` scales the count, and zero publishes no rivers at all, which is a map of lakes and land
+   * with no channels on it. `width` is the full width of a channel in world units, so it sets both how
+   * much ground a river covers and the span a road has to bridge where it crosses one.
+   */
+  rivers?: { density?: number; width?: number };
 }
 
 export interface ResolvedGenerationConfig {
@@ -31,6 +39,7 @@ export interface ResolvedGenerationConfig {
   water: { amount: number; scale: number };
   vegetation: { density: number; clustering: number };
   roads: { density: number };
+  rivers: { density: number; width: number };
 }
 
 export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
@@ -43,4 +52,5 @@ export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
   water: { amount: 0.2, scale: 0.003 },
   vegetation: { density: 0.65, clustering: 0.8 },
   roads: { density: 0.5 },
+  rivers: { density: 1, width: 12 },
 };

@@ -16,11 +16,16 @@ test('generation is byte-stable for the same config', () => {
   assert.equal(JSON.stringify(first), JSON.stringify(second));
   // Pinned over the whole exported map, placement fields included, so a change to how a map is
   // serialised is caught here. This moved from the previous value when `origin` and `world` joined
-  // the resolved config; `tests/tiling.test.mjs` holds the pre-existing value for the map with those
-  // two fields removed, which is the assertion that the terrain itself did not move.
+  // the resolved config, again when water was allowed to reach the map edge, again when rivers
+  // were published as water and the road separation gap was measured in both directions, again when a
+  // river became the main channel of its catchment and roads crossed them, again when a course was
+  // cut at a water body's shore and `rivers` joined the config, again when every course and road
+  // centreline was curve-fitted so the channels are not staircases, and again when a course was
+  // rejoined into one reach that runs to the water rather than one leg of it;
+  // `tests/tiling.test.mjs` holds the matching value for the map with those two fields removed.
   assert.equal(
     stableHash(first),
-    '9dfa41b2fc691ae4f95f0516d99147a6dc5d0fd1417b0d0e826805d4b3674e3c',
+    '9637f0655bd2a99ad10f95e3a6ecc5bebd97d28bd8c7ee0d261c9f3f6f70d17c',
   );
 });
 
@@ -146,7 +151,9 @@ test('roads form a valid network on every seed and map size', () => {
   }
 });
 
-test('a road never crosses water or impassable rock', () => {
+test('a road never crosses a lake or impassable rock', () => {
+  // Rivers are not in this set: a road goes over a channel rather than stopping at the bank, and the
+  // crossing is recorded on the road's metadata. A lake is where a road cannot go at all.
   for (const config of [
     { seed: 583921 },
     { seed: 42, width: 1024, height: 768 },
@@ -155,9 +162,10 @@ test('a road never crosses water or impassable rock', () => {
   ]) {
     const map = generateMap(config);
     const rock = map.terrain.filter((region) => region.kind === 'rock');
+    const lakes = map.water.filter((region) => region.kind !== 'river');
     for (const road of map.roads) {
       for (const point of road.path) {
-        for (const lake of map.water)
+        for (const lake of lakes)
           assert.ok(
             !pointInPolygon(point, lake.geometry),
             `${road.id} runs through ${lake.id} on seed ${config.seed}`,
@@ -174,6 +182,7 @@ test('a road never crosses water or impassable rock', () => {
 
 test('a road keeps a minimum distance from the shoreline', () => {
   // The clearance the generator uses, restated here so a change to one without the other is caught.
+  // It applies to a lake, which the road is kept out of; a river is crossed, not kept away from.
   const CLEARANCE = 20;
   const distanceToSegment = (point, a, b) => {
     const dx = b.x - a.x;
@@ -195,7 +204,7 @@ test('a road keeps a minimum distance from the shoreline', () => {
       // Both ends are checked separately: a road that runs along a bank still has to clear it where
       // it stops, which is where a setback is easiest to lose.
       for (const point of [road.path[0], road.path[road.path.length - 1], ...road.path]) {
-        for (const lake of map.water) {
+        for (const lake of map.water.filter((region) => region.kind !== 'river')) {
           const ring = lake.geometry.points;
           let closest = Infinity;
           for (let k = 0; k < ring.length; k += 1)
@@ -352,10 +361,24 @@ test('the collision view has geometry for every blocking feature', () => {
     assert.ok(tree.collision, 'trees must draw in the collision view');
 });
 
+/**
+ * Lakes the beach pass is responsible for. Rivers are never given a band, and water cut by the map
+ * edge has no outward room for one, so `shorelineBand` skips both.
+ */
+const enclosedLakes = (map) =>
+  map.water.filter(
+    (lake) =>
+      lake.kind === 'lake' &&
+      lake.geometry.points.every(
+        (point) =>
+          point.x > 0 && point.x < map.bounds.width && point.y > 0 && point.y < map.bounds.height,
+      ),
+  );
+
 test('beaches form a band that hugs each shoreline and excludes the lake', () => {
   const map = generateMap({ seed: 583921, width: 1024, height: 768, water: { amount: 0.2 } });
   const beaches = map.terrain.filter((region) => region.kind === 'beach');
-  assert.equal(beaches.length, map.water.length, 'each lake should get a beach');
+  assert.equal(beaches.length, enclosedLakes(map).length, 'each enclosed lake should get a beach');
 
   for (const beach of beaches) {
     const lake = map.water.find((candidate) => candidate.id === beach.metadata.source);
@@ -445,10 +468,51 @@ test('terrain classification responds to the moisture field', () => {
 
 test('water contours are unaffected by the shared contour module', () => {
   const map = generateMap({ seed: 583921, water: { amount: 0.2 }, vegetation: { density: 0 } });
-  assert.equal(map.water.length, 13);
+  // `water` also carries the rivers, which are traced rather than contoured, so the count here is the
+  // lakes alone.
+  const lakes = map.water.filter((region) => region.kind === 'lake');
+  assert.equal(lakes.length, 14);
   assert.equal(
-    map.water.reduce((sum, lake) => sum + (lake.geometry.holes?.length ?? 0), 0),
+    lakes.reduce((sum, lake) => sum + (lake.geometry.holes?.length ?? 0), 0),
     0,
+  );
+});
+
+test('water reaches the map edge where the terrain forms it, cut by the edge', () => {
+  // A shoreline used to be forced to close inside the map, so every border was a strip of land no
+  // matter how low the terrain ran. Water now runs to the edge and is cut by it, but only where the
+  // border is genuinely below the level: a border that sits high still reads as land, so this is not
+  // a ring of ocean around the whole map.
+  const width = 1024;
+  const height = 768;
+  const lakes = (map) => map.water.filter((region) => region.kind === 'lake');
+  const onEdge = (lake) =>
+    lake.geometry.points.some(
+      (point) =>
+        point.x <= 1e-9 || point.x >= width - 1e-9 || point.y <= 1e-9 || point.y >= height - 1e-9,
+    );
+
+  let reachedTheEdge = 0;
+  for (const amount of [0.2, 0.5, 0.8]) {
+    const map = generateMap({ seed: 42, width, height, water: { amount } });
+    for (const lake of lakes(map)) {
+      for (const point of lake.geometry.points)
+        assert.ok(
+          point.x >= 0 && point.x <= width && point.y >= 0 && point.y <= height,
+          'shoreline cut by the edge must stay inside the map',
+        );
+      if (onEdge(lake)) reachedTheEdge += 1;
+    }
+  }
+  assert.ok(reachedTheEdge > 0, 'some water should run to the map edge');
+
+  // And the converse: at a middling amount not every lake is cut, so high ground on a border is
+  // still land rather than the whole map being flooded.
+  const map = generateMap({ seed: 42, width, height, water: { amount: 0.3 } });
+  const all = lakes(map);
+  assert.ok(
+    all.some((lake) => !onEdge(lake)),
+    'a lake away from the border should remain fully enclosed',
   );
 });
 
@@ -488,8 +552,8 @@ test('every lake gets a beach across seeds and map sizes', () => {
     if (map.water.length === 0) continue;
     assert.equal(
       beaches.length,
-      map.water.length,
-      `seed ${config.seed} should give every lake a beach`,
+      enclosedLakes(map).length,
+      `seed ${config.seed} should give every enclosed lake a beach`,
     );
   }
 });
@@ -722,8 +786,12 @@ test('all elevation islands remain as holes in high-water contours', () => {
     water: { amount: 0.8, scale: 0.05 },
     vegetation: { density: 0 },
   });
+  // The coverage is the lakes alone. `water` also carries the rivers, which are traced down the
+  // drainage rather than contoured from a level, and a river on a map this flooded is the last of the
+  // water in a valley rather than part of the high-water surface the ceiling is about.
+  const lakes = map.water.filter((region) => region.kind === 'lake');
   const coverage =
-    map.water.reduce((sum, lake) => sum + polygonArea(lake.geometry), 0) /
+    lakes.reduce((sum, lake) => sum + polygonArea(lake.geometry), 0) /
     (map.bounds.width * map.bounds.height);
   assert.ok(coverage > 0.72 && coverage < 0.88);
   assert.ok(map.water.reduce((sum, lake) => sum + (lake.geometry.holes?.length ?? 0), 0) > 32);

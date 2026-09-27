@@ -11,8 +11,8 @@ const jsonValue = {
 
 export const gameMapSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.1.json',
-  title: 'GameMap v1.1',
+  $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.2.json',
+  title: 'GameMap v1.2',
   description:
     'A forest carries no collision. Its geometry is a hull for broadphase, rendering and a minimap, and it deliberately over-covers the clearings between trees so that a consumer can test one bounds box instead of every tree on the map. Movement is blocked by the circles in the forest tree list, never by the hull.',
   type: 'object',
@@ -29,7 +29,7 @@ export const gameMapSchema = {
     'barriers',
   ],
   properties: {
-    version: { const: '1.1' },
+    version: { const: '1.2' },
     metadata: { $ref: '#/$defs/mapMetadata' },
     bounds: { $ref: '#/$defs/bounds' },
     terrain: { type: 'array', items: { $ref: '#/$defs/terrain' } },
@@ -175,7 +175,7 @@ export const gameMapSchema = {
           required: ['kind', 'geometry', 'collision'],
           properties: {
             type: { const: 'water' },
-            kind: { const: 'lake' },
+            kind: { enum: ['lake', 'river'] },
             geometry: { $ref: '#/$defs/polygon' },
             collision: {
               allOf: [

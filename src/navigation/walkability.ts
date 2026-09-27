@@ -107,6 +107,10 @@ function blockersOf(map: GameMap): PolygonGeometry[] {
  * Rings are paired per scanline rather than per cell, which is the whole cost model: the work is
  * proportional to the edge crossings, not to the area. Testing every cell against every polygon
  * instead is about a hundred times slower on a whole-world bake.
+ *
+ * A row is the union of its two boundary scanlines, which is exact while the ring's edges cross them.
+ * An edge running horizontally through the middle of a row is the one case that is not, and it widens
+ * the row across the edge, so the raster can block a cell whose centre is open but never the reverse.
  */
 export function rasterizeWalkability(
   map: GameMap,
@@ -128,6 +132,9 @@ export function rasterizeWalkability(
   // told about crossings twice, and getting that wrong leaves the row with an odd crossing count
   // that pairs into nothing. The row reads its two boundaries out of this one array instead.
   const scanlines: number[][] = Array.from({ length: rows + 1 }, () => []);
+  // The x-spans of the ring's own horizontal edges, per row. An edge lying inside a row is a boundary
+  // the row's two scanlines never see, so the row is widened across the edge to stay conservative.
+  const across: number[][] = Array.from({ length: rows }, () => []);
   let scratch = new Uint8Array(0);
 
   for (const geometry of blockersOf(map)) {
@@ -154,6 +161,7 @@ export function rasterizeWalkability(
     if (scratch.length < area) scratch = new Uint8Array(area);
     else scratch.fill(0, 0, area);
     for (let row = minRow; row <= maxRow + 1; row += 1) scanlines[row].length = 0;
+    for (let row = minRow; row <= maxRow; row += 1) across[row].length = 0;
 
     // Every edge is walked once, bucketing its intersection with each scanline boundary it reaches.
     for (let ring = 0; ring < rings.length; ring += 1) {
@@ -161,9 +169,20 @@ export function rasterizeWalkability(
       for (let index = 0; index < points.length; index += 1) {
         const a = points[index];
         const b = points[index + 1 === points.length ? 0 : index + 1];
-        if (a.y === b.y) continue;
         const low = a.y < b.y ? a.y : b.y;
         const high = a.y < b.y ? b.y : a.y;
+        // An edge that lies inside one row is a step in the ring that no scanline crosses, because it
+        // starts and ends between the same pair of boundaries. The shape is wider in the middle of the
+        // row than at either edge of it, so the row is widened across the edge. This costs at most one
+        // row of cells per edge and cannot leave a covered cell open, which is the one direction the
+        // raster is allowed to be wrong in. An edge that reaches a row boundary needs nothing: it
+        // crosses that boundary and is counted there.
+        const acrossRow = Math.floor(low / cellSize);
+        if (low > acrossRow * cellSize && high < (acrossRow + 1) * cellSize) {
+          if (acrossRow >= minRow && acrossRow <= maxRow)
+            across[acrossRow].push(Math.min(a.x, b.x), Math.max(a.x, b.x));
+          continue;
+        }
         const firstRow = Math.max(minRow, Math.floor(low / cellSize));
         const lastRow = Math.min(maxRow, Math.floor(high / cellSize));
         if (firstRow > lastRow) continue;
@@ -207,6 +226,17 @@ export function rasterizeWalkability(
       // almost everywhere and the row needs their union.
       fillScanline(scanlines[row], scratch, span, minColumn, offset, cellSize, true);
       fillScanline(scanlines[row + 1], scratch, span, minColumn, offset, cellSize, false);
+      for (let index = 0; index + 1 < across[row].length; index += 2)
+        fillSpan(
+          scratch,
+          span,
+          minColumn,
+          offset,
+          across[row][index],
+          across[row][index + 1],
+          cellSize,
+          false,
+        );
     }
 
     for (let row = 0; row < depth; row += 1) {

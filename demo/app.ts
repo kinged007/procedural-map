@@ -29,7 +29,7 @@ const generateButton = element<HTMLButtonElement>('generate-button');
 const exportButton = element<HTMLButtonElement>('export-button');
 const importButton = element<HTMLButtonElement>('import-button');
 const cellSizeInput = element<HTMLSelectElement>('cell-size');
-const ranges = ['density', 'water', 'variation', 'clustering', 'roads'] as const;
+const ranges = ['density', 'water', 'variation', 'clustering', 'roads', 'rivers'] as const;
 const numberFormat = new Intl.NumberFormat('en');
 const descriptions: Record<MapView, string> = {
   styled: 'Grassland, open water & clustered woodland',
@@ -131,6 +131,10 @@ function configFromControls(): GenerationConfig {
       clustering: element<HTMLInputElement>('clustering').valueAsNumber / 100,
     },
     roads: { density: element<HTMLInputElement>('roads').valueAsNumber / 100 },
+    rivers: {
+      density: element<HTMLInputElement>('rivers').valueAsNumber / 100,
+      width: element<HTMLInputElement>('river-width').valueAsNumber,
+    },
   };
 }
 
@@ -146,6 +150,8 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('variation').value = String(config.terrain.variation * 100);
   element<HTMLInputElement>('clustering').value = String(config.vegetation.clustering * 100);
   element<HTMLInputElement>('roads').value = String(config.roads.density * 100);
+  element<HTMLInputElement>('rivers').value = String(config.rivers.density * 100);
+  element<HTMLInputElement>('river-width').value = String(config.rivers.width);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);
   element<HTMLInputElement>('origin-x').value = String(config.origin.x);
@@ -176,9 +182,13 @@ function showMap(nextMap: GameMap, source: string, elapsed?: number) {
   map = nextMap;
   const { width, height } = map.bounds;
   deriveNavigation(nextMap);
+  const lakes = map.water.filter((region) => region.kind !== 'river');
+  const rivers = map.water.filter((region) => region.kind === 'river');
   element('tree-count').textContent = numberFormat.format(map.vegetation.length);
   element('grove-count').textContent = numberFormat.format(map.forests.length);
-  element('lake-count').textContent = numberFormat.format(map.water.length);
+  element('lake-count').textContent = rivers.length
+    ? `${numberFormat.format(lakes.length)} · ${rivers.length}`
+    : numberFormat.format(lakes.length);
   const coverage =
     (map.water.reduce((total, lake) => total + polygonArea(lake.geometry), 0) / (width * height)) *
     100;

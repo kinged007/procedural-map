@@ -1,6 +1,6 @@
 # Architecture
 
-The canonical product boundary is `GameMap` v1.1. Generation, native JSON import, and future external import adapters produce this model. Consumers use the same geometry, semantic entities, and asset references regardless of source.
+The canonical product boundary is `GameMap` v1.2. Generation, native JSON import, and future external import adapters produce this model. Consumers use the same geometry, semantic entities, and asset references regardless of source.
 
 ```
 generation / import adapter -> GameMap -> validation -> export, renderer, game consumer
@@ -22,15 +22,27 @@ The library has no browser or DOM dependency. It ships as Node ESM in `dist/`. T
 
 `NativeMapImporter` accepts a JSON string or object and returns a validated deep clone. `WatabouImporter` is present as an adapter boundary but is unsupported in this MVP: `canImport` returns `false` and `import` throws until a representative Watabou fixture schema is available. No game logic belongs in this library.
 
-The MVP includes the `temperate` default theme. `MapTheme` lets a renderer substitute terrain, water, and vegetation colors without regenerating the map.
+The MVP includes the `temperate` default theme. `MapTheme` lets a renderer substitute terrain, water, and vegetation colors without regenerating the map. The renderer draws what the format publishes and nothing more: a delta at each mouth, no shore margin on a river because a lake's beach margin is wider than a river is, and no marker at all where a road crosses a river, because roads are drawn over the water and a marker there was a square in the wrong place.
 
 ## Map guarantees
 
-All geometry uses absolute world coordinates. Bounds define the valid rectangle from `(0, 0)` through `(width, height)`. The validator requires finite values, unique entity IDs, supported version `1.1`, valid geometry, and entity coordinates within the bounds. Generated trees do not overlap water.
+All geometry uses absolute world coordinates. Bounds define the valid rectangle from `(0, 0)` through `(width, height)`. The validator requires finite values, unique entity IDs, supported version `1.2`, valid geometry, and entity coordinates within the bounds. Generated trees do not overlap water.
 
 Terrain classification is a separate stage over the generated fields. It contours the combined terrain and moisture score into `meadow` and `scrub` overlays using the same marching-squares module as water, kept in `generation/contours.ts`.
 
 `metadataLayers` is optional canonical metadata. Generator output stores debug fields there so they survive native JSON export and import. Consumers may ignore these layers.
+
+## Rivers and bridges
+
+`generation/rivers.ts` traces each course on the priority-flood drainage, and `generation/ribbon.ts`
+holds the offset code shared with roads, so a channel and a road are the same kind of surface. A course
+is cut where it first reaches standing water, and the site becomes a published mouth rather than a
+channel drawn over a lake.
+
+A bridge is not a map entity, and the renderer does not draw one. The road's `metadata.crossings` names
+the river, the site, and the channel's width, and the road ribbon and the channel polygon are both on
+the map, so the part of one centreline that is over the other is the bridge. A bridge the game owns is
+an entity a consumer adds, which is why the site is data and the deck is not.
 
 ## Forests
 
@@ -56,7 +68,10 @@ holds no state of its own and adds nothing to `GameMap`: `rasterizeWalkability` 
 returns a grid, and `navigableRegions` and `spawnCandidates` take that grid and return positions. The
 fill rule it uses, a cell is blocked if any part of it is covered by water or rock, is the same rule
 the map already states about blocking features, so the grid and a consumer's own collision test cannot
-drift apart.
+drift apart. A row is the union of its two boundary scanlines, which is exact while a ring's edges
+cross them; an edge lying inside a row is a step neither boundary sees, so the row is widened across it.
+That costs at most one row of cells per edge and cannot report a covered cell as open, which is the one
+direction the grid is allowed to be wrong in.
 
 Generation does not depend on `navigation`, and no map carries a baked grid. That keeps the canonical
 format unchanged and keeps the grid a derived artefact a consumer can rebake at its own tile size.

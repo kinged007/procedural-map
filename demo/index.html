@@ -163,6 +163,23 @@
                   ></label
                 ><input id="clustering" type="range" min="0" max="100" value="80" />
               </div>
+              <div class="range-field">
+                <label for="rivers"
+                  >Rivers<output id="rivers-value" for="rivers">100%</output></label
+                ><input id="rivers" type="range" min="0" max="100" value="100" />
+                <div class="range-hints"><span>No channels</span><span>Full network</span></div>
+              </div>
+              <label class="field-label" for="river-width">River channel width (units)</label
+              ><input
+                class="number-input"
+                id="river-width"
+                type="number"
+                min="1"
+                max="44"
+                step="1"
+                value="12"
+                required
+              />
               <label class="field-label" for="terrain-scale">Terrain noise scale</label
               ><input
                 class="number-input"
@@ -225,7 +242,7 @@
             </div>
             <div class="stat">
               <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong
-              ><span class="stat-detail">polygon geometry</span>
+              ><span class="stat-detail">lakes · rivers</span>
             </div>
             <div class="stat">
               <span class="stat-label">WATER COVERAGE</span><strong id="water-coverage">—</strong

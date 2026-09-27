@@ -6,7 +6,9 @@ export type Segment = [GridPoint, GridPoint];
 
 /**
  * Marching-squares contour of every cell whose corner values are at or below `level`.
- * Outer grid cells count as dry so contours never run along the map edge.
+ * The outer ring of the grid counts as dry so that every contour closes on itself, because ring
+ * tracing discards an open chain. A caller that wants water to reach the edge pads the grid first,
+ * so this rule lands on the padding and the real border keeps its own values.
  */
 export function contourSegments(
   columns: number,
@@ -155,4 +157,92 @@ export function gridToPolygons(
     smoothRing(ring.map((point) => ({ x: point.x * scaleX, y: point.y * scaleY }))),
   );
   return ringsToPolygons(rings);
+}
+
+function clipToAxis(
+  points: Point[],
+  keep: (point: Point) => boolean,
+  cross: (inside: Point, outside: Point) => Point,
+): Point[] {
+  const clipped: Point[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const previous = points[(index + points.length - 1) % points.length];
+    const currentInside = keep(current);
+    const previousInside = keep(previous);
+    if (currentInside) {
+      if (!previousInside) clipped.push(cross(previous, current));
+      clipped.push(current);
+    } else if (previousInside) {
+      clipped.push(cross(previous, current));
+    }
+  }
+  return clipped;
+}
+
+/** Cuts a ring to the map rectangle so shoreline that leaves the map is cut by the edge, not rounded off. */
+function clipRingToBounds(points: Point[], width: number, height: number): Point[] {
+  const atX = (x: number) => (a: Point, b: Point) => ({
+    x,
+    y: a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x),
+  });
+  const atY = (y: number) => (a: Point, b: Point) => ({
+    y,
+    x: a.x + ((b.x - a.x) * (y - a.y)) / (b.y - a.y),
+  });
+  return clipToAxis(
+    clipToAxis(
+      clipToAxis(
+        clipToAxis(points, (point) => point.x >= 0, atX(0)),
+        (point) => point.x <= width,
+        atX(width),
+      ),
+      (point) => point.y >= 0,
+      atY(0),
+    ),
+    (point) => point.y <= height,
+    atY(height),
+  );
+}
+
+/**
+ * Contours a grid whose water is allowed to reach the map edge.
+ *
+ * The grid is extended by one ring that replicates the outer row and column, which keeps every
+ * contour closed inside the extension while the real border keeps its own values. Water therefore
+ * runs to the edge and is cut by it, and a border that sits above the level stays dry land.
+ */
+export function gridToEdgePolygons(
+  columns: number,
+  rows: number,
+  values: number[],
+  level: number,
+  width: number,
+  height: number,
+): PolygonGeometry[] {
+  const paddedColumns = columns + 2;
+  const paddedRows = rows + 2;
+  const padded = new Array<number>(paddedColumns * paddedRows);
+  for (let row = 0; row < paddedRows; row += 1) {
+    for (let column = 0; column < paddedColumns; column += 1) {
+      const sourceColumn = Math.min(columns - 1, Math.max(0, column - 1));
+      const sourceRow = Math.min(rows - 1, Math.max(0, row - 1));
+      padded[row * paddedColumns + column] = values[sourceRow * columns + sourceColumn];
+    }
+  }
+
+  const scaleX = width / ((columns - 1) * 2);
+  const scaleY = height / ((rows - 1) * 2);
+  const rings = traceRings(contourSegments(paddedColumns, paddedRows, padded, level)).map((ring) =>
+    smoothRing(ring.map((point) => ({ x: (point.x - 2) * scaleX, y: (point.y - 2) * scaleY }))),
+  );
+
+  return ringsToPolygons(rings)
+    .map((geometry) => ({
+      points: clipRingToBounds(geometry.points, width, height),
+      ...(geometry.holes
+        ? { holes: geometry.holes.map((hole) => clipRingToBounds(hole, width, height)) }
+        : {}),
+    }))
+    .filter((geometry) => geometry.points.length >= 3 && Math.abs(ringArea(geometry.points)) > 0);
 }

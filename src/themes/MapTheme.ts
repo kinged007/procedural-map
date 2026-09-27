@@ -10,6 +10,8 @@ export interface MapTheme {
     detail: string;
   };
   water: { fill: string; shore: string; line: string; ripple: string };
+  /** Where a river's channel becomes standing water. Optional, for the same reason. */
+  riverMouths?: string;
   roads: { primary: string; secondary: string; path: string; casing: string };
   vegetation: { canopy: string[]; outline: string; trunk: string; shadow: string };
 }

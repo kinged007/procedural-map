@@ -1,4 +1,4 @@
-# GameMap v1.1 schema
+# GameMap v1.2 schema
 
 The canonical product boundary is `GameMap` v1.1. Generation, native JSON import, and future external
 import adapters all produce this model, and a consumer uses the same geometry regardless of which one
@@ -15,7 +15,7 @@ elided with a comment rather than truncated silently.
 
 ```ts
 interface GameMap {
-  version: '1.1';
+  version: '1.2';
   metadata: { id: string; seed?: number; generator?: string; generatedAt?: string };
   bounds: { width: number; height: number };
   terrain: TerrainRegion[];
@@ -178,13 +178,12 @@ leave the map gets no beach at all, so a map can have fewer beaches than lakes.
 
 ## water
 
-The only water kind today is `lake`. Collision is required and is the same polygon as the visible
-geometry, so a consumer never has to reconcile the two.
+There are two water kinds. `lake` is a body of standing water contoured from the elevation field, and `river` is the channel of a course walked down the drainage of the same field, `rivers.width` world units wide, 12 by default. Collision is required on both and is the same polygon as the visible geometry, so a consumer never has to reconcile the two.
 
 ```ts
 interface WaterRegion extends MapEntity {
   type: 'water';
-  kind: 'lake';
+  kind: 'lake' | 'river';
   geometry: PolygonGeometry;
   collision: { type: 'polygon' } & PolygonGeometry;
 }
@@ -207,7 +206,41 @@ interface WaterRegion extends MapEntity {
 ```
 
 A lake may carry its own holes for islands, and generation preserves every high-ground ring it finds
-inside a contour.
+inside a contour. A river has no holes: it is the surface of one course, and a ring. A course is cut at the first water its channel reaches, and the end is slid onto the shore so the
+channel and the water body join rather than stopping a step apart. A river has no holes: it is the
+surface of one course, and a ring. A course that would lie on a river already published is cut back to
+the junction, so a map's rivers meet rather than overlap: two channels touching is a confluence, and
+the ring of each ends inside the other's.
+
+```json
+{
+  "id": "river-1",
+  "type": "water",
+  "kind": "river",
+  "geometry": { "points": [{ "x": 1592.88, "y": 568.88 }, "... 14 points"] },
+  "collision": { "type": "polygon", "points": [{ "x": 1592.88, "y": 568.88 }, "... same points"] },
+  "asset": { "category": "water.river", "variant": "river-1" }
+}
+```
+
+A course is cut where it first reaches standing water, so a channel never lies over a lake, and the
+site is published on the river. `metadata.mouths` is present when the river met a water body, and each
+entry names it:
+
+```ts
+interface RiverMouth {
+  waterId: string;
+  point: Point;
+  polygon: PolygonGeometry;
+}
+```
+
+`point` is where the channel met the water's edge, and `polygon` is a small square one channel wide at
+that point, so an asset can be placed without re-deriving the direction. The channel and the water body
+overlap by half a channel at a mouth, which is what a mouth is: the channel widens where it meets
+standing water. There is one mouth per course that reaches standing water, and a mouth is the only
+place a map says a river met something: a delta, a silt bank or an estuary goes here. Every river ends
+at a mouth, at the edge of the world, or on a river already published, and never in open ground.
 
 ## vegetation
 
@@ -335,11 +368,37 @@ interface RoadEntity extends MapEntity {
   path: Point[];
   width: number;
   collision: { type: 'polygon' } & PolygonGeometry;
+  metadata: {
+    length: number;
+    crossings?: RoadCrossing[];
+  };
+}
+
+interface RoadCrossing {
+  riverId: string;
+  point: Point;
+  span: number;
 }
 ```
 
 `width` is the full width, not the half-width, and is a constant per kind: 22 for `primary`, 14 for
 `secondary`, 7 for `path`. `metadata.length` is the centreline length.
+
+`metadata.crossings` is where a road's surface reaches a river. A road goes over a channel rather than
+stopping at the bank, so a crossing is a place on the road that a consumer has to build for:
+`riverId` names the `water` entity, `point` is the point on the river's surface closest to the road,
+and `span` is the width of the channel to cover, which is `rivers.width`. A road's surface is its
+centreline a half-width either side, so a road running along a bank with its edge in the water has a
+crossing as well as one going over. `span` is the channel's width, not the length of a bridge. The key
+is absent when the road's surface reached no river, and a road that meets the same river twice has one
+crossing rather than two.
+
+A crossing is a hint that the two surfaces touch, not proof the road spans the channel: a road running
+along a bank with its edge in the water carries a crossing too. The data a consumer needs to build
+for it is all present — `road.path` is the full centreline and the river's `geometry` is the full
+channel — so the actual overlap is a point-in-polygon test between them, and a consumer that wants to
+place a bridge sizes it from the part of the centreline that is over the channel. `crossings` is a
+shortcut for finding the site; `path` and `geometry` are the truth.
 
 ```json
 {
@@ -373,12 +432,12 @@ or a later generation stage can populate them without a version bump.
 
 `asset` is a `{ category, variant }` pair, and the generator uses a fixed vocabulary:
 
-| Collection   | `category`        | `variant`                                                 |
-| ------------ | ----------------- | --------------------------------------------------------- |
-| `terrain`    | `terrain.grass`   | `temperate-1`, `meadow-1`, `scrub-1`, `rock-1`, `beach-1` |
-| `water`      | `water.lake`      | `lake-1`, `lake-2`, ...                                   |
-| `vegetation` | `vegetation.tree` | `oak-1`..`oak-3`, `birch-1`..`birch-3`                    |
-| `roads`      | `road.<kind>`     | `<kind>-1`                                                |
+| Collection   | `category`                   | `variant`                                                 |
+| ------------ | ---------------------------- | --------------------------------------------------------- |
+| `terrain`    | `terrain.grass`              | `temperate-1`, `meadow-1`, `scrub-1`, `rock-1`, `beach-1` |
+| `water`      | `water.lake` / `water.river` | `lake-1`, `lake-2`, ... / `river-1`                       |
+| `vegetation` | `vegetation.tree`            | `oak-1`..`oak-3`, `birch-1`..`birch-3`                    |
+| `roads`      | `road.<kind>`                | `<kind>-1`                                                |
 
 `asset.category` is `terrain.grass` for every terrain kind including rock and beach; the kind is
 carried by `variant`. Switch on the semantic `kind` field, not on the asset, when behaviour depends
@@ -446,7 +505,7 @@ the first. `assertValidMap(value)` throws on the first.
 
 A map is rejected when:
 
-- `version` is anything but `"1.0"`, or `bounds` has a non-positive dimension.
+- `version` is anything but `"1.2"`, or `bounds` has a non-positive dimension.
 - Any number is not finite, or a point, polygon vertex, circle, or rectangle falls outside `bounds`.
 - An `id` is empty or repeats anywhere in the map.
 - A ring has fewer than 3 or more than 32,768 points, is self-intersecting, or encloses no area.
