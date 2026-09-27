@@ -53,7 +53,7 @@ The generator has no fixed world scale. Its constants are tuned so a 2048x1536 m
 in practice means one world unit reads as roughly one metre in a top-down game. Pick a global scale
 factor at import time if you need a different unit.
 
-## Three things to build
+## Four things to build
 
 ### 1. Ground surface
 
@@ -200,6 +200,35 @@ where the channel met its edge, and a small square one channel wide at that poin
 delta, a silt bank, an estuary, or a waterfall asset goes, and it is the only place a map says a river
 met something: a channel runs from its source in the hills, which is the other end of the ring and is
 not marked, to the water or off the edge of the map. Iterate `river.metadata?.mouths ?? []`.
+
+### 4. Buildings
+
+`map.structures` holds the buildings placed along the roads, each a typed `BuildingEntity`. A building
+is a solid rectangle, so it is a footprint to fit an asset into and a wall to walk into:
+
+- `position` is the centre at ground level, `width` the frontage and `depth` the depth.
+- `geometry` is the footprint ring, and `collision` is the same polygon, as with water and roads.
+- `rotation` is in radians and points **from the building towards its road**, so a building placed on
+  a road looks back down it. To find a building's front wall, take `position` and step `depth / 2`
+  along the direction `rotation` points.
+- `asset.category` is `structure.house` or `structure.farm`, and `category` says which.
+- `metadata.roadId` is the road it was placed against, and `metadata.setback` is how far its front wall
+  stands from that road's centreline.
+
+**A building blocks the walkability raster.** It is in the same list as the water and the rock, so a
+character cannot walk through a wall without you making those cells walkable. If you want doorways, you
+find them yourself: nothing in the format says where a door is, and `metadata` has no room for one
+until the format grows a field for it.
+
+Nothing about a building is a parcel. There is no plot, no boundary, and no ownership: a building is a
+rectangle standing on the ground, and the ground around it is ordinary terrain. A farm is a building
+that happens to stand 48 units back from a road rather than `buildings.setback`, not a field around it.
+
+Buildings are kept off the beach, which is worth knowing because a beach is ordinary walkable terrain
+and nothing else in the map refuses it. The reason is that a house on the sand is a house nobody would
+have built, and because a shoreline is where a port, a pier, or a boat shed goes. So a consumer that
+wants a harbour is building into ground the generator has deliberately left empty, and can pick its own
+shoreline site the same way it picks a river mouth.
 
 ## Walking on the map
 
@@ -399,7 +428,8 @@ The same resolved configuration always produces a byte-identical map. Two conseq
 on:
 
 - A seed plus a config is a complete save file. Store `(seed, width, height, terrain, water,
-vegetation, roads)` and you can rebuild the world exactly, which is a fraction of the JSON size.
+vegetation, roads, rivers, buildings)` and you can rebuild the world exactly, which is a fraction of
+  the JSON size.
 - Generated maps are comparable. If two maps with the same config differ, something in the pipeline
   changed the data, and a diff of the exports will show it.
 
@@ -410,13 +440,16 @@ the config you passed in, or the defaults will drift between versions.
 
 So the map is not mistaken for more than it is:
 
-- **No structures or barriers.** Both collections are empty on a generated map.
-- **No buildings, plots, settlements, or resources.** These are the v0.4 to v0.6 roadmap.
+- **No barriers.** `map.barriers` is empty on a generated map; it is where an imported wall, gate, or
+  fence belongs.
+- **No plots, parcels, settlements, or resources.** Buildings are published, but a building is a
+  rectangle on the ground, not a parcel it sits in. Plots and settlements are the v0.5 roadmap.
 - **No bridges or fords.** Rivers are published, and a road records the site of each crossing its
   surface reached, but nothing is built there. A river also blocks the walkability raster where a road
   goes over it, so a character cannot walk the crossing until you make those cells walkable. A river
   also meets a water body on a published site rather than running over it, and a river's channel is
-  its geometry, so a bridge deck is drawn by you.- **No heightmap or 3D data.** The map is flat. Elevation is available as a debug field, not as
+  its geometry, so a bridge deck is drawn by you.
+- **No heightmap or 3D data.** The map is flat. Elevation is available as a debug field, not as
   geometry, and no region carries a height.
 - **No navigation mesh, and no pathfinding.** A* or whatever you use runs over the walkability grid.
 - **No region naming.** Regions are numbered by size. No region has a name.

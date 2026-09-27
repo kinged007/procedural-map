@@ -1253,6 +1253,19 @@ A river is water, and it is published in the same `water` collection as a lake, 
 - `rivers.density` scales the count and `rivers.width` sets the channel, so a map whose water is only standing passes `density: 0` and publishes no river at all.
 - Bridges and fords remain v0.7. v0.3 publishes where one goes, and draws nothing there: a road is rendered over the water, and the part of a road's centreline that lies over a channel is the bridge, in the data a consumer already has.
 
+## 12.5 Buildings
+
+A building is a solid rectangle standing on the ground, published in `structures`, and it is the only structure the generator produces so far.
+
+- A road is the only thing that offers a site. A building is placed because a road was there, and a building that needs to stand away from a road entirely is a different placement problem belonging to settlements.
+- A building faces its road. `rotation` points from the building towards the road rather than along it, so a building looks back down the way it stands and the front wall is the face nearest the centreline. Both sides of a road are built on, so a settlement grows from both banks.
+- The footprint is the collision, exactly as water and roads are, so a consumer never reconciles two shapes. The renderer works the front wall out from `position` and `rotation` rather than from the order of the ring, so a hand-written map that wrote the ring the other way round still draws.
+- A category earns its place by changing the placement, not only the name. A house is small and uses the configured setback; a farm is larger and stands well back from the road, which is what a farmyard is. Two categories are enough to carry that, and a third that only changed the asset would not be a category.
+- Spacing is a global centre-to-centre minimum rather than a gap along one road, so buildings on two roads that run close together do not end up inside each other. It also makes `setback` behave oddly at the low end: pulling both rows in towards a road pulls them into each other, and below the spacing they cancel out and the map gets fewer buildings. A control that is not monotone is called out here rather than left to be discovered.
+- A building is refused a site in the water, on rock, in a road, on a beach, or under a tree. A beach is the one of these that nothing refuses to walk on: a building is kept off it anyway, because a house standing on the sand is a house nobody would build, and because a shoreline is where a port, a pier, or a boat shed belongs. Keeping the band clear is what leaves that ground for a category able to claim it, which is v0.5 work; the v0.4 rule is only that nothing stands there yet. Trees are generated first, so a tree is the reason a building is dropped and not the other way round: the wood is worth more to a map than the house beside it.
+- A building blocks the walkability raster, in the same list as water and rock. Nothing in the format says where a door is, so a consumer wanting a doorway finds it itself.
+- A building is not a parcel. There is no plot, no boundary, and no ownership: it is a rectangle standing on ordinary ground, and the ground around it is ordinary terrain.
+
 ---
 
 # 29. Roadmap
@@ -1343,6 +1356,22 @@ Features:
 - asset assignment;
 - plot/parcel concepts.
 
+Delivered in v0.4:
+
+- Building footprints, collision polygons, categories, orientation, and asset assignment are published
+  as a typed `BuildingEntity` in `structures`, and the format moved to 1.3 to say so.
+- Road-facing placement, on both sides of a road, with a global spacing minimum.
+- `buildings.density`, `buildings.spacing`, and `buildings.setback` place them.
+- **Plot and parcel concepts are deferred to v0.5.** They are listed above as a v0.4 feature and are
+  deliberately not delivered in it. A building is a rectangle on the ground and nothing claims the
+  ground around it. A parcel only means something once there are settlements dividing land between
+  owners, so publishing an empty boundary now would be a shape with no meaning that v0.5 would have to
+  unpick rather than extend. v0.5 owns plots, and the building format does not have to change for one
+  to arrive: a plot is the ground around a building, and the field to add is on the building itself
+  once there is more than one way to place it.
+- Which categories to place is a fixed weighted draw, not a configuration. A caller that wants to
+  choose is asking for the settlement phase, where placement and category become one problem.
+
 ---
 
 ## v0.5 — Settlement Generation
@@ -1358,7 +1387,14 @@ Potential systems:
 - town density;
 - central squares;
 - neighbourhoods;
-- settlement boundaries.
+- settlement boundaries;
+- which building categories a map places;
+- shoreline categories, including a port or a pier that stands in the water.
+
+Carried over from v0.4 and deferred here on purpose: plots and parcels, and choosing which categories
+get placed rather than drawing from a fixed weighted set. A shoreline is v0.5 work too, because v0.4
+keeps the whole beach band clear of buildings, which is what leaves a port or a pier somewhere to
+stand.
 
 Generation parameters might include:
 

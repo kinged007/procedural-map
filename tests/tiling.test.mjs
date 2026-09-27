@@ -30,7 +30,7 @@ test('a tile with no origin and no world is the map it always was', () => {
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    'ee1c672c922f2f845abc09da424308eb3e243828317c96966f62f4446ad11364',
+    'b9a28eddc43d07443ed4921fcfbeb63051dea331acf0351ca1648aa32233fe86',
   );
 });
 

@@ -11,6 +11,7 @@ import type {
 import { boundsOf, circleIntersectsPolygon, polygonArea } from '../map/geometry.js';
 import { rasterizeWalkability } from '../navigation/walkability.js';
 import { assertValidMap } from '../validation/MapValidator.js';
+import { generateBuildings } from './buildings.js';
 import { gridToEdgePolygons } from './contours.js';
 import { generateForests, markWalkableInside } from './forests.js';
 import { generateRoads } from './roads/RoadGenerator.js';
@@ -237,6 +238,35 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         'rivers.width',
         1,
         44,
+      ),
+    },
+    buildings: {
+      density: resolveNumber(
+        config.buildings?.density,
+        DEFAULT_CONFIG.buildings.density,
+        'buildings.density',
+        0,
+        1,
+      ),
+      // A building's own depth is 11 to 20 units, so a spacing under that would refuse almost every
+      // site and the map would come out empty rather than tight. The floor is the widest building.
+      spacing: resolveNumber(
+        config.buildings?.spacing,
+        DEFAULT_CONFIG.buildings.spacing,
+        'buildings.spacing',
+        20,
+        200,
+      ),
+      // A building's front wall has to clear the road surface it stands against, or the clearance
+      // test refuses every site and the map comes out empty. The floor is half the width of the
+      // widest road. A setback much above that is legal but does not add buildings: pulling both
+      // rows in also pulls them into each other, and past the spacing they cancel out again.
+      setback: resolveNumber(
+        config.buildings?.setback,
+        DEFAULT_CONFIG.buildings.setback,
+        'buildings.setback',
+        6,
+        120,
       ),
     },
   };
@@ -536,6 +566,12 @@ export function generateMap(config: GenerationConfig): GameMap {
   const roadRandom = new Random(placement ^ 0x2f1c93);
   const roads = generateRoads(resolved, fields, water, terrain, () => roadRandom.next());
   const vegetation = generateTrees(resolved, fields, water, random, impassable, roads);
+  // Buildings come last, because a road is the only thing that offers them a site, and the roads, the
+  // ground they must not stand on, and the trees they must not stand under all exist by now.
+  const buildingRandom = new Random(placement ^ 0x6b8f21);
+  const structures = generateBuildings(resolved, roads, water, terrain, vegetation, () =>
+    buildingRandom.next(),
+  );
   const forests: ForestEntity[] = generateForests(vegetation);
   // A tile at an origin needs to be distinguishable from the same tile at the origin, or assembling
   // a world puts duplicate entity ids in it. The single-tile id is left as it was.
@@ -544,7 +580,7 @@ export function generateMap(config: GenerationConfig): GameMap {
       ? ''
       : `@${resolved.origin.x},${resolved.origin.y}`;
   const map: GameMap = {
-    version: '1.2',
+    version: '1.3',
     metadata: {
       id: `generated-${resolved.seed}-${resolved.width}x${resolved.height}${placementTag}`,
       seed: resolved.seed,
@@ -571,7 +607,7 @@ export function generateMap(config: GenerationConfig): GameMap {
     water,
     vegetation,
     forests,
-    structures: [],
+    structures,
     roads,
     barriers: [],
     metadataLayers: { fields, generation: resolved, waterLevel: level },

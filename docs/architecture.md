@@ -22,11 +22,11 @@ The library has no browser or DOM dependency. It ships as Node ESM in `dist/`. T
 
 `NativeMapImporter` accepts a JSON string or object and returns a validated deep clone. `WatabouImporter` is present as an adapter boundary but is unsupported in this MVP: `canImport` returns `false` and `import` throws until a representative Watabou fixture schema is available. No game logic belongs in this library.
 
-The MVP includes the `temperate` default theme. `MapTheme` lets a renderer substitute terrain, water, and vegetation colors without regenerating the map. The renderer draws what the format publishes and nothing more: a delta at each mouth, no shore margin on a river because a lake's beach margin is wider than a river is, and no marker at all where a road crosses a river, because roads are drawn over the water and a marker there was a square in the wrong place.
+The MVP includes the `temperate` default theme. `MapTheme` lets a renderer substitute terrain, water, and vegetation colors without regenerating the map. The renderer draws what the format publishes and nothing more: a delta at each mouth, no shore margin on a river because a lake's beach margin is wider than a river is, and no marker at all where a road crosses a river, because roads are drawn over the water and a marker there was a square in the wrong place. A building is drawn as a gable from its own published `position`, `rotation`, and size rather than from the order of its ring, so a map that wrote the ring the other way round still draws correctly. Buildings draw last, over the canopies, because a roof is a solid thing standing on the ground.
 
 ## Map guarantees
 
-All geometry uses absolute world coordinates. Bounds define the valid rectangle from `(0, 0)` through `(width, height)`. The validator requires finite values, unique entity IDs, supported version `1.2`, valid geometry, and entity coordinates within the bounds. Generated trees do not overlap water.
+All geometry uses absolute world coordinates. Bounds define the valid rectangle from `(0, 0)` through `(width, height)`. The validator requires finite values, unique entity IDs, supported version `1.3`, valid geometry, and entity coordinates within the bounds. Generated trees do not overlap water, and no tree trunk is inside a building.
 
 Terrain classification is a separate stage over the generated fields. It contours the combined terrain and moisture score into `meadow` and `scrub` overlays using the same marching-squares module as water, kept in `generation/contours.ts`.
 

@@ -364,7 +364,7 @@ export function validateMap(data: unknown): ValidationResult {
     const validator = new Validator();
     if (!isRecord(data)) return { valid: false, errors: ['map: must be an object'] };
     validator.jsonValue(data, 'map');
-    if (data.version !== '1.2') validator.error('version', 'must be supported version "1.2"');
+    if (data.version !== '1.3') validator.error('version', 'must be supported version "1.3"');
     if (!isRecord(data.metadata)) validator.error('metadata', 'must be an object');
     else {
       if (typeof data.metadata.id !== 'string' || data.metadata.id.length === 0)
@@ -406,9 +406,36 @@ export function validateMap(data: unknown): ValidationResult {
             collection === 'terrain' ||
             collection === 'water' ||
             collection === 'vegetation' ||
-            collection === 'forests';
+            collection === 'forests' ||
+            collection === 'structures';
           validator.entity(entity, `${collection}[${index}]`, bounds!, !specialized);
           if (!isRecord(entity)) return;
+          if (
+            collection === 'structures' &&
+            (entity.type !== 'building' ||
+              !['house', 'farm'].includes(entity.category as string) ||
+              !validator.finite(entity.width, `${collection}[${index}].width`) ||
+              (entity.width as number) <= 0 ||
+              !validator.finite(entity.depth, `${collection}[${index}].depth`) ||
+              (entity.depth as number) <= 0 ||
+              !validator.polygon(entity.geometry, `${collection}[${index}].geometry`, bounds!) ||
+              !isRecord(entity.collision) ||
+              entity.collision.type !== 'polygon' ||
+              !validator.polygon(entity.collision, `${collection}[${index}].collision`, bounds!) ||
+              !isRecord(entity.metadata) ||
+              // `setback` is how far the front wall stands off the road, so a consumer cannot place
+              // a doorstep without it. `roadId` is optional: a building can stand off the network.
+              !validator.finite(
+                entity.metadata.setback,
+                `${collection}[${index}].metadata.setback`,
+              ) ||
+              (entity.metadata.setback as number) < 0 ||
+              (entity.metadata.roadId !== undefined && typeof entity.metadata.roadId !== 'string'))
+          )
+            validator.error(
+              `${collection}[${index}]`,
+              'must be a building with a category, a footprint, and polygon collision',
+            );
           if (
             collection === 'terrain' &&
             (entity.type !== 'terrain' ||

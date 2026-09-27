@@ -113,6 +113,9 @@ Every knob, with the value used when it is left out:
 | `roads.density`         | `0.5`            | How many roads, and how far a tier reaches.                                                                                                                                                              |
 | `rivers.density`        | `1`              | How many rivers. `0` publishes none at all, for a map whose water is only standing.                                                                                                                      |
 | `rivers.width`          | `12`             | Channel width in world units, which also sets the span recorded at a road crossing.                                                                                                                      |
+| `buildings.density`     | `0.5`            | The chance a site offered by a road is built on. `0` publishes no buildings.                                                                                                                             |
+| `buildings.spacing`     | `34`             | Smallest gap between two buildings, centre to centre, measured across the whole map.                                                                                                                     |
+| `buildings.setback`     | `16`             | How far a building's front wall stands off the road centreline. A farm sets its own.                                                                                                                     |
 
 Values outside a knob's range are rejected at the boundary rather than clamped silently.
 
@@ -134,6 +137,15 @@ crossing until you make those cells walkable.
 Both surfaces are on the map, so you do not need the record to find a bridge: any contiguous run of a
 road's centreline inside a river's `geometry` is a road genuinely crossing that river. The recipe is in
 [Consuming generated maps](docs/consuming-maps.md#3-roads).
+
+### Buildings along the roads
+
+`map.structures` holds buildings placed along the road network: each one a rectangle standing back
+from a road with its front wall facing it, publishing its footprint, a matching collision polygon, a
+`rotation`, a `category`, and the road it belongs to. A building is a solid thing, so it blocks the
+walkability raster like the water and the rock do. `buildings.density`, `buildings.spacing`, and
+`buildings.setback` place them; the details and the fields are in
+[Consuming generated maps](docs/consuming-maps.md#4-buildings).
 
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 

@@ -127,6 +127,43 @@ export interface RoadEntity extends MapEntity {
   };
 }
 
+/**
+ * What a building is, which fixes its footprint and how far back it stands from the road.
+ *
+ * The set is deliberately two. A category earns its place by changing the placement or the
+ * footprint, so a name that only changes the asset is not a category. `farm` stands well back from
+ * the road because a farmyard is bigger than the house beside it; a category that needs to stand
+ * apart from a road entirely is a placement problem of its own, not a new category.
+ */
+export type BuildingCategory = 'house' | 'farm';
+
+export interface BuildingEntity extends MapEntity {
+  type: 'building';
+  category: BuildingCategory;
+  /** The building's centre, at ground level. */
+  position: Point;
+  /**
+   * Radians, in the same handedness as the rest of the map: the compass direction the building's
+   * front looks. A building placed on a road faces back down it, so this is the heading from the
+   * building to the road rather than the road's own heading.
+   */
+  rotation: number;
+  /** Frontage along the road, in world units. */
+  width: number;
+  /** Depth away from the road, in world units. */
+  depth: number;
+  /** The footprint. The same polygon as `collision`, as with water and roads. */
+  geometry: PolygonGeometry;
+  collision: { type: 'polygon' } & PolygonGeometry;
+  asset: AssetReference;
+  metadata: {
+    /** The road this building was placed against, absent for one placed off the network. */
+    roadId?: string;
+    /** How far the front wall stands from the road's centreline, in world units. */
+    setback: number;
+  };
+}
+
 export interface SpatialFields {
   columns: number;
   rows: number;
@@ -137,7 +174,7 @@ export interface SpatialFields {
 }
 
 export interface GameMap {
-  version: '1.2';
+  version: '1.3';
   metadata: {
     id: string;
     seed?: number;
@@ -149,7 +186,7 @@ export interface GameMap {
   water: WaterRegion[];
   vegetation: VegetationEntity[];
   forests: ForestEntity[];
-  structures: MapEntity[];
+  structures: BuildingEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };

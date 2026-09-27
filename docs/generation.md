@@ -150,6 +150,39 @@ Two invariants keep the network readable. A road that branches from another is r
 
 Road generation is skipped entirely when water and rock together cover more than 55% of the map, since routing has no meaningful result there. A fully flooded map therefore has no roads at all.
 
+## Buildings
+
+Buildings are placed last, because a road is the only thing that offers them a site. Every
+`spacing` world units along each road centreline is a site, each site is built on with probability
+`buildings.density`, and a building that is built on stands `buildings.setback` off the centreline
+with its front wall facing the road. On either side of a road, so a settlement grows from both banks.
+A default map produces 45 to 55 buildings.
+
+Two categories, and a category earns its place by changing the placement rather than only the name:
+a `house` is 15 by 11 units and uses the configured setback, and a `farm` is 28 by 20 and stands 48
+units back, which is what a farmyard is. A farm is drawn in for one site in nine.
+
+`spacing` is re-checked as a global centre-to-centre minimum rather than only along one road, so
+buildings on two roads that run close together do not end up inside each other. It is also what makes
+`setback` behave oddly at the low end, which is worth knowing before reaching for it: pulling both
+rows of buildings in towards a road also pulls them into each other, so below the spacing they cancel
+out and the map gets _fewer_ buildings. On a 1024 by 768 map, a spacing of 20 gives 39 buildings, 34
+gives 23, 80 gives 9, and 200 gives 2.
+
+A site is refused outright if the building would stand in the water, on rock, in a road, on a beach, or
+under a tree. A beach is the only one of those that anything else is happy to walk on, and a building
+is kept off it anyway: a house standing on the sand is a house nobody would have built, and the
+shoreline is where a port, a pier, or a boat shed belongs. Clearing the whole band now is what leaves
+that ground for a category that can claim it, which is settlement work. Trees are generated first, so a
+tree is the reason a building is refused and not the other way round: the wood is worth more to a map
+than the house beside it, and the density target that governs the tree count is untouched. Clearing a
+site of trees instead would keep every building, at the cost of thinning the wood, and is the better
+trade if a map ever needs buildings more than it needs trees.
+
+No building stands apart from the road network. A farmstead set back from a lane is a farm; a farm in
+the middle of a field with no lane at all is a different placement problem, and it belongs with
+settlements rather than here.
+
 ## Tiles
 
 The four fields are sampled at `origin + local`, so a tile is a window onto one landscape rather than

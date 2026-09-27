@@ -3,7 +3,7 @@ import test from 'node:test';
 import { exportMap, importMap, validateMap } from '../dist/index.js';
 
 const makeMap = () => ({
-  version: '1.2',
+  version: '1.3',
   metadata: { id: 'validation-fixture', seed: 42 },
   bounds: { width: 100, height: 100 },
   terrain: [
@@ -74,7 +74,7 @@ test('reports malformed numeric values, geometry, collisions, and duplicate IDs'
     { x: 100, y: 0 },
   ];
   map.vegetation[0].collision.radius = 80;
-  map.structures.push({
+  map.barriers.push({
     id: 'tree-1',
     type: 'rock',
     collision: { type: 'rectangle', x: 90, y: 90, width: 20, height: 20 },
@@ -84,7 +84,7 @@ test('reports malformed numeric values, geometry, collisions, and duplicate IDs'
   assert.ok(result.errors.some((error) => error.includes('metadata.seed')));
   assert.ok(result.errors.some((error) => error.includes('terrain[0].geometry.points')));
   assert.ok(
-    result.errors.some((error) => error.includes('tree-1') || error.includes('structures[0].id')),
+    result.errors.some((error) => error.includes('tree-1') || error.includes('barriers[0].id')),
   );
 });
 
@@ -117,7 +117,7 @@ test('rejects trees whose canopy or collision overlaps water', () => {
 
 test('rejects non-JSON extension values and scalar entity metadata', () => {
   const map = makeMap();
-  map.structures.push({
+  map.barriers.push({
     id: 'rock-1',
     type: 'rock',
     custom: { callback: () => {} },
@@ -136,7 +136,7 @@ test('rejects non-JSON extension values and scalar entity metadata', () => {
 test('preserves JSON extension data through a native round trip', () => {
   const map = makeMap();
   map.metadata.label = 'fixture';
-  map.structures.push({
+  map.barriers.push({
     id: 'rock-1',
     type: 'rock',
     metadata: { loot: { items: ['coin', 2, null] } },

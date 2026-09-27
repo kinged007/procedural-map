@@ -169,6 +169,31 @@
                 ><input id="rivers" type="range" min="0" max="100" value="100" />
                 <div class="range-hints"><span>No channels</span><span>Full network</span></div>
               </div>
+              <div class="range-field">
+                <label for="buildings"
+                  >Buildings<output id="buildings-value" for="buildings">50%</output></label
+                ><input id="buildings" type="range" min="0" max="100" value="50" />
+                <div class="range-hints">
+                  <span>No buildings</span><span>Every offered site</span>
+                </div>
+              </div>
+              <div class="range-field">
+                <label for="spacing"
+                  >Building spacing<output id="spacing-value" for="spacing">34</output></label
+                ><input id="spacing" type="range" min="20" max="200" value="34" />
+                <div class="range-hints"><span>Built up</span><span>Scattered</span></div>
+              </div>
+              <label class="field-label" for="setback">Building setback from road (units)</label
+              ><input
+                class="number-input"
+                id="setback"
+                type="number"
+                min="6"
+                max="120"
+                step="1"
+                value="16"
+                required
+              />
               <label class="field-label" for="river-width">River channel width (units)</label
               ><input
                 class="number-input"
@@ -239,6 +264,10 @@
             <div class="stat">
               <span class="stat-label">GROVES</span><strong id="grove-count">—</strong
               ><span class="stat-detail">hull broadphase</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">BUILDINGS</span><strong id="building-count">—</strong
+              ><span class="stat-detail" id="building-detail">houses · farms</span>
             </div>
             <div class="stat">
               <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong

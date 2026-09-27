@@ -27,6 +27,16 @@ export interface GenerationConfig {
    * much ground a river covers and the span a road has to bridge where it crosses one.
    */
   rivers?: { density?: number; width?: number };
+  /**
+   * The buildings placed along the road network.
+   *
+   * `density` is the chance a site offered by a road is built on, so `0` publishes no buildings at
+   * all and the map is roads and open ground. `spacing` is the smallest gap between two buildings,
+   * measured centre to centre across the whole map, so it decides how tightly a road is built up. The
+   * `setback` is overwritten by a category that sets its own, which is how a farm ends up further
+   * back from the road than a house.
+   */
+  buildings?: { density?: number; spacing?: number; setback?: number };
 }
 
 export interface ResolvedGenerationConfig {
@@ -40,6 +50,7 @@ export interface ResolvedGenerationConfig {
   vegetation: { density: number; clustering: number };
   roads: { density: number };
   rivers: { density: number; width: number };
+  buildings: { density: number; spacing: number; setback: number };
 }
 
 export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
@@ -53,4 +64,5 @@ export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
   vegetation: { density: 0.65, clustering: 0.8 },
   roads: { density: 0.5 },
   rivers: { density: 1, width: 12 },
+  buildings: { density: 0.5, spacing: 34, setback: 16 },
 };

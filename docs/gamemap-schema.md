@@ -1,6 +1,6 @@
-# GameMap v1.2 schema
+# GameMap v1.3 schema
 
-The canonical product boundary is `GameMap` v1.2. Generation, native JSON import, and future external
+The canonical product boundary is `GameMap` v1.3. Generation, native JSON import, and future external
 import adapters all produce this model, and a consumer uses the same geometry regardless of which one
 produced it.
 
@@ -10,6 +10,23 @@ enforces the rules below; `assertValidMap` throws instead of returning.
 Every example in this document is taken from a real map, generated with
 `generateMap({ seed: 7, width: 900, height: 700, water: { amount: 0.15 } }`. Long coordinate arrays are
 elided with a comment rather than truncated silently.
+
+## What changed in 1.3
+
+1.3 populates `structures` with buildings. In 1.2 that collection existed and was always empty, and is
+the only change: a consumer written against 1.2 keeps working, and one that iterates `structures` to
+find out what kind of world it has just been handed.
+
+| Change                              | Kind                             | What a consumer does                                                                                                  |
+| ----------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `structures` holds buildings        | was always `[]`                  | Iterate it. Every entry is a building, so `category` and `rotation` are always present.                               |
+| `structures` item shape is fixed    | narrower than the generic entity | `type` is `building`, and `category`, `width`, `depth`, `geometry`, `collision`, `asset` and `metadata` are required. |
+| Generation config gains `buildings` | new optional config              | `buildings: { density, spacing, setback }`. Unset is `density: 0.5, spacing: 34, setback: 16`.                        |
+
+A 1.2 map still validates as 1.2, and a 1.3 map does not validate as 1.2: the validator accepts
+`"1.3"` only, and `structures` is checked for the building shape rather than as a generic entity. A
+consumer that hand-writes a map and put its own entity in `structures` has to move it to `barriers`,
+which is the collection for an entity the generator did not produce.
 
 ## What changed in 1.2
 
@@ -46,7 +63,7 @@ interface GameMap {
   water: WaterRegion[];
   vegetation: VegetationEntity[];
   forests: ForestEntity[];
-  structures: MapEntity[];
+  structures: BuildingEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };
@@ -55,7 +72,7 @@ interface GameMap {
 
 All ten of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`, `structures`,
 `roads`, and `barriers` are required, even when the collection is empty. `metadataLayers` is optional.
-A generated map sets `structures` and `barriers` to `[]`; they are reserved for buildings and walls.
+A generated map fills `structures` with buildings and leaves `barriers` empty.
 
 `bounds` is the size of the world in world units. Every coordinate in the map is absolute and lies
 inside it.
@@ -449,8 +466,49 @@ tell a junction from two roads running alongside each other.
 
 ## structures and barriers
 
-Both are `MapEntity[]` and both are empty on a generated map. They exist in the format so an importer
-or a later generation stage can populate them without a version bump.
+`structures` is a `BuildingEntity[]`: the buildings the generator placed along the road network. Every
+entry has the same shape, and validation rejects anything else.
+
+```ts
+interface BuildingEntity {
+  id: string;
+  type: 'building';
+  /** What it is, which fixes its footprint and how far back it stands. */
+  category: 'house' | 'farm';
+  position: Point;
+  /** Radians: the compass direction the front of the building looks. */
+  rotation: number;
+  /** Frontage along the road. */
+  width: number;
+  /** Depth away from the road. */
+  depth: number;
+  /** The footprint. The same polygon as `collision`. */
+  geometry: PolygonGeometry;
+  collision: { type: 'polygon' } & PolygonGeometry;
+  asset: AssetReference;
+  metadata: {
+    /** The road it was placed against, or absent if it stands off the network. */
+    roadId?: string;
+    /** How far the front wall stands from that road's centreline. */
+    setback: number;
+  };
+}
+```
+
+Two conventions are worth stating outright. `rotation` points from the building **towards the road**,
+so a building placed on a road looks back down it; it is not the road's own heading. And `geometry` is
+a rectangle `width` across and `depth` deep, written ring-wise starting on a back corner, so the front
+wall — the edge nearest the road — is the one from `points[1]` to `points[2]`, and `points[0]` to
+`points[1]` is a side wall. A consumer that needs the front wall can work it out from `position` and
+`rotation` instead, which is what the renderer does, and is the safer route if a hand-written map ever
+wrote the ring the other way round.
+
+The footprint is a ring of exactly four points and is a solid rectangle, which is what a consumer
+places its own asset into.
+
+`barriers` is a `MapEntity[]` and is empty on a generated map. It is where a wall, a gate, or anything
+else the generator did not produce belongs, and it is validated as a generic entity rather than as a
+building.
 
 ## Asset references
 

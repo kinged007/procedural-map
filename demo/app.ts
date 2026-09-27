@@ -29,7 +29,18 @@ const generateButton = element<HTMLButtonElement>('generate-button');
 const exportButton = element<HTMLButtonElement>('export-button');
 const importButton = element<HTMLButtonElement>('import-button');
 const cellSizeInput = element<HTMLSelectElement>('cell-size');
-const ranges = ['density', 'water', 'variation', 'clustering', 'roads', 'rivers'] as const;
+const ranges = [
+  'density',
+  'water',
+  'variation',
+  'clustering',
+  'roads',
+  'rivers',
+  'buildings',
+  'spacing',
+] as const;
+// The one range that is a count in world units rather than a percentage, so it reads as a number.
+const unitRanges = new Set(['spacing']);
 const numberFormat = new Intl.NumberFormat('en');
 const descriptions: Record<MapView, string> = {
   styled: 'Grassland, open water & clustered woodland',
@@ -100,8 +111,16 @@ function setBusy(value: boolean) {
 function refreshRanges() {
   for (const id of ranges) {
     const input = element<HTMLInputElement>(id);
-    input.style.setProperty('--progress', `${input.value}%`);
-    element<HTMLOutputElement>(`${id}-value`).value = `${input.value}%`;
+    // The track fill is a share of the way from the slider's own minimum to its maximum. Every other
+    // range starts at zero, where this is the same as the raw value; spacing starts at 20, where it
+    // is not, and the fill would sit short of the thumb.
+    const minimum = Number(input.min || 0);
+    const maximum = Number(input.max || 100);
+    const fill = ((input.valueAsNumber - minimum) / (maximum - minimum || 1)) * 100;
+    input.style.setProperty('--progress', `${fill}%`);
+    element<HTMLOutputElement>(`${id}-value`).value = unitRanges.has(id)
+      ? input.value
+      : `${input.value}%`;
   }
 }
 
@@ -135,6 +154,11 @@ function configFromControls(): GenerationConfig {
       density: element<HTMLInputElement>('rivers').valueAsNumber / 100,
       width: element<HTMLInputElement>('river-width').valueAsNumber,
     },
+    buildings: {
+      density: element<HTMLInputElement>('buildings').valueAsNumber / 100,
+      spacing: element<HTMLInputElement>('spacing').valueAsNumber,
+      setback: element<HTMLInputElement>('setback').valueAsNumber,
+    },
   };
 }
 
@@ -152,6 +176,9 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('roads').value = String(config.roads.density * 100);
   element<HTMLInputElement>('rivers').value = String(config.rivers.density * 100);
   element<HTMLInputElement>('river-width').value = String(config.rivers.width);
+  element<HTMLInputElement>('buildings').value = String(config.buildings.density * 100);
+  element<HTMLInputElement>('spacing').value = String(config.buildings.spacing);
+  element<HTMLInputElement>('setback').value = String(config.buildings.setback);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);
   element<HTMLInputElement>('origin-x').value = String(config.origin.x);
@@ -189,6 +216,11 @@ function showMap(nextMap: GameMap, source: string, elapsed?: number) {
   element('lake-count').textContent = rivers.length
     ? `${numberFormat.format(lakes.length)} · ${rivers.length}`
     : numberFormat.format(lakes.length);
+  const farms = map.structures.filter((building) => building.category === 'farm').length;
+  element('building-count').textContent = numberFormat.format(map.structures.length);
+  element('building-detail').textContent = farms
+    ? `houses ${numberFormat.format(map.structures.length - farms)} · farms ${farms}`
+    : `houses ${numberFormat.format(map.structures.length)} · no farms`;
   const coverage =
     (map.water.reduce((total, lake) => total + polygonArea(lake.geometry), 0) / (width * height)) *
     100;

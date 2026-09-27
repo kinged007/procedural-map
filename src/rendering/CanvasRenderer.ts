@@ -1,4 +1,5 @@
 import type {
+  BuildingEntity,
   CollisionGeometry,
   GameMap,
   Point,
@@ -139,6 +140,71 @@ function drawRoads(context: CanvasRenderingContext2D, roads: RoadEntity[], theme
       context.strokeStyle = pass === 'casing' ? theme.roads.casing : theme.roads[road.kind];
       context.stroke();
     }
+  }
+}
+
+/**
+ * Draws each building as a gable seen from above: the footprint, a ridge line down the middle, and a
+ * roof slope shaded to either side of it.
+ *
+ * The shape comes entirely from the published footprint and `rotation`, so a building draws the same
+ * way whichever way it faces and a game that swaps in its own asset has the same rectangle to fit it
+ * into. A farm is drawn with a different roof, since a farm is the category that earns a category.
+ */
+function drawBuildings(
+  context: CanvasRenderingContext2D,
+  buildings: BuildingEntity[],
+  theme: MapTheme,
+): void {
+  const palette = theme.structures ?? defaultTheme.structures!;
+  for (const building of buildings) {
+    const points = building.geometry.points;
+    if (points.length !== 4) continue;
+    // The ridge runs along the building's depth: it joins the middle of the front wall to the middle
+    // of the back, and the two roof planes are the halves either side of it. Both are worked out from
+    // `position`, `rotation` and the published size rather than from the order of the ring, so a
+    // building draws the same way whichever way it was written into the ring.
+    const facing = { x: Math.cos(building.rotation), y: Math.sin(building.rotation) };
+    const along = { x: -facing.y, y: facing.x };
+    const half = { x: facing.x * (building.depth / 2), y: facing.y * (building.depth / 2) };
+    const front = {
+      x: building.position.x + half.x,
+      y: building.position.y + half.y,
+    };
+    const back = { x: building.position.x - half.x, y: building.position.y - half.y };
+
+    context.beginPath();
+    context.moveTo(points[0].x, points[0].y);
+    for (const point of points.slice(1)) context.lineTo(point.x, point.y);
+    context.closePath();
+    context.fillStyle = palette.wall;
+    context.fill();
+    context.strokeStyle = palette.outline;
+    context.lineWidth = 0.8;
+    context.stroke();
+
+    // Both roof planes, the second shaded back, so the two slopes meet on a line and the far one
+    // reads as further away.
+    for (const side of [1, -1]) {
+      context.beginPath();
+      context.moveTo(front.x, front.y);
+      context.lineTo(back.x, back.y);
+      context.lineTo(
+        back.x + (along.x * (side * building.width)) / 2,
+        back.y + (along.y * (side * building.width)) / 2,
+      );
+      context.closePath();
+      context.fillStyle = palette.roof;
+      context.globalAlpha = side > 0 ? 1 : 0.82;
+      context.fill();
+    }
+    context.globalAlpha = 1;
+    context.beginPath();
+    context.moveTo(front.x, front.y);
+    context.lineTo(back.x, back.y);
+    context.strokeStyle = palette.roofFarm;
+    context.lineWidth = 1.4;
+    context.stroke();
   }
 }
 
@@ -527,6 +593,10 @@ export class CanvasRenderer {
           context.stroke();
         }
       }
+      // Last of the map, over the canopies. A building is a solid thing standing on the ground, and
+      // the trees are only ever cleared far enough away for a trunk not to be inside a wall, so a
+      // canopy can still overhang a roof.
+      if (styled && map.structures.length > 0) drawBuildings(context, map.structures, theme);
 
       if (view === 'collision') {
         context.fillStyle = '#b45f4533';

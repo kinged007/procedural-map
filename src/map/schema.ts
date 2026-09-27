@@ -11,8 +11,8 @@ const jsonValue = {
 
 export const gameMapSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.2.json',
-  title: 'GameMap v1.2',
+  $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.3.json',
+  title: 'GameMap v1.3',
   description:
     'A forest carries no collision. Its geometry is a hull for broadphase, rendering and a minimap, and it deliberately over-covers the clearings between trees so that a consumer can test one bounds box instead of every tree on the map. Movement is blocked by the circles in the forest tree list, never by the hull.',
   type: 'object',
@@ -29,14 +29,14 @@ export const gameMapSchema = {
     'barriers',
   ],
   properties: {
-    version: { const: '1.2' },
+    version: { const: '1.3' },
     metadata: { $ref: '#/$defs/mapMetadata' },
     bounds: { $ref: '#/$defs/bounds' },
     terrain: { type: 'array', items: { $ref: '#/$defs/terrain' } },
     water: { type: 'array', items: { $ref: '#/$defs/water' } },
     vegetation: { type: 'array', items: { $ref: '#/$defs/tree' } },
     forests: { type: 'array', items: { $ref: '#/$defs/forest' } },
-    structures: { type: 'array', items: { $ref: '#/$defs/entity' } },
+    structures: { type: 'array', items: { $ref: '#/$defs/building' } },
     roads: { type: 'array', items: { $ref: '#/$defs/road' } },
     barriers: { type: 'array', items: { $ref: '#/$defs/entity' } },
     metadataLayers: { $ref: '#/$defs/metadataLayers' },
@@ -141,6 +141,48 @@ export const gameMapSchema = {
                 { $ref: '#/$defs/polygon' },
                 { type: 'object', required: ['type'], properties: { type: { const: 'polygon' } } },
               ],
+            },
+          },
+        },
+      ],
+    },
+    building: {
+      allOf: [
+        { $ref: '#/$defs/entity' },
+        {
+          type: 'object',
+          required: [
+            'type',
+            'category',
+            'position',
+            'rotation',
+            'width',
+            'depth',
+            'geometry',
+            'collision',
+            'asset',
+            'metadata',
+          ],
+          properties: {
+            type: { const: 'building' },
+            category: { enum: ['house', 'farm'] },
+            width: { type: 'number', exclusiveMinimum: 0 },
+            depth: { type: 'number', exclusiveMinimum: 0 },
+            geometry: { $ref: '#/$defs/polygon' },
+            collision: {
+              allOf: [
+                { $ref: '#/$defs/polygon' },
+                { type: 'object', required: ['type'], properties: { type: { const: 'polygon' } } },
+              ],
+            },
+            metadata: {
+              type: 'object',
+              required: ['setback'],
+              properties: {
+                roadId: { type: 'string', minLength: 1 },
+                setback: { type: 'number', minimum: 0 },
+              },
+              additionalProperties: { $ref: '#/$defs/jsonValue' },
             },
           },
         },
