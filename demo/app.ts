@@ -38,9 +38,10 @@ const ranges = [
   'rivers',
   'buildings',
   'spacing',
+  'settlements',
 ] as const;
-// The one range that is a count in world units rather than a percentage, so it reads as a number.
-const unitRanges = new Set(['spacing']);
+// The ranges that are a count in world units rather than a percentage, so they read as a number.
+const unitRanges = new Set(['spacing', 'settlements']);
 const numberFormat = new Intl.NumberFormat('en');
 const descriptions: Record<MapView, string> = {
   styled: 'Grassland, open water & clustered woodland',
@@ -55,6 +56,8 @@ const descriptions: Record<MapView, string> = {
     'The read path a game runs on: walkability cells, roomiest ground per area in green, spawn candidates in amber',
   forests:
     'Grove hulls, tinted by whether there is walkable ground inside. Green groves are crossable, terracotta ones are thick wood',
+  settlements:
+    'Place reach and centre. A centre is on a road, a dashed ring is how far the place reaches, and the ring is sized by the buildings it holds',
 };
 
 let map: GameMap | undefined;
@@ -159,6 +162,7 @@ function configFromControls(): GenerationConfig {
       spacing: element<HTMLInputElement>('spacing').valueAsNumber,
       setback: element<HTMLInputElement>('setback').valueAsNumber,
     },
+    settlements: { count: element<HTMLInputElement>('settlements').valueAsNumber },
   };
 }
 
@@ -179,6 +183,7 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('buildings').value = String(config.buildings.density * 100);
   element<HTMLInputElement>('spacing').value = String(config.buildings.spacing);
   element<HTMLInputElement>('setback').value = String(config.buildings.setback);
+  element<HTMLInputElement>('settlements').value = String(config.settlements.count);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);
   element<HTMLInputElement>('origin-x').value = String(config.origin.x);
@@ -221,6 +226,17 @@ function showMap(nextMap: GameMap, source: string, elapsed?: number) {
   element('building-detail').textContent = farms
     ? `houses ${numberFormat.format(map.structures.length - farms)} · farms ${farms}`
     : `houses ${numberFormat.format(map.structures.length)} · no farms`;
+  const kinds = { hamlet: 0, village: 0, town: 0 };
+  for (const settlement of map.settlements) kinds[settlement.kind] += 1;
+  const dead = map.settlements.filter(
+    (settlement) => settlement.metadata.buildingIds.length === 0,
+  ).length;
+  element('settlement-count').textContent = numberFormat.format(map.settlements.length);
+  element('settlement-detail').textContent = map.settlements.length
+    ? `${kinds.hamlet} hamlets · ${kinds.village} villages · ${kinds.town} towns${
+        dead ? ` · ${dead} dead` : ''
+      }`
+    : 'no places on this map';
   const coverage =
     (map.water.reduce((total, lake) => total + polygonArea(lake.geometry), 0) / (width * height)) *
     100;

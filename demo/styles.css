@@ -788,10 +788,12 @@ canvas.dragging {
   font-size: 9px;
   color: #a1aa93;
 }
-.stat:nth-child(3) {
-  border: 0;
-  padding-right: 0;
-  margin-right: 0;
+/* The trailing stat carries no divider, because the legend follows it in the same row. The legend is
+   the last child, so the stat that needs it is the one before it: a fixed position would drop the
+   divider in the middle of the row the moment a stat is added, which is what happened here. Its
+   spacing stays, so there is still a gap before the legend. */
+.map-summary .stat:nth-last-child(2) {
+  border-right: 0;
 }
 .map-legend {
   display: flex;

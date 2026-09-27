@@ -23,7 +23,8 @@ export type MapView =
   | 'collision'
   | 'entities'
   | 'navigation'
-  | 'forests';
+  | 'forests'
+  | 'settlements';
 
 /**
  * The read path, as data. The renderer does not build it: the caller derives it with the library's own
@@ -390,6 +391,42 @@ function drawForests(context: CanvasRenderingContext2D, map: GameMap, scale: num
   }
 }
 
+function drawSettlements(context: CanvasRenderingContext2D, map: GameMap, scale: number) {
+  for (const settlement of map.settlements) {
+    // The reach, filled. A settlement is a distance and not a wall, so this is a region a consumer
+    // would test, drawn as one so its size is readable.
+    context.beginPath();
+    context.arc(settlement.position.x, settlement.position.y, settlement.radius, 0, Math.PI * 2);
+    context.fillStyle = '#c9a2271f';
+    context.fill();
+    context.strokeStyle = '#a8861f';
+    context.lineWidth = 1.4 / scale;
+    context.setLineDash([7 / scale, 5 / scale]);
+    context.stroke();
+    context.setLineDash([]);
+  }
+  // The members, in the settlement's own footprint colour, so a settlement holding houses and a
+  // settlement holding nothing are told apart at a glance rather than by counting.
+  const members = new Set(map.settlements.flatMap((s) => s.metadata.buildingIds));
+  for (const building of map.structures) {
+    if (!members.has(building.id)) continue;
+    context.fillStyle = '#7a5c10';
+    polygonPath(context, building.geometry);
+    context.fill();
+  }
+  for (const settlement of map.settlements) {
+    // The centre, and a ring scaled to the size so a hamlet and a town are not the same dot.
+    const reach = Math.max(6, Math.min(26, 4 + settlement.metadata.buildingIds.length * 1.6));
+    context.beginPath();
+    context.arc(settlement.position.x, settlement.position.y, reach / scale, 0, Math.PI * 2);
+    context.fillStyle = '#4a3805';
+    context.fill();
+    context.strokeStyle = '#ffe9a8';
+    context.lineWidth = 2 / scale;
+    context.stroke();
+  }
+}
+
 export class CanvasRenderer {
   private context: CanvasRenderingContext2D;
   private transform = { scale: 1, x: 0, y: 0 };
@@ -618,6 +655,7 @@ export class CanvasRenderer {
         for (const entity of [
           ...map.vegetation,
           ...map.structures,
+          ...map.settlements,
           ...map.roads,
           ...map.barriers,
         ]) {
@@ -630,6 +668,7 @@ export class CanvasRenderer {
       if (view === 'navigation' && navigation)
         drawNavigation(context, map, navigation, scale, this.rasterTexture(navigation.raster));
       if (view === 'forests') drawForests(context, map, scale);
+      if (view === 'settlements') drawSettlements(context, map, scale);
     }
     context.restore();
     context.strokeStyle = '#435b4a35';

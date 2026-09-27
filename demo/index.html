@@ -183,6 +183,14 @@
                 ><input id="spacing" type="range" min="20" max="200" value="34" />
                 <div class="range-hints"><span>Built up</span><span>Scattered</span></div>
               </div>
+              <div class="range-field">
+                <label for="settlements"
+                  >Settlements<output id="settlements-value" for="settlements">2</output></label
+                ><input id="settlements" type="range" min="0" max="16" value="2" />
+                <div class="range-hints">
+                  <span>No places</span><span>Every one the roads can hold</span>
+                </div>
+              </div>
               <label class="field-label" for="setback">Building setback from road (units)</label
               ><input
                 class="number-input"
@@ -270,6 +278,10 @@
               ><span class="stat-detail" id="building-detail">houses · farms</span>
             </div>
             <div class="stat">
+              <span class="stat-label">SETTLEMENTS</span><strong id="settlement-count">—</strong
+              ><span class="stat-detail" id="settlement-detail">hamlets · villages · towns</span>
+            </div>
+            <div class="stat">
               <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong
               ><span class="stat-detail">lakes · rivers</span>
             </div>
@@ -301,7 +313,8 @@
               ><button data-view="collision" aria-pressed="false">Collision</button
               ><button data-view="entities" aria-pressed="false">Entities</button
               ><button data-view="navigation" aria-pressed="false">Navigation</button
-              ><button data-view="forests" aria-pressed="false">Forests</button>
+              ><button data-view="forests" aria-pressed="false">Forests</button
+              ><button data-view="settlements" aria-pressed="false">Settlements</button>
             </div>
             <label class="cell-size-field" for="cell-size"
               ><span>Cell</span>
