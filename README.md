@@ -94,6 +94,47 @@ A map still reports its own bounds and carries tile-local coordinates, so the re
 walkability grid need no knowledge of the world. Left alone, `origin` is zero and `world` is the tile's
 own size, and a single-tile map is unchanged.
 
+### Configuration
+
+Every knob, with the value used when it is left out:
+
+| Option                  | Default          | What it changes                                                                                                                                                                                          |
+| ----------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seed`                  | `583921`         | The whole map. The same seed and the same config always produce the same map.                                                                                                                            |
+| `width`, `height`       | `2048`, `1536`   | Tile size, up to 4096 by 4096.                                                                                                                                                                           |
+| `origin`                | `{ x: 0, y: 0 }` | Where this tile sits in its world.                                                                                                                                                                       |
+| `world`                 | tile size        | The world's size. Defaults to the tile, which is a world of one.                                                                                                                                         |
+| `terrain.variation`     | `0.35`           | How strongly the terrain field swings between its highs and lows, which is what decides where the meadow, scrub, and rock boundaries fall. It does not change how much water there is.                   |
+| `terrain.scale`         | `0.004`          | How large the patches of meadow, scrub, and forest are. Smaller is broader country, and far fewer trees. It does not move the coastline or the rock.                                                     |
+| `water.amount`          | `0.2`            | How much of the map is below the waterline. `1` is all water, `0` none.                                                                                                                                  |
+| `water.scale`           | `0.003`          | Despite the name, this is the scale of the **elevation** field, so it sets the size of the landforms and, with them, the size of the lakes and the extent of the rock. Larger is more, smaller features. |
+| `vegetation.density`    | `0.65`           | How many trees. `0` is bare ground.                                                                                                                                                                      |
+| `vegetation.clustering` | `0.8`            | How much the trees clump into groves rather than spreading evenly.                                                                                                                                       |
+| `roads.density`         | `0.5`            | How many roads, and how far a tier reaches.                                                                                                                                                              |
+| `rivers.density`        | `1`              | How many rivers. `0` publishes none at all, for a map whose water is only standing.                                                                                                                      |
+| `rivers.width`          | `12`             | Channel width in world units, which also sets the span recorded at a road crossing.                                                                                                                      |
+
+Values outside a knob's range are rejected at the boundary rather than clamped silently.
+
+### Rivers, and roads going over them
+
+A river is published in the same `water` collection as a lake, with `kind: 'river'`, so anything that
+treats water as water treats a river as water. It is the main channel of a catchment, walked down the
+drainage of the elevation field, and every river runs to the water it drains into: a lake it reaches,
+the edge of the world, or a river already there that it joins. Where one reaches a lake, the site is
+published as `water.metadata.mouths` on the river, which is where a delta or an estuary asset goes.
+
+**A road goes over a river rather than around it**, because a channel is narrow enough to bridge. In
+format 1.1 only lakes and rock refused a road; if you asserted that a road never touches water, that
+assertion now fails. The assertion you want is that a road never enters a _lake_. Each crossing is
+recorded on `road.metadata.crossings` with the river, the site, and the channel width, and a river
+blocks the walkability raster under the road just like any other water, so a character cannot walk the
+crossing until you make those cells walkable.
+
+Both surfaces are on the map, so you do not need the record to find a bridge: any contiguous run of a
+road's centreline inside a river's `geometry` is a road genuinely crossing that river. The recipe is in
+[Consuming generated maps](docs/consuming-maps.md#3-roads).
+
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 
 ```js

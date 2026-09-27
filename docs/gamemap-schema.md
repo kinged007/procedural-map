@@ -1,6 +1,6 @@
 # GameMap v1.2 schema
 
-The canonical product boundary is `GameMap` v1.1. Generation, native JSON import, and future external
+The canonical product boundary is `GameMap` v1.2. Generation, native JSON import, and future external
 import adapters all produce this model, and a consumer uses the same geometry regardless of which one
 produced it.
 
@@ -10,6 +10,30 @@ enforces the rules below; `assertValidMap` throws instead of returning.
 Every example in this document is taken from a real map, generated with
 `generateMap({ seed: 7, width: 900, height: 700, water: { amount: 0.15 } }`. Long coordinate arrays are
 elided with a comment rather than truncated silently.
+
+## What changed in 1.2
+
+1.2 adds rivers. A consumer written against 1.1 keeps working, because every 1.2 addition is either an
+optional field or a new value on an existing enum, and a 1.1 reader that ignores both behaves exactly as
+before. A consumer that wants the new features opts in.
+
+| Change                           | Kind                | What a consumer does                                                                                                        |
+| -------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `water.kind` gains `"river"`     | new enum value      | A water body that is a channel rather than a body. It has the same shape as a lake: a `geometry` and a `collision` polygon. |
+| `water.metadata.mouths`          | new optional field  | Where a river's channel becomes standing water. `[{ waterId, point, polygon }]`, absent on a river that reached no water.   |
+| `road.metadata.crossings`        | new optional field  | `[{ riverId, point, span }]`, absent on a road whose surface reached no river. See [roads](#roads).                         |
+| Generation config gains `rivers` | new optional config | `rivers: { density, width }`. Unset is `density: 1, width: 12`.                                                             |
+
+Two changes are not additive, and a 1.1 reader that assumed them will notice:
+
+- **A river is a `water` entity, so a count of water bodies is now a count of lakes plus rivers.** The
+  split them on `kind`. Generation skips river generation entirely when `rivers.density` is `0`.
+- **A road now goes over a river instead of treating it as an obstruction.** In 1.1 only lakes and
+  impassable rock refused a road. A 1.1 consumer that asserted a road never touches water will fail on a
+  1.2 map; the assertion it wants is that a road never enters a _lake_.
+
+The `version` string is the only place the two are distinguishable: a 1.1 map validates as neither 1.1
+nor 1.2 under the current validator, which accepts `"1.2"` only.
 
 ## Top level
 

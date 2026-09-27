@@ -1233,7 +1233,7 @@ A road is a centreline plus a width. The centreline is an ordered polyline from 
 - `roads.density` scales the target count per tier. It never drops a tier to zero, so a sparse map is a small network rather than no network.
 - Road generation is skipped when water and impassable terrain together cover more than 55% of the map, since routing has no meaningful result there.
 
-Routing is a greedy walk over a small fan of headings, not a shortest-path search. Each step takes the cheapest heading available, which produces the meander and long detours of a surveyed road rather than a taut path between endpoints. With water and rock treated as walls, the meander is a detour around an obstruction rather than a line drawn through it.
+Routing is a greedy walk over a small fan of headings, not a shortest-path search. Each step takes the cheapest heading available, which produces the meander and long detours of a surveyed road rather than a taut path between endpoints. With lakes and rock treated as walls, the meander is a detour around an obstruction rather than a line drawn through it. A river is not a wall, so a road crossing one is a straight step over a channel rather than a detour, and the walk has no memory of how long it has been following a bank: a road that meets a river often runs alongside it before it commits to a crossing.
 
 ---
 
@@ -1398,7 +1398,7 @@ Add:
 - docks;
 - piers;
 - paths;
-- river crossings;
+- river crossing structures, on the sites v0.3 publishes;
 - barriers.
 
 ---

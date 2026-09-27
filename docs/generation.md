@@ -18,6 +18,8 @@ Defaults are the values shown above. `seed` must be a JavaScript safe integer. W
 
 Generation creates normalized terrain, elevation, moisture, and vegetation fields, retained in `metadataLayers.fields` for debugging. The noise grid is at most 64 by 64 samples. Water contours follow elevation at a threshold selected from `water.amount`; lakes are connected and smoothed polygons that can contain holes. Generation preserves all resulting shoreline rings and holes. `water.amount: 0` creates no lakes and `water.amount: 1` covers the full bounds.
 
+The scale knobs are named for the layer they were added for, and only one of them still works that way. `water.scale` is the scale of the **elevation** field, so it sets the size of the landforms and, with them, the size of the lakes and the extent of the rock. `terrain.scale` scales the terrain and vegetation fields, so it sets the size of the patches of meadow, scrub, and forest, and it does not move the coastline. `terrain.variation` is the amplitude of the terrain field, which is what decides where the classification boundaries fall; it does not change how much water there is.
+
 ## Terrain classification
 
 `terrain` always begins with one full-bounds `grass` region, followed by four overlay kinds. They are emitted in a fixed order and are **not** nested: because each kind is contoured from a different field, the boundaries cross and regions freely overlap.
