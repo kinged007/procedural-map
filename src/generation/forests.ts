@@ -96,13 +96,9 @@ export function generateForests(trees: VegetationEntity[]): ForestEntity[] {
   // cell. This is the same trick the tree crowding check already uses.
   let minX = Infinity;
   let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
   for (const tree of trees) {
     if (tree.position.x < minX) minX = tree.position.x;
-    if (tree.position.x > maxX) maxX = tree.position.x;
     if (tree.position.y < minY) minY = tree.position.y;
-    if (tree.position.y > maxY) maxY = tree.position.y;
   }
   const cells = new Map<string, number[]>();
   const cellKey = (point: Point) =>
@@ -133,7 +129,7 @@ export function generateForests(trees: VegetationEntity[]): ForestEntity[] {
   for (let index = 0; index < trees.length; index += 1) {
     const key = cellKey(trees[index].position);
     const bucket = cells.get(key);
-    if (bucket) for (const other of bucket) union(index, other);
+    if (bucket) bucket.push(index);
     else cells.set(key, [index]);
   }
   for (let index = 0; index < trees.length; index += 1) {

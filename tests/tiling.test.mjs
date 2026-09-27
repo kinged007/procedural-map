@@ -240,6 +240,23 @@ test('a tile that does not fit its world is rejected', () => {
   );
 });
 
+test('a world is not capped at the size of one tile', () => {
+  // A world is the frame a tile is a window onto, not a map generated in one piece, so it must be
+  // able to be larger than the largest single tile. The documented example is 8192x6144, and it has
+  // to generate, or the docs promise an API that throws. A single tile is still capped at 4096.
+  const map = generateMap({
+    seed: SEED,
+    ...TILE,
+    origin: { x: 4096, y: 3072 },
+    world: { width: 8192, height: 6144 },
+  });
+  assert.equal(validateMap(map).valid, true);
+  assert.deepEqual(map.metadataLayers.generation.world, { width: 8192, height: 6144 });
+
+  // The tile's own ceiling is unchanged.
+  assert.throws(() => generateMap({ seed: SEED, width: 4097, height: 480 }), /width must be/);
+});
+
 test('a map records the placement it was generated with', () => {
   const { generation } = generateMap({
     seed: SEED,

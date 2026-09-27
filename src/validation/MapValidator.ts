@@ -16,6 +16,26 @@ function isRecord(value: unknown): value is RecordValue {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Structural equality that does not depend on key order. Two trees that were written by hand, or
+ * that arrived from a JSON parser that reorders keys, are the same tree whichever way their keys
+ * are listed, and a validator must not report a difference that is only ordering.
+ */
+function structurallyEqual(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (typeof left !== typeof right || left === null || right === null) return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((entry, index) => structurallyEqual(entry, right[index]));
+  }
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  if (leftKeys.length !== rightKeys.length) return false;
+  if (leftKeys.some((key, index) => key !== rightKeys[index])) return false;
+  return leftKeys.every((key) => structurallyEqual(left[key], right[key]));
+}
+
 function isPlainRecord(value: object): boolean {
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
@@ -645,7 +665,7 @@ export function validateMap(data: unknown): ValidationResult {
           }
           if (seen.has(tree.id)) validator.error(label, 'must not repeat a tree within its forest');
           seen.add(tree.id);
-          if (JSON.stringify(tree) !== JSON.stringify(original))
+          if (!structurallyEqual(tree, original))
             validator.error(label, 'must match the tree of the same id in vegetation');
         });
       });

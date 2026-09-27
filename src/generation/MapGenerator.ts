@@ -32,6 +32,10 @@ const ROAD_CLEARANCE = 3;
 
 const MIN_DIMENSION = 128;
 const MAX_DIMENSION = 4096;
+// A world is a window that a tile sits inside, so it is only bounded by needing a finite integer
+// coordinate, not by how much terrain one map can carry. The field grid samples it at up to 64
+// points across, so this is a sanity limit rather than a quality one.
+const MAX_WORLD = 1_000_000;
 const MAX_TREES = 8000;
 
 /**
@@ -135,20 +139,18 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
   if (!Number.isInteger(width) || !Number.isInteger(height))
     throw new TypeError('width and height must be integers');
   const origin = {
-    x: resolveNumber(config.origin?.x, 0, 'origin.x', -MAX_DIMENSION, MAX_DIMENSION),
-    y: resolveNumber(config.origin?.y, 0, 'origin.y', -MAX_DIMENSION, MAX_DIMENSION),
+    x: resolveNumber(config.origin?.x, 0, 'origin.x', -MAX_WORLD, MAX_WORLD),
+    y: resolveNumber(config.origin?.y, 0, 'origin.y', -MAX_WORLD, MAX_WORLD),
   };
   // The world defaults to the tile, which is the whole of what a single-tile map needs. A caller who
-  // passes one is claiming the tile is a window onto it, and the window has to fit.
+  // passes one is claiming the tile is a window onto it, and the window has to fit. The world is a
+  // coordinate frame, not a map that gets generated in one piece, so it is not held to the tile's
+  // own ceiling: a world the size of one maximum tile would fit exactly one tile and make the
+  // feature pointless. Its real limit is the field grid, which samples at most 64 points across
+  // whatever the extent is, so a very large world keeps working and simply grows blockier.
   const world = {
-    width: resolveNumber(config.world?.width, width, 'world.width', MIN_DIMENSION, MAX_DIMENSION),
-    height: resolveNumber(
-      config.world?.height,
-      height,
-      'world.height',
-      MIN_DIMENSION,
-      MAX_DIMENSION,
-    ),
+    width: resolveNumber(config.world?.width, width, 'world.width', MIN_DIMENSION, MAX_WORLD),
+    height: resolveNumber(config.world?.height, height, 'world.height', MIN_DIMENSION, MAX_WORLD),
   };
   if (
     origin.x < 0 ||

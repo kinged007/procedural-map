@@ -8,6 +8,7 @@ import {
   validateMap,
 } from '../dist/index.js';
 import { boundsOf, pointInPolygon, polygonArea } from '../dist/map/geometry.js';
+import { generateForests } from '../dist/generation/forests.js';
 
 const SEED = 583921;
 const wooded = () =>
@@ -196,6 +197,47 @@ test('a map with no trees has no groves', () => {
   assert.equal(validateMap(map).valid, true);
 });
 
+test('two trees are one grove only when they are within the link distance', () => {
+  // The grove is a broadphase, so a group that spans much more ground than the link distance makes
+  // its hull useless for the job. The spatial index buckets trees on a grid of exactly the link
+  // distance, so two trees can share a bucket while being almost a bucket diagonal apart, and only
+  // a bucket that holds more than one tree ever gets that pair compared at all. Grouping on bucket
+  // membership rather than on distance merges exactly those pairs, which is what this pins.
+  const LINK_DISTANCE = 26;
+  const tree = (id, x, y) => ({
+    id: `t${id}`,
+    type: 'tree',
+    kind: 'tree',
+    position: { x, y },
+    radius: 4,
+    collision: { type: 'circle', center: { x, y }, radius: 4 },
+    metadata: { species: 'oak', canopy: { radius: 8 } },
+  });
+
+  // Three neighbours, each within the link distance of the others, are one grove.
+  const near = generateForests([
+    tree(0, 1, 1),
+    tree(1, 1 + LINK_DISTANCE * 0.9, 1),
+    tree(2, 1, 1 + LINK_DISTANCE * 0.9),
+  ]);
+  assert.equal(near.length, 1, 'three neighbours within the link distance are one grove');
+
+  // These three all land in the same 26-unit bucket, but only the first two are within the link
+  // distance of each other; the third is further from both than the link distance. A grove needs
+  // three trees, so nothing is published. Grouping on the bucket instead would report a grove of
+  // three, spanning a diagonal of about 1.3 link distances.
+  const mixed = generateForests([
+    tree(0, 1, 1),
+    tree(1, 1 + LINK_DISTANCE * 0.92, 1),
+    tree(2, 1 + LINK_DISTANCE * 0.46, 1 + LINK_DISTANCE * 0.92),
+  ]);
+  assert.equal(
+    mixed.length,
+    0,
+    'a tree outside the link distance of the pair is not merged by sharing their bucket',
+  );
+});
+
 test('forests survive export and import unchanged', () => {
   const map = wooded();
   const restored = importMap(exportMap(map));
@@ -312,6 +354,19 @@ test('a forest must agree with the tree list', () => {
   result = validateMap(repeated);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((error) => error.includes('must not repeat a tree')));
+
+  // The same tree with its keys written in another order is the same tree. Comparing the two as
+  // serialised text would report a difference that is only ordering, which matters because a map
+  // that arrived through a JSON parser can list the keys of a tree in any order.
+  const reordered = forestFixture();
+  reordered.forests[0].trees[1] = Object.fromEntries(
+    Object.entries(reordered.forests[0].trees[1]).reverse(),
+  );
+  assert.equal(
+    validateMap(reordered).valid,
+    true,
+    'reordering a tree’s keys must not read as a different tree',
+  );
 });
 
 test('a forest needs a species, a hull, trees, and measured metadata', () => {
