@@ -116,6 +116,7 @@ Every knob, with the value used when it is left out:
 | `buildings.density`     | `0.5`            | The chance a site offered by a road is built on. `0` publishes no buildings.                                                                                                                             |
 | `buildings.spacing`     | `34`             | Smallest gap between two buildings, centre to centre, measured across the whole map.                                                                                                                     |
 | `buildings.setback`     | `16`             | How far a building's front wall stands off the road centreline. A farm sets its own.                                                                                                                     |
+| `settlements.count`     | `2`              | How many settlements the map has. A map with no roads publishes none, whatever this is set to.                                                                                                           |
 
 Values outside a knob's range are rejected at the boundary rather than clamped silently.
 
@@ -146,6 +147,11 @@ from a road with its front wall facing it, publishing its footprint, a matching 
 walkability raster like the water and the rock do. `buildings.density`, `buildings.spacing`, and
 `buildings.setback` place them; the details and the fields are in
 [Consuming generated maps](docs/consuming-maps.md#4-buildings).
+
+`map.settlements` holds the places: each one a centre standing on a road, a radius saying how far it
+reaches, and the ids of the buildings inside it. A settlement carries no collision, because its radius
+says where a place ends rather than where you cannot walk. A settlement with no buildings is a dead
+settlement, and mixing a high `settlements.count` against a low `buildings.density` produces them.
 
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 
@@ -191,7 +197,7 @@ renderer.render(map, { theme: defaultTheme, view: 'styled' });
 | Document                                           | What it covers                                                                                                                                                      |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Consuming generated maps](docs/consuming-maps.md) | **Start here if you are consuming a map in a game.** What the generator produces, what it expects your engine to do, cost and limits, and what is not produced yet. |
-| [GameMap v1.2 schema](docs/gamemap-schema.md)      | Field-by-field structure of the exported JSON, with worked examples taken from a real generated map, and every validation rule.                                     |
+| [GameMap v1.4 schema](docs/gamemap-schema.md)      | Field-by-field structure of the exported JSON, with worked examples taken from a real generated map, and every validation rule.                                     |
 | [Generation](docs/generation.md)                   | How each layer is produced: fields, water, terrain classification, vegetation, and roads, and how the controls affect the result.                                   |
 | [Architecture](docs/architecture.md)               | Where the product boundary sits and how the modules divide up.                                                                                                      |
 | [PRD](../PRD.md)                                   | Requirements, design principles, and the roadmap.                                                                                                                   |

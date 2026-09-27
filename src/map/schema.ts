@@ -11,10 +11,10 @@ const jsonValue = {
 
 export const gameMapSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.3.json',
-  title: 'GameMap v1.3',
+  $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.4.json',
+  title: 'GameMap v1.4',
   description:
-    'A forest carries no collision. Its geometry is a hull for broadphase, rendering and a minimap, and it deliberately over-covers the clearings between trees so that a consumer can test one bounds box instead of every tree on the map. Movement is blocked by the circles in the forest tree list, never by the hull.',
+    'A forest carries no collision, and a settlement carries none either. A forest geometry is a hull for broadphase, rendering and a minimap, and it deliberately over-covers the clearings between trees so that a consumer can test one bounds box instead of every tree on the map. A settlement radius is a statement about where a place ends, not a wall: it claims buildings by proximity and a consumer wanting the ground it covers tests the distance itself. A settlement with no buildings is a settlement, which is what a dead one is.',
   type: 'object',
   required: [
     'version',
@@ -25,11 +25,12 @@ export const gameMapSchema = {
     'vegetation',
     'forests',
     'structures',
+    'settlements',
     'roads',
     'barriers',
   ],
   properties: {
-    version: { const: '1.3' },
+    version: { const: '1.4' },
     metadata: { $ref: '#/$defs/mapMetadata' },
     bounds: { $ref: '#/$defs/bounds' },
     terrain: { type: 'array', items: { $ref: '#/$defs/terrain' } },
@@ -37,6 +38,7 @@ export const gameMapSchema = {
     vegetation: { type: 'array', items: { $ref: '#/$defs/tree' } },
     forests: { type: 'array', items: { $ref: '#/$defs/forest' } },
     structures: { type: 'array', items: { $ref: '#/$defs/building' } },
+    settlements: { type: 'array', items: { $ref: '#/$defs/settlement' } },
     roads: { type: 'array', items: { $ref: '#/$defs/road' } },
     barriers: { type: 'array', items: { $ref: '#/$defs/entity' } },
     metadataLayers: { $ref: '#/$defs/metadataLayers' },
@@ -141,6 +143,28 @@ export const gameMapSchema = {
                 { $ref: '#/$defs/polygon' },
                 { type: 'object', required: ['type'], properties: { type: { const: 'polygon' } } },
               ],
+            },
+          },
+        },
+      ],
+    },
+    settlement: {
+      allOf: [
+        { $ref: '#/$defs/entity' },
+        {
+          type: 'object',
+          required: ['type', 'position', 'radius', 'metadata'],
+          properties: {
+            type: { const: 'settlement' },
+            radius: { type: 'number', exclusiveMinimum: 0 },
+            metadata: {
+              type: 'object',
+              required: ['buildingIds'],
+              properties: {
+                // Empty on purpose: a settlement nobody built in is still a settlement.
+                buildingIds: { type: 'array', items: { type: 'string', minLength: 1 } },
+              },
+              additionalProperties: { $ref: '#/$defs/jsonValue' },
             },
           },
         },

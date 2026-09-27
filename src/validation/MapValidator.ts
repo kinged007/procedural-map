@@ -384,7 +384,7 @@ export function validateMap(data: unknown): ValidationResult {
     const validator = new Validator();
     if (!isRecord(data)) return { valid: false, errors: ['map: must be an object'] };
     validator.jsonValue(data, 'map');
-    if (data.version !== '1.3') validator.error('version', 'must be supported version "1.3"');
+    if (data.version !== '1.4') validator.error('version', 'must be supported version "1.4"');
     if (!isRecord(data.metadata)) validator.error('metadata', 'must be an object');
     else {
       if (typeof data.metadata.id !== 'string' || data.metadata.id.length === 0)
@@ -412,11 +412,17 @@ export function validateMap(data: unknown): ValidationResult {
       'vegetation',
       'forests',
       'structures',
+      'settlements',
       'roads',
       'barriers',
     ] as const;
     for (const collection of collections)
       if (!Array.isArray(data[collection])) validator.error(collection, 'must be an array');
+    // Read before the loop below, so a settlement can be checked against the buildings that exist.
+    const buildingIds = new Set<string>();
+    if (Array.isArray(data.structures))
+      for (const building of data.structures)
+        if (isRecord(building) && typeof building.id === 'string') buildingIds.add(building.id);
     if (bounds) {
       for (const collection of collections) {
         const entities = data[collection];
@@ -427,7 +433,8 @@ export function validateMap(data: unknown): ValidationResult {
             collection === 'water' ||
             collection === 'vegetation' ||
             collection === 'forests' ||
-            collection === 'structures';
+            collection === 'structures' ||
+            collection === 'settlements';
           validator.entity(entity, `${collection}[${index}]`, bounds!, !specialized);
           if (!isRecord(entity)) return;
           if (
@@ -456,6 +463,33 @@ export function validateMap(data: unknown): ValidationResult {
               `${collection}[${index}]`,
               'must be a building with a category, a footprint, and polygon collision',
             );
+          if (
+            collection === 'settlements' &&
+            (entity.type !== 'settlement' ||
+              !validator.finite(entity.radius, `${collection}[${index}].radius`) ||
+              (entity.radius as number) <= 0 ||
+              !isRecord(entity.metadata) ||
+              !Array.isArray(entity.metadata.buildingIds) ||
+              !entity.metadata.buildingIds.every((id) => typeof id === 'string' && id.length > 0))
+          )
+            validator.error(
+              `${collection}[${index}]`,
+              'must be a settlement with a radius and a list of building ids',
+            );
+          // A settlement names the buildings it holds, so a name that resolves to nothing is a
+          // membership a consumer cannot act on. A settlement with no buildings is valid; one that
+          // claims a building which is not on the map is not.
+          if (collection === 'settlements' && isRecord(entity.metadata)) {
+            const members = entity.metadata.buildingIds;
+            if (Array.isArray(members))
+              members.forEach((id, memberIndex) => {
+                if (typeof id !== 'string' || !buildingIds.has(id))
+                  validator.error(
+                    `${collection}[${index}].metadata.buildingIds[${memberIndex}]`,
+                    'must name a building published in structures',
+                  );
+              });
+          }
           if (
             collection === 'terrain' &&
             (entity.type !== 'terrain' ||

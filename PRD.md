@@ -384,12 +384,14 @@ The generator itself does not perform player collision.
 
 It simply describes the geometry.
 
-| Feature       | Collision shape | Notes                                                                     |
-| ------------- | --------------- | ------------------------------------------------------------------------- |
+
+| Feature       | Collision shape | Notes                                                                      |
+| ------------- | --------------- | -------------------------------------------------------------------------- |
 | Trees         | circle          | Radius is smaller than the canopy, so the trunk blocks and not the leaves. |
 | Water         | polygon         | Same polygon as the region's geometry.                                     |
 | Rock terrain  | polygon         | Same polygon as the region's geometry.                                     |
-| Other terrain | none            | `grass`, `meadow`, `scrub`, and `beach` are passable.                       |
+| Other terrain | none            | `grass`, `meadow`, `scrub`, and `beach` are passable.                      |
+
 
 Impassable terrain is identified by the presence of a `collision` on a terrain region, not by a separate list. Collision is therefore uniform across every collection: each blocking feature carries its own geometry, so a consumer does not need to know which kind of feature it is looking at.
 
@@ -626,10 +628,12 @@ A realistic browser target, given the MVP's roughly 1,600 trees on one map:
 
 Two alternatives earn their place conditionally:
 
-| Condition | Approach |
-| --------- | -------- |
+
+| Condition                                              | Approach                                                                     |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------- |
 | Large, stylised vector art viewed at a wide zoom range | SDF atlas — crisp vector-looking outlines at any zoom from one small texture |
-| Tens of thousands of distinct, non-variant art | WebGL2 `sampler2DArray` texture arrays instead of a single atlas |
+| Tens of thousands of distinct, non-variant art         | WebGL2 `sampler2DArray` texture arrays instead of a single atlas             |
+
 
 In-world text should stay vector or SDF regardless of the choice for everything else.
 
@@ -1359,18 +1363,18 @@ Features:
 Delivered in v0.4:
 
 - Building footprints, collision polygons, categories, orientation, and asset assignment are published
-  as a typed `BuildingEntity` in `structures`, and the format moved to 1.3 to say so.
+as a typed `BuildingEntity` in `structures`, and the format moved to 1.3 to say so.
 - Road-facing placement, on both sides of a road, with a global spacing minimum.
 - `buildings.density`, `buildings.spacing`, and `buildings.setback` place them.
 - **Plot and parcel concepts are deferred to v0.5.** They are listed above as a v0.4 feature and are
-  deliberately not delivered in it. A building is a rectangle on the ground and nothing claims the
-  ground around it. A parcel only means something once there are settlements dividing land between
-  owners, so publishing an empty boundary now would be a shape with no meaning that v0.5 would have to
-  unpick rather than extend. v0.5 owns plots, and the building format does not have to change for one
-  to arrive: a plot is the ground around a building, and the field to add is on the building itself
-  once there is more than one way to place it.
+deliberately not delivered in it. A building is a rectangle on the ground and nothing claims the
+ground around it. A parcel only means something once there are settlements dividing land between
+owners, so publishing an empty boundary now would be a shape with no meaning that v0.5 would have to
+unpick rather than extend. v0.5 owns plots, and the building format does not have to change for one
+to arrive: a plot is the ground around a building, and the field to add is on the building itself
+once there is more than one way to place it.
 - Which categories to place is a fixed weighted draw, not a configuration. A caller that wants to
-  choose is asking for the settlement phase, where placement and category become one problem.
+choose is asking for the settlement phase, where placement and category become one problem.
 
 ---
 
@@ -1390,11 +1394,36 @@ Potential systems:
 - settlement boundaries;
 - which building categories a map places;
 - shoreline categories, including a port or a pier that stands in the water.
+- NEW - Settlements may be considered a player base or spawn point. we want parameters that can define the quantity of settlements to spawn, and mixed with the housing and other params, we may generate maps with a dead settlement (ie. no surrounding buildings, or its all in ruins.)
+
+Delivered in v0.5 so far:
+
+- Settlement centres, published as a `SettlementEntity` in a new `settlements` collection, and the
+  format moved to 1.4 to say so. A centre stands on the road network and holds the buildings within
+  260 units of it, naming them in `metadata.buildingIds`.
+- **`settlements.count` sets how many settlements a map has.** It is a count and not something derived
+  from the road network, so a caller asking for four gets four whether the network has four pieces or
+  two. The network supplies the sites, the caller supplies the number.
+- A settlement carries no collision: its `radius` says how far a place reaches, not where you cannot
+  walk. A consumer testing the ground it covers uses the distance itself, the same way it treats a
+  forest hull.
+- **A dead settlement is reachable by mixing the parameters rather than by a switch.** Membership is by
+  proximity, so a centre that ends up with nothing near it publishes an empty `buildingIds`, which
+  validation accepts. A high `settlements.count` against `buildings.density: 0` publishes a map of
+  places and no buildings at all.
+- The generator does not designate a player base. The note above says a settlement *may* be one, which
+  is a consumer's choice of where to start, so a settlement carries no `role` field until something
+  writes one. Wiring `spawnCandidates` to offer a settlement centre is listed below.
 
 Carried over from v0.4 and deferred here on purpose: plots and parcels, and choosing which categories
 get placed rather than drawing from a fixed weighted set. A shoreline is v0.5 work too, because v0.4
 keeps the whole beach band clear of buildings, which is what leaves a port or a pier somewhere to
 stand.
+
+Ruins, the second half of the settlement note, are not started. A ruin is a property of a building
+rather than of a settlement's emptiness, so it changes what a building is: a ruined building has to
+stop being a collider or it is a wall around rubble, and it has to stop counting or it contradicts the
+density the caller asked for. It is tracked in `plans/settlement-plan.md` as S7.
 
 Generation parameters might include:
 
@@ -1436,6 +1465,7 @@ Add:
 - paths;
 - river crossing structures, on the sites v0.3 publishes;
 - barriers.
+- NEW - Enemy spawn locations. Games will decide how to render the asset, but lets call it enemy bases. a custom parameters to determine quantity and minimum distance from a settlement.
 
 ---
 

@@ -14,6 +14,7 @@ import { assertValidMap } from '../validation/MapValidator.js';
 import { generateBuildings } from './buildings.js';
 import { gridToEdgePolygons } from './contours.js';
 import { generateForests, markWalkableInside } from './forests.js';
+import { generateSettlements } from './settlements.js';
 import { generateRoads } from './roads/RoadGenerator.js';
 import { generateRivers } from './rivers.js';
 import { generateTerrain } from './terrain/TerrainGenerator.js';
@@ -269,6 +270,18 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         'buildings.setback',
         6,
         120,
+      ),
+    },
+    settlements: {
+      // A count, not a density: a caller asking for four settlements wants four, and a map with no
+      // roads has nowhere to put even one, so the ceiling is generous and the road network is what
+      // actually limits it.
+      count: resolveNumber(
+        config.settlements?.count,
+        DEFAULT_CONFIG.settlements.count,
+        'settlements.count',
+        0,
+        64,
       ),
     },
   };
@@ -575,6 +588,13 @@ export function generateMap(config: GenerationConfig): GameMap {
     buildingRandom.next(),
   );
   const forests: ForestEntity[] = generateForests(vegetation);
+  // Settlements come after the buildings, because a settlement is defined by the buildings it holds
+  // rather than the other way round. Its own stream, so asking for a different number of settlements
+  // does not move the buildings.
+  const settlementRandom = new Random(placement ^ 0x2c9d47);
+  const settlements = generateSettlements(roads, structures, resolved.settlements.count, () =>
+    settlementRandom.next(),
+  );
   // A tile at an origin needs to be distinguishable from the same tile at the origin, or assembling
   // a world puts duplicate entity ids in it. The single-tile id is left as it was.
   const placementTag =
@@ -582,7 +602,7 @@ export function generateMap(config: GenerationConfig): GameMap {
       ? ''
       : `@${resolved.origin.x},${resolved.origin.y}`;
   const map: GameMap = {
-    version: '1.3',
+    version: '1.4',
     metadata: {
       id: `generated-${resolved.seed}-${resolved.width}x${resolved.height}${placementTag}`,
       seed: resolved.seed,
@@ -610,6 +630,7 @@ export function generateMap(config: GenerationConfig): GameMap {
     vegetation,
     forests,
     structures,
+    settlements,
     roads,
     barriers: [],
     metadataLayers: { fields, generation: resolved, waterLevel: level },

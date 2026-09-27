@@ -25,12 +25,13 @@ test('a tile with no origin and no world is the map it always was', () => {
   // fields. The pinned value moved when water was allowed to reach the map edge, again when rivers
   // were published, again when a river became the main channel of its catchment, again when a
   // course was cut at a water body's shore, again when centreline curve-fitting changed the
-  // channels, and again when a course was rejoined into one reach running to the water; this still
-  // guards against `origin`/`world` leaking into the terrain.
+  // channels, again when a course was rejoined into one reach running to the water, and again when
+  // settlements were published as a 1.4 collection; this still guards against `origin`/`world`
+  // leaking into the terrain.
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    'b9a28eddc43d07443ed4921fcfbeb63051dea331acf0351ca1648aa32233fe86',
+    '0384c11a6b6fc4f8359ee17fbdd8362ec678dc60570fd497779cf45153fe537a',
   );
 });
 

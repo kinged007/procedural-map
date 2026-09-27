@@ -1,6 +1,6 @@
-# GameMap v1.3 schema
+# GameMap v1.4 schema
 
-The canonical product boundary is `GameMap` v1.3. Generation, native JSON import, and future external
+The canonical product boundary is `GameMap` v1.4. Generation, native JSON import, and future external
 import adapters all produce this model, and a consumer uses the same geometry regardless of which one
 produced it.
 
@@ -10,6 +10,22 @@ enforces the rules below; `assertValidMap` throws instead of returning.
 Every example in this document is taken from a real map, generated with
 `generateMap({ seed: 7, width: 900, height: 700, water: { amount: 0.15 } }`. Long coordinate arrays are
 elided with a comment rather than truncated silently.
+
+## What changed in 1.4
+
+1.4 adds a `settlements` collection. Before it a map had houses but no village: buildings were placed
+one at a time against a road and nothing said which of them belonged together.
+
+| Change                                | Kind                    | What a consumer does                                                                                                                |
+| ------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `settlements` holds places            | new required collection | Iterate it. Each entry is a settlement with a `position`, a `radius`, and the buildings inside it.                                  |
+| `settlements` membership is by id     | new                     | `metadata.buildingIds` names the buildings, and may be empty: a settlement nobody built in is still one.                            |
+| A settlement carries no collision     | new                     | Its `radius` says how far the place reaches. It is not a wall, so a consumer testing the ground it covers uses the distance itself. |
+| Generation config gains `settlements` | new optional config     | `settlements: { count }`. Unset is `count: 2`, and a map with no roads publishes none.                                              |
+
+A 1.3 map still validates as 1.3, and a 1.4 map does not validate as 1.3: the validator accepts
+`"1.4"` only, `settlements` is required, and it is checked for the settlement shape. A 1.3 map read by a
+1.4 consumer has no settlements, so anything that renders or uses places has to cope with none.
 
 ## What changed in 1.3
 
@@ -50,13 +66,13 @@ Two changes are not additive, and a 1.1 reader that assumed them will notice:
   1.2 map; the assertion it wants is that a road never enters a _lake_.
 
 The `version` string is the only place the two are distinguishable: a 1.1 map validates as neither 1.1
-nor 1.2 under the current validator, which accepts `"1.2"` only.
+nor 1.2 under the current validator, which accepts the newest version only.
 
 ## Top level
 
 ```ts
 interface GameMap {
-  version: '1.2';
+  version: '1.4';
   metadata: { id: string; seed?: number; generator?: string; generatedAt?: string };
   bounds: { width: number; height: number };
   terrain: TerrainRegion[];
@@ -64,15 +80,18 @@ interface GameMap {
   vegetation: VegetationEntity[];
   forests: ForestEntity[];
   structures: BuildingEntity[];
+  settlements: SettlementEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };
 }
 ```
 
-All ten of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`, `structures`,
-`roads`, and `barriers` are required, even when the collection is empty. `metadataLayers` is optional.
-A generated map fills `structures` with buildings and leaves `barriers` empty.
+All eleven of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`, `structures`,
+`settlements`, `roads`, and `barriers` are required, even when the collection is empty.
+`metadataLayers` is optional.
+A generated map fills `structures` with buildings and `settlements` with places, and leaves `barriers`
+empty.
 
 `bounds` is the size of the world in world units. Every coordinate in the map is absolute and lies
 inside it.
@@ -510,6 +529,49 @@ places its own asset into.
 else the generator did not produce belongs, and it is validated as a generic entity rather than as a
 building.
 
+## settlements
+
+`settlements` is a `SettlementEntity[]`: the places on the map, each a centre with the buildings
+around it. A settlement answers "where is the village", which `structures` on its own cannot, because
+`structures` is a list of buildings rather than of places.
+
+```ts
+interface SettlementEntity {
+  id: string;
+  type: 'settlement';
+  /** The centre, which stands on the road network. */
+  position: Point;
+  /** How far the settlement reaches from its centre, in world units. */
+  radius: number;
+  metadata: {
+    /** The buildings inside the settlement, which may be none at all. */
+    buildingIds: string[];
+  };
+}
+```
+
+Three things follow from this shape, and a consumer that assumes otherwise will be wrong.
+
+**A settlement carries no collision.** `radius` says how far the place reaches; it is not a wall. A
+consumer wanting the ground a settlement covers tests `distance(position, point) <= radius` itself,
+the same way it tests a forest hull rather than treating one as movement blocking. There is no
+polygon here, because a settlement is a distance and not a shape: a circle of 260 units around a
+centre in a square world either overflows the map or leaves corners of the map unreachable from it,
+and neither is a thing a consumer should have to reconcile.
+
+**Membership is by id, and is on the settlement.** `metadata.buildingIds` names the buildings inside it,
+and each id resolves to a `structures` entry. Validation rejects an id that does not, so a consumer can
+resolve every one without a guard. Membership is on the settlement rather than a `settlementId` back
+reference on each building, so reading one settlement takes one read.
+
+**An empty membership is valid.** A settlement with no buildings is a dead settlement, and the PRD
+asks for maps that have one: mixing a high `settlements.count` against a low `buildings.density`
+produces them without a separate switch. A consumer that assumes every settlement is inhabited will
+render an empty place, which is the correct result and not a data error.
+
+A map with no roads publishes no settlements, because a centre is placed on a road and a map with
+nothing but open ground has nowhere to put one.
+
 ## Asset references
 
 `asset` is a `{ category, variant }` pair, and the generator uses a fixed vocabulary:
@@ -587,7 +649,7 @@ the first. `assertValidMap(value)` throws on the first.
 
 A map is rejected when:
 
-- `version` is anything but `"1.2"`, or `bounds` has a non-positive dimension.
+- `version` is anything but `"1.4"`, or `bounds` has a non-positive dimension.
 - Any number is not finite, or a point, polygon vertex, circle, or rectangle falls outside `bounds`.
 - An `id` is empty or repeats anywhere in the map.
 - A ring has fewer than 3 or more than 32,768 points, is self-intersecting, or encloses no area.
@@ -596,6 +658,8 @@ A map is rejected when:
 - A terrain, water, or road entity is missing a field its collection requires, or carries a `kind`
   outside the allowed set.
 - Collision is present on a terrain region but is not a valid polygon.
+- A settlement is missing a positive `radius` or a `metadata.buildingIds` list, or carries an id that
+  names no building in `structures`. An empty list is valid.
 
 Nothing is checked about whether the world makes sense. Two roads may run in parallel, a road may stop
 short of anything, and a beach may be a few units wide. Those are design outcomes, not errors.

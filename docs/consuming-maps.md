@@ -53,7 +53,7 @@ The generator has no fixed world scale. Its constants are tuned so a 2048x1536 m
 in practice means one world unit reads as roughly one metre in a top-down game. Pick a global scale
 factor at import time if you need a different unit.
 
-## Four things to build
+## Five things to build
 
 ### 1. Ground surface
 
@@ -229,6 +229,33 @@ and nothing else in the map refuses it. The reason is that a house on the sand i
 have built, and because a shoreline is where a port, a pier, or a boat shed goes. So a consumer that
 wants a harbour is building into ground the generator has deliberately left empty, and can pick its own
 shoreline site the same way it picks a river mouth.
+
+### 5. Settlements
+
+`map.settlements` holds the places. Each one is a centre standing on a road, a `radius` saying how far
+it reaches, and `metadata.buildingIds` naming the buildings inside it.
+
+```js
+// Every building in a settlement, resolved in one read.
+const byId = new Map(map.structures.map((building) => [building.id, building]));
+for (const settlement of map.settlements) {
+  const houses = settlement.metadata.buildingIds.map((id) => byId.get(id));
+  console.log(settlement.id, houses.length, settlement.position);
+}
+```
+
+A settlement carries no collision. Its `radius` says how far the place reaches, not where you cannot
+walk, so test the ground yourself if you need it:
+
+```js
+const inSettlement = (settlement, point) =>
+  Math.hypot(point.x - settlement.position.x, point.y - settlement.position.y) <= settlement.radius;
+```
+
+Two things to expect. Membership may be empty: a settlement with no buildings is a dead settlement,
+and a high `settlements.count` against a low `buildings.density` produces them on purpose, so do not
+assume every settlement is inhabited. And a map with no roads has no settlements at all, because a
+centre is placed on a road.
 
 ## Walking on the map
 
@@ -442,8 +469,9 @@ So the map is not mistaken for more than it is:
 
 - **No barriers.** `map.barriers` is empty on a generated map; it is where an imported wall, gate, or
   fence belongs.
-- **No plots, parcels, settlements, or resources.** Buildings are published, but a building is a
-  rectangle on the ground, not a parcel it sits in. Plots and settlements are the v0.5 roadmap.
+- **No plots, parcels, or resources.** Buildings are published, but a building is a rectangle on the
+  ground, not a parcel it sits in. Plots are the v0.5 roadmap. Settlements are published — see below —
+  but a settlement is a centre and a list of the buildings around it, not land divided between owners.
 - **No bridges or fords.** Rivers are published, and a road records the site of each crossing its
   surface reached, but nothing is built there. A river also blocks the walkability raster where a road
   goes over it, so a character cannot walk the crossing until you make those cells walkable. A river
@@ -471,6 +499,6 @@ The studio in `demo/` exposes all of these as tabs, with sliders for every gener
 
 ## See also
 
-- [GameMap v1.2 schema](gamemap-schema.md) — field-by-field structure
+- [GameMap v1.4 schema](gamemap-schema.md) — field-by-field structure
 - [Generation](generation.md) — how the map is produced
 - [Architecture](architecture.md) — where the boundary sits

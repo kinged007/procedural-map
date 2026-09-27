@@ -37,6 +37,16 @@ export interface GenerationConfig {
    * back from the road than a house.
    */
   buildings?: { density?: number; spacing?: number; setback?: number };
+  /**
+   * The settlements on the map, each a centre with the buildings around it.
+   *
+   * `count` is how many settlements a map has. It is a count rather than something derived from the
+   * road network, because a caller asking for four settlements should get four whether the network
+   * happens to have four pieces or two. A settlement claims the buildings near its centre, so a count
+   * well above what `buildings.density` supports leaves settlements with no buildings at all, which
+   * is what a dead settlement is.
+   */
+  settlements?: { count?: number };
 }
 
 export interface ResolvedGenerationConfig {
@@ -51,6 +61,7 @@ export interface ResolvedGenerationConfig {
   roads: { density: number };
   rivers: { density: number; width: number };
   buildings: { density: number; spacing: number; setback: number };
+  settlements: { count: number };
 }
 
 export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
@@ -65,4 +76,5 @@ export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
   roads: { density: 0.5 },
   rivers: { density: 1, width: 12 },
   buildings: { density: 0.5, spacing: 34, setback: 16 },
+  settlements: { count: 2 },
 };

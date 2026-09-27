@@ -183,6 +183,27 @@ No building stands apart from the road network. A farmstead set back from a lane
 the middle of a field with no lane at all is a different placement problem, and it belongs with
 settlements rather than here.
 
+## Settlements
+
+Settlements come after the buildings, because a settlement is defined by the buildings it holds rather
+than the other way round. Every point along every road centreline is a candidate for a centre, the
+candidates are shuffled by a stream of their own so a seed scatters the centres over the network, and
+the first `settlements.count` of them that clear a 260-unit gap from each other become settlements. A
+centre then claims the buildings within 260 units of it.
+
+The count is a parameter rather than something derived from the road network, because a caller asking
+for four settlements should get four whether the network has four pieces or two. The network supplies
+the sites; the caller supplies the number. A centre with no buildings near it publishes an empty
+membership rather than being dropped, which is what makes a dead settlement reachable by mixing a high
+count against a low `buildings.density` instead of by a switch.
+
+The 260 units is both the reach and the separation, so the two cannot drift apart: a settlement's
+radius is exactly the distance within which it holds buildings and exactly the distance kept from the
+next centre. Both become configuration when a caller needs to tune them, which is not yet.
+
+A settlement's own stream means changing `settlements.count` does not rebuild the map under it: the
+buildings, the roads, and everything else are identical at every count for a given seed.
+
 ## Tiles
 
 The four fields are sampled at `origin + local`, so a tile is a window onto one landscape rather than

@@ -265,7 +265,7 @@ const forestFixture = (overrides) => {
     },
   ];
   return {
-    version: '1.3',
+    version: '1.4',
     metadata: { id: 'forest-fixture' },
     bounds: { width: 100, height: 100 },
     terrain: [
@@ -306,6 +306,7 @@ const forestFixture = (overrides) => {
       },
     ],
     structures: [],
+    settlements: [],
     roads: [],
     barriers: [],
     ...overrides,

@@ -173,8 +173,24 @@ export interface SpatialFields {
   vegetation: number[];
 }
 
+export interface SettlementEntity extends MapEntity {
+  type: 'settlement';
+  /** The settlement's centre, on the road network. */
+  position: Point;
+  /**
+   * How far the settlement reaches from its centre, in world units. This is a description of where a
+   * place ends, not a wall: a settlement carries no collision, and a consumer wanting the ground it
+   * covers tests this itself rather than being handed a polygon it would have to trust.
+   */
+  radius: number;
+  metadata: {
+    /** The buildings inside the settlement, which may be none at all. */
+    buildingIds: string[];
+  };
+}
+
 export interface GameMap {
-  version: '1.3';
+  version: '1.4';
   metadata: {
     id: string;
     seed?: number;
@@ -187,6 +203,7 @@ export interface GameMap {
   vegetation: VegetationEntity[];
   forests: ForestEntity[];
   structures: BuildingEntity[];
+  settlements: SettlementEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };
