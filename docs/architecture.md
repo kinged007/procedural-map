@@ -61,6 +61,22 @@ the median until each part holds at most 128 trees. Generation does depend on `n
 internal 8-unit raster, used only to measure `walkableInside` and discarded; the generated map carries
 no grid, because the canonical format should not pin a consumer to one tile size.
 
+## Worked ground
+
+`generation/plots.ts` is split in two, and the split is the design. `plotSites` runs immediately after
+the roads, at the same point the settlement clearings are chosen, and returns candidate rectangles
+around each settlement. The fields among them join the tree placer's and the building placer's
+keep-out lists, which is the only way a field stays clear rather than being punched into a finished map.
+Only fields are kept clear; an orchard's rectangle is already full of the trees it asked for, and
+refusing more inside it would leave bare gaps down every row.
+
+The orchard's rows are added to `vegetation` at the same point, before the random trees, so that
+`generation/forests.ts` then groups planted and wild trees together by its own proximity rule. An
+orchard's trees are therefore blockers like any other, and the walkability raster closes around them
+with no carve — the difference from a dock deck, where the deck is the thing to stand on and has to be
+written into the grid after the blockers. `generatePlots` runs after everything exists, to resolve each
+plot's `settlementId` and the tree ids that survived.
+
 ## Walkability
 
 `navigation` is the only module that turns map geometry into something a game can read per frame. It

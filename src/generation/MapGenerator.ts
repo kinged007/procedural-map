@@ -16,6 +16,7 @@ import { gridToEdgePolygons } from './contours.js';
 import { generateDocks } from './docks.js';
 import { generateResourceSites } from './resources.js';
 import { generateForests, markWalkableInside } from './forests.js';
+import { generatePlots, plotSites } from './plots.js';
 import { generateSettlements, settlementSites, type SettlementSite } from './settlements.js';
 import { generateRoads } from './roads/RoadGenerator.js';
 import { generateRivers } from './rivers.js';
@@ -378,6 +379,15 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         64,
       ),
     },
+    plots: {
+      field: resolveCount(config.plots?.field, DEFAULT_CONFIG.plots.field, 'plots.field', 64),
+      orchard: resolveCount(
+        config.plots?.orchard,
+        DEFAULT_CONFIG.plots.orchard,
+        'plots.orchard',
+        64,
+      ),
+    },
   };
 }
 
@@ -708,7 +718,35 @@ export function generateMap(config: GenerationConfig): GameMap {
     resolved.height,
     () => settlementRandom.next(),
   );
-  const vegetation = generateTrees(resolved, fields, water, random, noTrees, roads, sites);
+  // Worked ground is chosen now, for the same reason the clearings were: a field is ground that stays
+  // open, so it has to reach the tree and building placers as a keep-out rather than as a hole punched
+  // into a finished map. An orchard's rows are made here too, because a tree is a tree — it goes into
+  // `vegetation`, it blocks walking, and the grove builder groups it like any other.
+  const plotRandom = new Random(placement ^ 0x6b1d3f);
+  const plots = plotSites(
+    sites,
+    water,
+    noTrees,
+    roads.map((road) => ({ points: road.collision.points })),
+    resolved.plots,
+    resolved.width,
+    resolved.height,
+    () => plotRandom.next(),
+  );
+  // Only a field is kept clear: an orchard's rectangle is already full of the trees it asked for, and
+  // refusing more inside it would leave bare gaps down every row.
+  const vegetation = [
+    ...generateTrees(
+      resolved,
+      fields,
+      water,
+      random,
+      [...noTrees, ...plots.filter((plot) => plot.kind === 'field').map((plot) => plot.geometry)],
+      roads,
+      sites,
+    ),
+    ...plots.flatMap((plot) => plot.trees),
+  ];
   // Buildings come last, because a road is the only thing that offers them a site, and the roads, the
   // ground they must not stand on, and the trees they must not stand under all exist by now.
   const buildingRandom = new Random(placement ^ 0x6b8f21);
@@ -726,13 +764,18 @@ export function generateMap(config: GenerationConfig): GameMap {
     water,
     terrain,
     vegetation,
-    sites.map((site) => site.clearing),
+    // A field is worked ground, so a house is not built in the middle of it. It is one more polygon
+    // of ground to keep clear, which is the whole of what "not in a field" means.
+    [...sites.map((site) => site.clearing), ...plots.map((plot) => plot.geometry)],
     () => buildingRandom.next(),
     () => ruinRandom.next(),
     () => categoryRandom.next(),
   );
   const forests: ForestEntity[] = generateForests(vegetation);
   const settlements = generateSettlements(sites, structures);
+  // The plots are published once the places they name exist, like a dock. A plot is a holding of a
+  // settlement, and a settlement is only published once its buildings are.
+  const groundPlots = generatePlots(plots, settlements);
   // Docks come last of all, because a deck is a settlement's waterfront: it needs the places to
   // exist before it can name the one it serves, and the buildings to exist before it can refuse to
   // run a deck through a wall.
@@ -787,6 +830,7 @@ export function generateMap(config: GenerationConfig): GameMap {
     // Filled in below, once the map exists. A site is a question about the finished ground, so it is
     // asked of the finished map rather than of the collections as they are assembled.
     resourceSites: [],
+    plots: groundPlots,
     roads,
     barriers: [],
     metadataLayers: { fields, generation: resolved, waterLevel: level },

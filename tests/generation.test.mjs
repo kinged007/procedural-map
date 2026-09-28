@@ -40,11 +40,17 @@ test('generation is byte-stable for the same config', () => {
   // the hash reads keys, and the default count of 0 is a map of no harbours. Then resource sites were
   // published the same way, for the same reason and with the same effect: a `resourceSites: []` is a
   // key, and the default of zero across all three kinds is a map that says nothing about where iron
-  // is. Both collections are required, so a map that omits one is invalid rather than sparse.
+  // is. Both collections are required, so a map that omits one is invalid rather than sparse. Plots
+  // moved it once more, in exactly the same way, and this time in two places at once: a `plots: []`
+  // is a key on the map, and `metadataLayers.generation.plots` is the resolved knob. Removing both
+  // keys from this build reproduces the previous hash exactly, which is the evidence that the terrain
+  // did not move and only the two new keys did. The default of zero across both kinds is a map of no
+  // worked ground, for the same reason there is no ore: a field is a square of dirt until a game says
+  // what grows in it.
   // `tests/tiling.test.mjs` holds the matching value for the map with the placement fields removed.
   assert.equal(
     stableHash(first),
-    '7e641c45d6e9597a23d98f9837fb798e83110cbc52d4788f0cf444757ceefaa7',
+    'af93b0c32d113285a770e217e44ef881206a688cb77e23c6af1c4b1c5293403d',
   );
 });
 

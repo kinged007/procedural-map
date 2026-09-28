@@ -3,6 +3,7 @@ import type {
   CollisionGeometry,
   DockEntity,
   GameMap,
+  GroundPlotEntity,
   Point,
   PolygonGeometry,
   ResourceSiteEntity,
@@ -103,6 +104,54 @@ function drawDocks(context: CanvasRenderingContext2D, docks: DockEntity[], theme
  * of it is a scale drawing: a consumer drawing its own mine replaces all of it, and the geometry it
  * needs is the position, the facing and the name in `metadata`.
  */
+/**
+ * The worked ground of a field, and nothing of an orchard.
+ *
+ * A field is ground a character walks over, so it is drawn under everything as a surface: a tilled
+ * fill with furrow lines running along `rotation`, which is the heading the plot is published with
+ * and the reason it is required. An orchard is deliberately not drawn here. Its rows are trees in
+ * `vegetation`, they are drawn as trees by the loop below, and painting a rectangle over them would
+ * put a field's worth of colour on top of the one thing that makes an orchard an orchard.
+ *
+ * A consumer drawing crops replaces all of it and reads `geometry` for the ground.
+ */
+function drawPlots(
+  context: CanvasRenderingContext2D,
+  plots: GroundPlotEntity[],
+  scale: number,
+  theme: MapTheme,
+): void {
+  const palette = theme.plots ?? defaultTheme.plots!;
+  for (const plot of plots) {
+    if (plot.kind !== 'field') continue;
+    polygonPath(context, plot.geometry);
+    context.fillStyle = palette.field;
+    context.fill();
+    // Furrows along the long axis, spaced by the published depth so they land where the plot says
+    // the rows are rather than at a spacing this file invented.
+    const along = { x: Math.cos(plot.rotation), y: Math.sin(plot.rotation) };
+    const across = { x: -along.y, y: along.x };
+    const rows = Math.max(2, Math.round(plot.depth / 14));
+    context.strokeStyle = palette.furrow;
+    context.lineWidth = 1 / scale;
+    for (let row = 1; row < rows; row += 1) {
+      const w = (row / rows - 0.5) * plot.width;
+      const from = {
+        x: plot.position.x + along.x * (-plot.depth / 2) + across.x * w,
+        y: plot.position.y + along.y * (-plot.depth / 2) + across.y * w,
+      };
+      const to = {
+        x: plot.position.x + along.x * (plot.depth / 2) + across.x * w,
+        y: plot.position.y + along.y * (plot.depth / 2) + across.y * w,
+      };
+      context.beginPath();
+      context.moveTo(from.x, from.y);
+      context.lineTo(to.x, to.y);
+      context.stroke();
+    }
+  }
+}
+
 function drawResourceSites(
   context: CanvasRenderingContext2D,
   sites: ResourceSiteEntity[],
@@ -750,6 +799,9 @@ export class CanvasRenderer {
       // A dock is drawn over the water, under the roads: a deck reaching out from a shore, with the
       // road it is reached along running to its root.
       if (styled && map.docks.length > 0) drawDocks(context, map.docks, theme);
+      // A field is ground rather than an object, so it goes under the trees and under the roads,
+      // beside the settlement clearings it shares a reason with.
+      if (styled && map.plots.length > 0) drawPlots(context, map.plots, scale, theme);
       if (styled) drawMouths(context, map.water, theme);
       // A settlement's clearing, over the road it sits on. It is open ground, so it is drawn as
       // ground rather than as an object: a green at the middle of a place, with the road running

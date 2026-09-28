@@ -33,4 +33,8 @@ export const defaultTheme: MapTheme = {
   // water. The fishing mark is the only one that could be confused with a wave, which is why it is a
   // ring with a stroke through it rather than a dot.
   resources: { mine: '#4a3b2c', fishing: '#2f6f7e', hunting: '#3d5a2e' },
+  // A field is tilled ground, so it is a warmer and drier green than the grass it was cut from, and
+  // the furrow lines are darker still. An orchard gets no colour here because its rows are trees: the
+  // generator draws nothing over an orchard but the trees, so the two cannot disagree about it.
+  plots: { field: '#c8bd7e', furrow: '#a2924f' },
 };

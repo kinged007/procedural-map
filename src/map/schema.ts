@@ -28,6 +28,7 @@ export const gameMapSchema = {
     'settlements',
     'docks',
     'resourceSites',
+    'plots',
     'roads',
     'barriers',
   ],
@@ -43,6 +44,7 @@ export const gameMapSchema = {
     settlements: { type: 'array', items: { $ref: '#/$defs/settlement' } },
     docks: { type: 'array', items: { $ref: '#/$defs/dock' } },
     resourceSites: { type: 'array', items: { $ref: '#/$defs/resourceSite' } },
+    plots: { type: 'array', items: { $ref: '#/$defs/groundPlot' } },
     roads: { type: 'array', items: { $ref: '#/$defs/road' } },
     barriers: { type: 'array', items: { $ref: '#/$defs/entity' } },
     metadataLayers: { $ref: '#/$defs/metadataLayers' },
@@ -320,6 +322,67 @@ export const gameMapSchema = {
           // A site is a mark on the ground, not an obstacle, so it carries no collision. The same
           // reason a forest hull, a settlement and a dock carry none.
           not: { required: ['collision'] },
+        },
+      ],
+    },
+    groundPlot: {
+      allOf: [
+        { $ref: '#/$defs/entity' },
+        {
+          type: 'object',
+          // The heading is required rather than optional because the four numbers above it describe
+          // the plot but do not place it: a rectangle with no heading is a rectangle, and the
+          // difference between an orchard's rows and a field's furrows is entirely in it.
+          required: [
+            'type',
+            'kind',
+            'position',
+            'rotation',
+            'width',
+            'depth',
+            'geometry',
+            'metadata',
+          ],
+          properties: {
+            type: { const: 'ground-plot' },
+            kind: { enum: ['field', 'orchard'] },
+            rotation: { type: 'number' },
+            width: { type: 'number', exclusiveMinimum: 0 },
+            depth: { type: 'number', exclusiveMinimum: 0 },
+            geometry: { $ref: '#/$defs/polygon' },
+            metadata: {
+              type: 'object',
+              required: ['settlementId', 'treeIds'],
+              properties: {
+                settlementId: { type: 'string', minLength: 1 },
+                treeIds: {
+                  type: 'array',
+                  items: { type: 'string', minLength: 1 },
+                },
+              },
+              additionalProperties: { $ref: '#/$defs/jsonValue' },
+            },
+          },
+          allOf: [
+            {
+              // A field is worked ground and stands nothing, so it names no trees. An orchard whose
+              // rows were eaten by the river is published as a field instead, so the two kinds
+              // cannot be published in a state that disagrees with itself.
+              if: { properties: { kind: { const: 'field' } }, required: ['kind'] },
+              then: { properties: { metadata: { properties: { treeIds: { maxItems: 0 } } } } },
+            },
+            {
+              if: { properties: { kind: { const: 'orchard' } }, required: ['kind'] },
+              then: { properties: { metadata: { properties: { treeIds: { minItems: 1 } } } } },
+            },
+            {
+              // A plot is a mark on the ground, not an obstacle, so it carries no collision. The same
+              // reason a forest hull, a settlement, a dock and a resource site carry none. The
+              // orchard's trees are the exception and they are in `vegetation` as trees, so their
+              // trunks do block.
+              not: { required: ['collision'] },
+            },
+          ],
         },
       ],
     },

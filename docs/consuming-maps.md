@@ -672,13 +672,12 @@ the config you passed in, or the defaults will drift between versions.
 So the map is not mistaken for more than it is:
 
 - **No barriers.** `map.barriers` is empty on a generated map; it is where an imported wall, gate, or
-  fence belongs.
-- **No plots, parcels, or resources.** Buildings are published, but a building is a rectangle on the
-  ground, not a parcel it sits in. Settlements are published — see below — but a settlement is a centre
-  and a list of the buildings around it, not land divided between owners. `resourceSites` says where
-  gathering would make sense and deliberately does not say what a site yields: there is no ore, no
-  fish and no game in a `GameMap`, because the generator has no geology and a fantasy bolted to it is a
-  different product.
+  fence belongs. Fences in particular are still undecided: a fence that blocks needs a raster carve, and
+  one that does not is decoration, and that is a navigation decision rather than a placement detail.
+- **No ownership.** Buildings are published, but a building is a rectangle on the ground, not a parcel
+  it sits in. Settlements are published — see below — but a settlement is a centre and a list of the
+  buildings around it, not land divided between owners. `plots` says which ground a place works, and
+  works no particular crop on it.
 - **No bridges or fords.** Rivers are published, and a road records the site of each crossing its
   surface reached, but nothing is built there. A river also blocks the walkability raster where a road
   goes over it, so a character cannot walk the crossing until you make those cells walkable. A river
@@ -687,6 +686,10 @@ So the map is not mistaken for more than it is:
 - **No heightmap or 3D data.** The map is flat. Elevation is available as a debug field, not as
   geometry, and no region carries a height.
 - **No navigation mesh, and no pathfinding.** A* or whatever you use runs over the walkability grid.
+- **No what-a-thing-is-worth.** `resourceSites` says where gathering would make sense and deliberately
+  does not say what a site yields: there is no ore, no fish and no game in a `GameMap`, because the
+  generator has no geology and a fantasy bolted to it is a different product. The same goes for a field,
+  which is tilled ground and not wheat.
 - **No region naming.** Regions are numbered by size. No region has a name.
 - **No stitched world.** A map is one tile. `origin` and `world` make a tile continuous with its
   neighbours, but nothing merges two tiles into one geometry: a lake across a seam stays two polygons,

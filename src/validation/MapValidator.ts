@@ -415,6 +415,7 @@ export function validateMap(data: unknown): ValidationResult {
       'settlements',
       'docks',
       'resourceSites',
+      'plots',
       'roads',
       'barriers',
     ] as const;
@@ -446,6 +447,12 @@ export function validateMap(data: unknown): ValidationResult {
     if (Array.isArray(data.water))
       for (const body of data.water)
         if (isRecord(body) && typeof body.id === 'string') waterIds.add(body.id);
+    // A plot's trees are real trees, so a plot naming one that is not in `vegetation` names a trunk
+    // that blocks nothing and is drawn by nothing.
+    const treeIds = new Set<string>();
+    if (Array.isArray(data.vegetation))
+      for (const tree of data.vegetation)
+        if (isRecord(tree) && typeof tree.id === 'string') treeIds.add(tree.id);
     if (bounds) {
       for (const collection of collections) {
         const entities = data[collection];
@@ -459,7 +466,8 @@ export function validateMap(data: unknown): ValidationResult {
             collection === 'structures' ||
             collection === 'settlements' ||
             collection === 'docks' ||
-            collection === 'resourceSites';
+            collection === 'resourceSites' ||
+            collection === 'plots';
           validator.entity(entity, `${collection}[${index}]`, bounds!, !specialized);
           if (!isRecord(entity)) return;
           if (
@@ -614,6 +622,71 @@ export function validateMap(data: unknown): ValidationResult {
           }
 
           if (
+            collection === 'plots' &&
+            (entity.type !== 'ground-plot' ||
+              !['field', 'orchard'].includes(entity.kind as string) ||
+              entity.collision !== undefined ||
+              !validator.finite(entity.rotation, `${collection}[${index}].rotation`) ||
+              !validator.finite(entity.width, `${collection}[${index}].width`) ||
+              (entity.width as number) <= 0 ||
+              !validator.finite(entity.depth, `${collection}[${index}].depth`) ||
+              (entity.depth as number) <= 0 ||
+              !validator.polygon(entity.geometry, `${collection}[${index}].geometry`, bounds!) ||
+              !isRecord(entity.metadata))
+          )
+            validator.error(
+              `${collection}[${index}]`,
+              'must be a field or an orchard, with a heading, a size, a rectangle and no collision',
+            );
+
+          // A plot is a holding of a settlement, so a plot naming a place that is not on the map is
+          // a rectangle belonging to nobody. And a field is worked ground that stands nothing, while an
+          // orchard's rows are trees, so the two kinds have to agree with their own list: a field
+          // claiming trees is a field with an orchard in it, and an orchard claiming none is a field
+          // that has lost its trees somewhere upstream.
+          if (collection === 'plots' && isRecord(entity.metadata)) {
+            const owner = entity.metadata.settlementId;
+            if (typeof owner !== 'string' || !owner.length)
+              validator.error(
+                `${collection}[${index}].metadata.settlementId`,
+                'a plot must name the settlement it belongs to',
+              );
+            else if (!settlementIds.has(owner))
+              validator.error(
+                `${collection}[${index}].metadata.settlementId`,
+                'must name a settlement published in settlements',
+              );
+            const trees = entity.metadata.treeIds;
+            if (
+              !Array.isArray(trees) ||
+              !trees.every((id) => typeof id === 'string' && id.length > 0)
+            )
+              validator.error(
+                `${collection}[${index}].metadata.treeIds`,
+                'must be a list of the trees standing on the plot, which a field has none of',
+              );
+            else {
+              trees.forEach((id, treeIndex) => {
+                if (!treeIds.has(id))
+                  validator.error(
+                    `${collection}[${index}].metadata.treeIds[${treeIndex}]`,
+                    'must name a tree published in vegetation',
+                  );
+              });
+              if (entity.kind === 'field' && trees.length > 0)
+                validator.error(
+                  `${collection}[${index}].metadata.treeIds`,
+                  'must be empty on a field, which is worked ground and stands nothing',
+                );
+              if (entity.kind === 'orchard' && trees.length === 0)
+                validator.error(
+                  `${collection}[${index}].metadata.treeIds`,
+                  'an orchard is its rows, so it must name at least one',
+                );
+            }
+          }
+
+          if (
             collection === 'settlements' &&
             (entity.type !== 'settlement' ||
               !['hamlet', 'village', 'town'].includes(entity.kind as string) ||
@@ -734,7 +807,7 @@ export function validateMap(data: unknown): ValidationResult {
               );
             if (
               entity.type !== 'forest' ||
-              !['mixed', 'oak', 'birch'].includes(entity.species as string) ||
+              !['mixed', 'oak', 'birch', 'orchard'].includes(entity.species as string) ||
               !validator.polygon(entity.geometry, `${label}.geometry`, bounds!) ||
               !Array.isArray(entity.trees) ||
               entity.trees.length < 2

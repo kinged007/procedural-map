@@ -29,15 +29,18 @@ test('a tile with no origin and no world is the map it always was', () => {
   // settlements were published as a 1.4 collection, again when a settlement gained the `kind` read
   // off its membership, again when a settlement opened a `clearing`, again when a building gained
   // the `state` that says whether it stands or has fallen down, again when the category weights
-  // moved out of the code into the resolved config, and again when docks were published as a 1.4
+  // moved out of the code into the resolved config, again when docks were published as a 1.4
   // collection. That last one published no docks at all: a `docks: []` is still a key on the map, so
   // the hash moves and the terrain does not. Resource sites moved it once more for the same reason,
-  // and again published nothing at the default of zero. This still guards against
+  // and again published nothing at the default of zero. Plots moved it once more still, and this
+  // time in two keys: the `plots` collection and `metadataLayers.generation.plots`, the resolved
+  // knob. Deleting both from a build with plots off reproduces the previous hash exactly, which is
+  // what says the terrain did not move and only the new keys did. This still guards against
   // `origin`/`world` leaking into the terrain.
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    '533e00eb1dd4bb0a556de74dc9e6377f46f2ef7846ece60c0d01af84ed961b4a',
+    'c51dc34650f4290b1f4296ef474761cb30b9988ff5baa69cba536b85e6a6f78b',
   );
 });
 

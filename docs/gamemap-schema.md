@@ -13,10 +13,10 @@ elided with a comment rather than truncated silently.
 
 ## What changed in 1.4
 
-1.4 adds a `settlements` collection, a `docks` one and a `resourceSites` one. Before it a map had
-houses but no village: buildings were placed one at a time against a road and nothing said which of
-them belonged together, nothing said a place reached the water, and nothing said where the ground was
-worth gathering on.
+1.4 adds a `settlements` collection, a `docks` one, a `resourceSites` one and a `plots` one. Before it
+a map had houses but no village: buildings were placed one at a time against a road and nothing said which
+of them belonged together, nothing said a place reached the water, nothing said where the ground was
+worth gathering on, and nothing said which ground the places worked.
 
 | Change                                | Kind                    | What a consumer does                                                                                                                |
 | ------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -30,11 +30,15 @@ worth gathering on.
 | A mine faces out of its rock          | new                     | `rotation` is the entrance direction. It is required on a `mine` and a `hunting` site, and forbidden on a `fishing` spot.           |
 | A site carries no collision           | new                     | A site is a mark on the ground, not a thing in it.                                                                                  |
 | Generation config gains `resources`   | new optional config     | `resources: { mine, fishing, hunting }`. All three unset is `0`: the generator has no geology and says nothing by default.          |
+| `plots` holds worked ground           | new required collection | Iterate it. Each entry is a `field` or an `orchard`, with a heading back to the place that works it.                                |
+| An orchard's rows are real trees      | new                     | `metadata.treeIds` names trees in `vegetation`, and their trunks block. An orchard is walked between the rows, not through them.    |
+| A plot carries no collision           | new                     | A field is ground to walk across. The trees on an orchard are the blockers, not the rectangle.                                      |
+| Generation config gains `plots`       | new optional config     | `plots: { field, orchard }`. Both unset is `0`. The counts are ceilings, not promises — plots need ground a place can reach.        |
 | A building says whether it stands     | new required field      | `state` is `standing` or `ruined`. A ruin carries no `collision`, so rubble is walkable.                                            |
 
 A 1.3 map still validates as 1.3, and a 1.4 map does not validate as 1.3: the validator accepts
-`"1.4"` only, `settlements`, `docks` and `resourceSites` are required, and all three are checked for
-their shape. A 1.3 map read by a 1.4 consumer has none, so anything that renders or uses places has to
+`"1.4"` only, `settlements`, `docks`, `resourceSites` and `plots` are required, and all four are checked
+for their shape. A 1.3 map read by a 1.4 consumer has none, so anything that renders or uses places has to
 cope with none.
 
 ## What changed in 1.3
@@ -93,18 +97,19 @@ interface GameMap {
   settlements: SettlementEntity[];
   docks: DockEntity[];
   resourceSites: ResourceSiteEntity[];
+  plots: GroundPlotEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };
 }
 ```
 
-All thirteen of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`,
-`structures`, `settlements`, `docks`, `resourceSites`, `roads`, and `barriers` are required, even when
-the collection is empty. `metadataLayers` is optional.
-A generated map fills `structures` with buildings, `settlements` with places, `docks` with decks and
-`resourceSites` with sites to gather at — though the last two are empty unless asked for — and leaves
-`barriers` empty.
+All fourteen of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`,
+`structures`, `settlements`, `docks`, `resourceSites`, `plots`, `roads`, and `barriers` are required,
+even when the collection is empty. `metadataLayers` is optional.
+A generated map fills `structures` with buildings, `settlements` with places, `docks` with decks,
+`resourceSites` with sites to gather at and `plots` with worked ground — though the last three are empty
+unless asked for — and leaves `barriers` empty.
 
 `bounds` is the size of the world in world units. Every coordinate in the map is absolute and lies
 inside it.
@@ -777,6 +782,46 @@ A site carries no `collision`, and validation rejects one that does. A site is a
 not a thing standing in it — the third reason in this format for a surface to carry no collision,
 after a forest hull and a deck.
 
+## plots
+
+`plots` is a `GroundPlotEntity[]`: the ground a settlement works.
+
+```ts
+interface GroundPlotEntity {
+  id: string; // "plot-1", "plot-2", ... unique within the map
+  type: 'ground-plot';
+  kind: 'field' | 'orchard';
+  position: Vec2; // the centre of the rectangle
+  rotation: number; // radians. The long axis, and the direction of a field's furrows
+  width: number; // across rotation, 44 to 96
+  depth: number; // along rotation, 32 to 64
+  geometry: PolygonGeometry; // the rectangle, published so a consumer need not rebuild it
+  asset: { category: 'ground.field' | 'ground.orchard'; variant: string };
+  metadata: { settlementId: string; treeIds: string[] };
+}
+```
+
+`rotation` points back at the settlement that works the plot, so one place's plots read as a holding
+rather than as unrelated rectangles. A consumer runs its furrows along it.
+
+`geometry` is the rectangle `rotation` and the two sizes describe, and validation checks the two agree
+rather than trusting either. This is the one place in the format where a redundant field is kept: the
+four numbers are for a consumer doing arithmetic and the polygon is for a consumer drawing, and a
+consumer that only has the polygon still has the plot.
+
+`metadata.settlementId` must name a settlement on the same map. A plot with no settlement is not worked
+ground, and validation rejects one.
+
+`metadata.treeIds` is every row tree on the plot, and is empty on a field. Each id must name a tree in
+`vegetation` that is inside the rectangle, and validation rejects a plot that names a tree which is not
+there. An orchard's trees are ordinary trees: they have trunks, they are blockers, and the walkability
+raster closes around them. So an orchard is walkable between the rows and not through them, and a
+consumer that wants an orchard walkable throughout has to treat the trees as it would any other wood.
+
+A plot carries no `collision`, and validation rejects one that does. The rectangle is a surface, and the
+trees on it are the things in it. The forest hull and the dock deck make the same argument, and this is
+the fourth surface in the format to.
+
 ## Asset references
 
 `asset` is a `{ category, variant }` pair, and the generator uses a fixed vocabulary:
@@ -789,6 +834,7 @@ after a forest hull and a deck.
 | `roads`      | `road.<kind>`                | `<kind>-1`                                                |
 | `structures` | `structure.house` / `.farm`  | `<category>-1`, or `<category>-ruin` for a ruin           |
 | `docks`      | `structure.dock`             | `plank-1`                                                 |
+| `plots`      | `ground.field` / `.orchard`  | `tilled-1`, `planted-1`                                   |
 
 `asset.category` is `terrain.grass` for every terrain kind including rock and beach; the kind is
 carried by `variant`. Switch on the semantic `kind` field, not on the asset, when behaviour depends

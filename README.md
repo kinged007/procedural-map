@@ -123,6 +123,8 @@ Every knob, with the value used when it is left out:
 | `resources.mine`        | `0`                     | Upper bound on mine sites cut into rock faces. A face is only offered if the ground in front of it is open, and a map with no rock publishes none.                                                       |
 | `resources.fishing`     | `0`                     | Upper bound on fishing spots in the water. Only bodies of 20,000 square units or more are fished, so a map of ponds publishes none.                                                                      |
 | `resources.hunting`     | `0`                     | Upper bound on huntable woods. A grove needs 20 trees and open ground inside it, which a default map holds 16 to 23 times.                                                                               |
+| `plots.field`           | `0`                     | Upper bound on fields worked around the settlements. A plot is ground a place reaches, and nothing is ploughed until a game says what a field yields.                                                    |
+| `plots.orchard`         | `0`                     | Upper bound on orchards. An orchard is a field with rows of real trees standing in it, and those trees block, so an orchard is walkable between the rows and not through them.                           |
 
 Values outside a knob's range are rejected at the boundary rather than clamped silently.
 
@@ -181,6 +183,15 @@ rock and `rotation` points the entrance out of it, a `fishing` spot is in the wa
 `access: 'land' | 'water'` alongside the measured `distanceToShore`, and a `hunting` site names a grove
 that was measured to be enterable. None of them blocks anything, so a site is a mark on the ground and
 not a thing in it.
+
+`map.plots` holds the ground the settlements work, and they are `0` by default. A `field` is a
+rectangle with a heading pointing back at its settlement, sized between 44×32 and 96×64 units, and
+`rotation` is the direction to run furrows in. An `orchard` is the same rectangle with the rows already
+standing in it — real trees in `map.vegetation`, with trunks that block, named in `metadata.treeIds` — so
+an orchard is walkable between the rows and not through them. Neither kind blocks. The counts are
+ceilings rather than promises: plots need ground the settlements actually reach, so a caller asking for
+twelve fields and eight orchards on a default map gets about ten and five, and an orchard the river has
+eaten through is published as a field rather than dropped.
 
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 

@@ -221,6 +221,21 @@
                   <span>No woods</span><span>Groves big enough to hold game</span>
                 </div>
               </div>
+              <div class="range-field">
+                <label for="field">Fields<output id="field-value" for="field">0</output></label
+                ><input id="field" type="range" min="0" max="16" value="0" />
+                <div class="range-hints">
+                  <span>No fields</span><span>Worked ground around a place</span>
+                </div>
+              </div>
+              <div class="range-field">
+                <label for="orchard"
+                  >Orchards<output id="orchard-value" for="orchard">0</output></label
+                ><input id="orchard" type="range" min="0" max="16" value="0" />
+                <div class="range-hints">
+                  <span>No orchards</span><span>Planted rows in a field</span>
+                </div>
+              </div>
               <label class="field-label" for="setback">Building setback from road (units)</label
               ><input
                 class="number-input"
@@ -356,6 +371,10 @@
             <div class="stat">
               <span class="stat-label">RESOURCE SITES</span><strong id="resource-count">—</strong
               ><span class="stat-detail" id="resource-detail">mines · fishing · hunting</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">WORKED GROUND</span><strong id="plot-count">—</strong
+              ><span class="stat-detail" id="plot-detail">fields · orchards</span>
             </div>
             <div class="stat">
               <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong

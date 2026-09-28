@@ -47,9 +47,20 @@ const ranges = [
   'mine',
   'fishing',
   'hunting',
+  'field',
+  'orchard',
 ] as const;
 // The ranges that are a count in world units rather than a percentage, so they read as a number.
-const unitRanges = new Set(['spacing', 'settlements', 'docks', 'mine', 'fishing', 'hunting']);
+const unitRanges = new Set([
+  'spacing',
+  'settlements',
+  'docks',
+  'mine',
+  'fishing',
+  'hunting',
+  'field',
+  'orchard',
+]);
 const numberFormat = new Intl.NumberFormat('en');
 const descriptions: Record<MapView, string> = {
   styled: 'Grassland, open water & clustered woodland',
@@ -184,6 +195,10 @@ function configFromControls(): GenerationConfig {
       fishing: element<HTMLInputElement>('fishing').valueAsNumber,
       hunting: element<HTMLInputElement>('hunting').valueAsNumber,
     },
+    plots: {
+      field: element<HTMLInputElement>('field').valueAsNumber,
+      orchard: element<HTMLInputElement>('orchard').valueAsNumber,
+    },
   };
 }
 
@@ -212,6 +227,8 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('mine').value = String(config.resources.mine);
   element<HTMLInputElement>('fishing').value = String(config.resources.fishing);
   element<HTMLInputElement>('hunting').value = String(config.resources.hunting);
+  element<HTMLInputElement>('field').value = String(config.plots.field);
+  element<HTMLInputElement>('orchard').value = String(config.plots.orchard);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);
   element<HTMLInputElement>('origin-x').value = String(config.origin.x);
@@ -290,6 +307,21 @@ function showMap(nextMap: GameMap, source: string, elapsed?: number) {
     : map.settlements.length
       ? 'no place stands on a shore'
       : 'no places to have a waterfront';
+  // The worked-ground detail reports the rows as well as the count, because the number of trees an
+  // orchard got is set by how much of its ground the river and the cliff left it, and a caller tuning
+  // `plots.orchard` cannot predict that from the count alone.
+  const plots = { field: 0, orchard: 0 };
+  let rows = 0;
+  for (const plot of map.plots) {
+    plots[plot.kind] += 1;
+    rows += plot.metadata.treeIds.length;
+  }
+  element('plot-count').textContent = numberFormat.format(map.plots.length);
+  element('plot-detail').textContent = map.plots.length
+    ? `${plots.field} fields · ${plots.orchard} orchards${plots.orchard ? ` (${rows} trees)` : ''}`
+    : map.settlements.length
+      ? 'no worked ground around the places'
+      : 'no places to have worked ground';
   const coverage =
     (map.water.reduce((total, lake) => total + polygonArea(lake.geometry), 0) / (width * height)) *
     100;

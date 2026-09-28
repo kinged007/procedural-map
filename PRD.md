@@ -1582,16 +1582,67 @@ Delivered so far:
 - **Sites carry no collision**, the third surface in this format with none of it, after a forest hull
   and a deck. A site is a mark on the ground, not a thing standing in it.
 
+- **Fields and orchards are delivered, as a new `plots` collection.** The one plot decision v0.5
+  deferred is now taken, and taken at the right level: not a parcel around a building but a piece of
+  ground a place works. The building format did not have to change for it to arrive, which is what the
+  v0.5 note predicted.
+- **A plot is a rectangle with a heading back to its settlement.** `rotation` is the long axis and
+  points at the place that works it, so one settlement's plots read as a holding rather than as
+  unrelated rectangles, and it is the direction a consumer runs its furrows in. `geometry` is published
+  alongside the four numbers, and validation checks the two agree rather than trusting either: the
+  numbers are for arithmetic and the polygon is for drawing, and a consumer holding only the polygon
+  still has the plot. That redundancy is deliberate and is the only one in the format.
+- **A field is a keep-out decided before the trees.** The plot sites are chosen at the same point the
+  settlement clearings are, so a field reaches the tree placer and the building placer as a keep-out
+  rather than as a hole punched into a finished map. Only fields are kept clear; an orchard's rectangle
+  is already full of the trees it asked for, and refusing more inside it would leave bare gaps down
+  every row.
+- **An orchard's rows are real trees.** They are published in `vegetation` with trunks that block, and
+  the grove builder groups them like any other, so the walkability raster closes around them with no
+  carve and a consumer never has to add collision of its own — the one job the generator owns. This is
+  the reason an orchard is worth building rather than publishing as a rectangle and a count. Measured
+  over five maps, 575 of 578 orchard trees block their own raster cell; the three that do not are
+  single-tree components, which block nothing on any map because `chunkTile` marks trunks from
+  `forests` and a component of one is not a grove.
+- **The row spacing is what makes an orchard legible, and it was measured by looking.** 11 across and 14
+  along, with two and a half units of jitter. The jitter breaks a perfectly regular grid, which is the tell
+  of a procedural orchard and moires against the field grid underneath. The spacing is the correction: at
+  the first attempt the trees were 9 apart with a canopy radius of 6, and the whole grid rendered as one
+  dark clump indistinguishable from the woodland around it. A canopy that touches its neighbour's is a
+  hedge and not a row.
+- **Plots are limited by the ground a place can reach, which is why the counts are ceilings.** They are
+  offered on a ring from 46 to 255 units of a settlement centre: the inner bound clears the settlement's
+  own 28-unit green and the outer bound stops just inside its 260-unit radius, so a plot belongs to the
+  place rather than the next one. Two plots cannot be closer than the sum of their half-diagonals, so
+  twenty plots need roughly three quarters of that ring packed; widening it past the settlement's own
+  reach was tried and bought a further twelve percent, which is not worth a field belonging to somewhere
+  else. Asking for twelve fields and eight orchards on a default map publishes about ten and five.
+- **Plot sizes were halved once, for the same reason.** A plot excludes a circle of its own
+  half-diagonal, so at 64 to 128 by 44 to 88 twenty of them needed more ground than a settlement has and
+  the count was routinely half honoured. At 44 to 96 by 32 to 64 a field is a median 3,200 square units,
+  about 57 by 57, which reads at fit zoom and is a few seconds' walk from the settlement's edge.
+- **An orchard the river has eaten through becomes a field rather than disappearing.** An orchard whose
+  grid is reduced below five surviving trees is not an orchard any more, and a caller who asked for
+  eight orchards would rather have five orchards and three fields than five orchards and nothing.
+- **Plots carry no collision.** A field is ground a character walks across, and an orchard's blockers
+  are its trees, not its rectangle. The forest hull and the dock deck make the same argument; this is the
+  fourth surface in the format to.
+
 - **The sites are placed after the map is built.** A mine's approach and a wood's enterability are both
   questions about finished ground, and `walkableInside` in particular is measured on the raster once
   every other collection exists. Asked earlier, every grove would look unenterable and no hunting at
   all would be published.
 
-Still open on this milestone: fields, orchards and trails. Farms, clearings and isolated buildings are
-already delivered — a farm is a building category since v0.5, a clearing is a settlement's own since
-v0.5, and an isolated building is what a dead settlement is. Fences are held back deliberately rather
-than left out: a fence has to decide whether it blocks, which is a navigation call and not a placement
-one, and it is the one question here that has an answer waiting on a decision rather than a measurement.
+Trails are delivered already: `RoadEntity.kind` has been `'path'` since v0.4, and a path is a narrow
+track between places, which is what a trail is. Building a second collection for them would duplicate a
+road with a different width and buy nothing.
+
+Fences are held back deliberately rather than left out: a fence has to decide whether it blocks, which
+is a navigation call and not a placement one, and it is the one item on this milestone whose answer is
+waiting on a decision rather than a measurement. Farms, clearings and isolated buildings are delivered —
+a farm is a building category since v0.5, a clearing is a settlement's own since v0.5, and an isolated
+building is what a dead settlement is. Vegetation transitions are the terrain overlay's own boundaries
+since v0.3, published as the meeting of two `terrain` regions.
 
 ---
 

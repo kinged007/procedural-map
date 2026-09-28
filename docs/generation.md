@@ -422,6 +422,73 @@ asked for rather than a different set because a number moved, and neither draws 
 stream, so nothing else on the map moves. The cost is a flat array walk and nothing more at the default
 of zero; at 64 of each on a 2048 by 1536 map it is about 7% of generation time.
 
+## Plots
+
+A plot is a piece of ground a settlement works, published in a `plots` collection as a `field` or an
+`orchard`. Both are `0` by default, and for the same reason the resource sites are: a field is a square
+of dirt until a game says what grows in it, and a default map that ploughed one would be claiming a
+harvest it has no way to justify.
+
+A field is a rectangle with a heading, a width across and a depth along. The heading points back at the
+settlement it belongs to, so one place's plots read as a single holding rather than as four unrelated
+rectangles, and it is what a consumer runs its furrows along. An orchard is the same rectangle with the
+trees already standing in it, named in `metadata.treeIds`. The geometry is published rather than left to
+be reconstructed from the four numbers, and a test checks the two agree.
+
+Neither carries collision. A field is ground a character walks across, and the validator refuses a plot
+that does, for the same reason a dock, a forest hull and a resource site carry none.
+
+### Where they go, and what limits them
+
+Plots are offered on a ring from 46 to 255 units of a settlement centre: the inner bound clears the
+settlement's own 28-unit green, and the outer bound stops just inside its 260-unit radius, so a plot is
+ground the place reaches rather than the next place's. The ring is sampled in area, so a plot is as
+likely to land far out as near. Plots are offered to the places round-robin, so one large settlement
+does not take every plot on the map.
+
+That ring is the limit on how many plots a map can hold, and it was set by measurement. Two plots cannot
+be closer than the sum of their half-diagonals, so at these sizes twenty plots need roughly three
+quarters of the ring packed. Widening the ring past the settlement's own reach was tried first and bought
+a further twelve percent, which is not worth a field that belongs to somewhere else. The counts are
+ceilings, and a default map asked for twelve fields and eight orchards publishes about ten and five.
+
+Plot sizes were halved once for the same reason. A plot excludes a circle of its own half-diagonal, so at
+64 to 128 by 44 to 88 twenty of them needed more ground than a settlement has and the count was routinely
+half honoured. At 44 to 96 by 32 to 64 a field is a median 3,200 square units — about 57 by 57, which
+reads at fit zoom and is a walk of a few seconds from the settlement's edge.
+
+### A field is a keep-out, and that is decided before the trees
+
+The plot sites are chosen before anything is planted, for the same reason the settlement clearings are: a
+field is ground that stays open, so it has to reach the tree placer and the building placer as a keep-out
+rather than as a hole punched into a finished map. Only a field is kept clear. An orchard's rectangle is
+already full of the trees it asked for, and refusing more inside it would leave bare gaps down every row.
+
+### An orchard's rows are real trees
+
+A tree is a tree: an orchard's rows are published in `vegetation`, each with a trunk that blocks, and the
+grove builder groups them like any other. An orchard published as a rectangle and a count would leave the
+consumer adding its own collision, which is the one thing the generator owns. Measured over five maps,
+575 of 578 orchard trees block their own raster cell — the three that do not are single-tree components,
+which block nothing on any map, because `chunkTile` marks trunks from `forests` and a component of one is
+not a grove.
+
+The rows are 11 apart across and 14 along, with two and a half units of jitter. The jitter is what breaks
+a perfectly regular grid, which is the tell of a procedural orchard and moires against the field grid
+underneath. The spacing is what makes the rows legible: at the first attempt the trees were 9 apart with a
+canopy radius of 6 and the whole grid drew as one dark clump indistinguishable from woodland. A canopy that
+touches its neighbour's is a hedge and not a row.
+
+An orchard's trees usually end up inside a neighbouring wood's grove rather than one of their own, because
+the ring around a settlement is where the woods are and the grove builder links trees 26 units apart. A
+grove is named `orchard` only where every tree in it is a planted row, which is the honest answer: a wood
+with planting in it is a wood. The orchard's own trees are always reachable through `treeIds`, which is
+the authoritative link.
+
+An orchard whose grid has been eaten by the river or the cliff is published as a field instead of dropped.
+It is not an orchard any more, and a caller who asked for eight orchards would rather have five orchards
+and three fields than five orchards and nothing.
+
 ## Tiles
 
 The four fields are sampled at `origin + local`, so a tile is a window onto one landscape rather than

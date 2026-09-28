@@ -99,6 +99,18 @@ export interface GenerationConfig {
    * to it. Ask for sites, get ground worth building on, and decide what a site is worth yourself.
    */
   resources?: { mine?: number; fishing?: number; hunting?: number };
+  /**
+   * Worked ground around a settlement: bare fields, and orchards of planted rows.
+   *
+   * Two counts rather than one because the two are not interchangeable and a caller asking for eight
+   * plots may want all eight bare or half of each. A field is ground kept open, and an orchard is
+   * ground filled on purpose, so a single count would have to be tuned against whichever the caller
+   * happened to want more of.
+   *
+   * `0` across the board is the default. A field is a square of dirt until a game decides what grows
+   * in it, and a default map that ploughed one would be claiming a crop it knows nothing about.
+   */
+  plots?: { field?: number; orchard?: number };
 }
 
 export interface ResolvedGenerationConfig {
@@ -122,6 +134,7 @@ export interface ResolvedGenerationConfig {
   settlements: { count: number };
   docks: { count: number };
   resources: { mine: number; fishing: number; hunting: number };
+  plots: { field: number; orchard: number };
 }
 
 export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
@@ -145,4 +158,5 @@ export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
   settlements: { count: 2 },
   docks: { count: 0 },
   resources: { mine: 0, fishing: 0, hunting: 0 },
+  plots: { field: 0, orchard: 0 },
 };

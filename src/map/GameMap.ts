@@ -80,7 +80,12 @@ export type ForestTree = VegetationEntity;
 
 export interface ForestEntity extends MapEntity {
   type: 'forest';
-  species: 'mixed' | 'oak' | 'birch';
+  /**
+   * The species of the stand, or `orchard` where every tree in it is a planted row rather than a
+   * wood. It is a fact about what is standing there, so an orchard is named one: a consumer asked to
+   * draw canopies from this and handed `oak` for an apple row has been told something false.
+   */
+  species: 'mixed' | 'oak' | 'birch' | 'orchard';
   /**
    * Convex hull of the grove, for a broadphase bounds test, rendering and a minimap. It is not a
    * collision shape: a grove's clearings have to stay walkable, so `collision` is deliberately absent
@@ -311,6 +316,51 @@ export interface SettlementEntity extends MapEntity {
   };
 }
 
+/** What a plot of ground is worked as. The two differ only in what stands on it. */
+export type PlotKind = 'field' | 'orchard';
+
+/**
+ * A piece of ground a settlement works: a field, or an orchard of planted rows.
+ *
+ * A field is kept clear of trees and a building is not built on it, and it is published as a
+ * rectangle with a heading so the consumer can run furrows along it rather than guessing which way
+ * is up. An orchard is the same rectangle with the trees already standing in it, and it names them
+ * in `metadata.treeIds` rather than leaving the consumer to match positions.
+ *
+ * It carries no `collision`. A field is ground a character walks across, and the validator refuses
+ * one that does, for the same reason a dock, a forest hull and a resource site carry none: a plot is
+ * a mark on the ground, not an obstacle. The orchard trees are the exception and they are in
+ * `vegetation` like any other tree, so their trunks do block.
+ */
+export interface GroundPlotEntity extends MapEntity {
+  type: 'ground-plot';
+  kind: PlotKind;
+  /** The middle of the plot. Inside `geometry`, and the same point the heading is measured from. */
+  position: Point;
+  /**
+   * Radians, the heading of the long axis. An orchard's rows run across it and a field's furrows run
+   * along it, and it points back at the settlement the plot belongs to, so one place's plots read as
+   * one holding. Required: a rectangle with no heading is a rectangle.
+   */
+  rotation: number;
+  /** Across the rows, in world units. */
+  width: number;
+  /** Along the rows, in world units. */
+  depth: number;
+  /** The worked ground itself, published so a consumer never reconstructs it from the four numbers. */
+  geometry: PolygonGeometry;
+  asset: AssetReference;
+  metadata: {
+    /** The settlement the plot belongs to. */
+    settlementId: string;
+    /**
+     * The trees of an orchard, each of which is also published in `vegetation` and blocks walking
+     * through its trunk. Empty on a field, which is worked ground and stands nothing.
+     */
+    treeIds: string[];
+  };
+}
+
 export interface GameMap {
   version: '1.4';
   metadata: {
@@ -328,6 +378,7 @@ export interface GameMap {
   settlements: SettlementEntity[];
   docks: DockEntity[];
   resourceSites: ResourceSiteEntity[];
+  plots: GroundPlotEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };

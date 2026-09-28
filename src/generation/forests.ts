@@ -68,8 +68,19 @@ function convexHull(points: Point[]): Point[] {
   return lower.concat(upper);
 }
 
-/** Area-weighted species of a grove, which is what the renderer needs to pick a canopy variant. */
+/**
+ * Area-weighted species of a grove, which is what the renderer needs to pick a canopy variant.
+ *
+ * An orchard grove is named `orchard` rather than counted as woodland. It is a fact about what is
+ * standing there, not a style: a consumer asked to draw canopies from this and handed `birch` for a
+ * planted row of apples has been told something false, and the only way to tell the difference is
+ * the trees' own species, which means every consumer has to re-derive what this already knows.
+ */
 function groveSpecies(trees: VegetationEntity[]): ForestEntity['species'] {
+  const planted = trees.filter((tree) => tree.species === 'orchard').length;
+  if (planted === trees.length) return 'orchard';
+  // A wild tree inside a row means the row is a wood with planting in it, which is a wood.
+  if (planted > 0) return 'mixed';
   let oaks = 0;
   for (const tree of trees) if (tree.species === 'oak') oaks += 1;
   if (oaks === 0) return 'birch';

@@ -37,6 +37,7 @@ const makeMap = () => ({
   settlements: [],
   docks: [],
   resourceSites: [],
+  plots: [],
   roads: [],
   barriers: [],
   metadataLayers: {

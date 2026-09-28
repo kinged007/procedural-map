@@ -39,4 +39,10 @@ export interface MapTheme {
    * as `docks`.
    */
   resources?: { mine: string; fishing: string; hunting: string };
+  /**
+   * Worked-ground colours. A field is a surface a character walks over, so it is a fill and a furrow
+   * line rather than an object; an orchard needs no colour of its own, because its rows are trees and
+   * the trees are already drawn. Optional, for the same reason as `docks`.
+   */
+  plots?: { field: string; furrow: string };
 }
