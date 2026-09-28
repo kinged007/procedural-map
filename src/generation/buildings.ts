@@ -18,20 +18,21 @@ import { distance, roadRibbon } from './ribbon.js';
  * A `farm` is the reason `setback` is per category rather than one number for the map: a farmyard is
  * both bigger and set further back than the house beside it, and it is that difference, not its name,
  * that earns the category. `setback: 0` means "use the configured setback".
+ *
+ * How often a category is drawn is not here: the weights are the caller's, in
+ * `buildings.categories`, because which buildings a map has is the caller's decision and this table
+ * only says what a category is once it has been chosen.
  */
-const CATEGORIES: Record<
+export const CATEGORIES: Record<
   BuildingCategory,
-  { width: number; depth: number; setback: number; weight: number }
+  { width: number; depth: number; setback: number }
 > = {
-  house: { width: 15, depth: 11, setback: 0, weight: 8 },
-  farm: { width: 28, depth: 20, setback: 48, weight: 1 },
+  house: { width: 15, depth: 11, setback: 0 },
+  farm: { width: 28, depth: 20, setback: 48 },
 };
 
 /** How close a footprint may come to the map edge, in world units. */
 const EDGE_MARGIN = 6;
-
-/** Total weight of every category, for the weighted draw. */
-const TOTAL_WEIGHT = Object.values(CATEGORIES).reduce((sum, entry) => sum + entry.weight, 0);
 
 /**
  * Places buildings along the road network, each standing back from its centreline and facing it.
@@ -58,8 +59,16 @@ export function generateBuildings(
   /** Settlement clearings, kept clear so a place has open ground at its middle. */
   clearings: PolygonGeometry[],
   random: () => number,
-  /** A stream of its own for the ruin draw, so setting the share moves no building's placement. */
+  /**
+   * A stream of its own for the ruin draw, so setting the share moves no building's placement.
+   */
   ruinRandom: () => number,
+  /**
+   * A stream of its own for the category draw, so reweighting the mix moves no building's site
+   * either. A farm covers more ground than a house, so changing the mix legitimately refuses
+   * neighbours and changes the count; it should not shuffle which sites were offered at all.
+   */
+  categoryRandom: () => number,
 ): BuildingEntity[] {
   const { density, spacing, setback, ruin } = config.buildings;
   if (density <= 0 || roads.length === 0) return [];
@@ -82,11 +91,17 @@ export function generateBuildings(
     ...clearings,
   ];
   const buildings: BuildingEntity[] = [];
+  // The weighted draw is set up once, from the caller's weights, rather than per station. A category
+  // with a weight of zero is never drawn, which is how a caller asks for a map of houses.
+  const weighted = (Object.keys(CATEGORIES) as BuildingCategory[])
+    .map((category) => ({ category, weight: config.buildings.categories[category] }))
+    .filter((entry) => entry.weight > 0);
+  const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
 
   for (const road of roads) {
     for (const station of stations(road.path, spacing)) {
       if (random() > density) continue;
-      const category = drawCategory(random());
+      const category = drawCategory(categoryRandom(), weighted, totalWeight);
       const spec = CATEGORIES[category];
       const front = spec.setback > 0 ? spec.setback : setback;
       const { dx, dy } = heading(road.path, station.index);
@@ -161,17 +176,23 @@ function heading(path: Point[], index: number): { dx: number; dy: number } {
   return { dx: (b.x - a.x) / length, dy: (b.y - a.y) / length };
 }
 
-/** Weighted draw over the categories. */
-function drawCategory(roll: number): BuildingCategory {
-  let threshold = roll * TOTAL_WEIGHT;
-  for (const [category, spec] of Object.entries(CATEGORIES) as [
-    BuildingCategory,
-    (typeof CATEGORIES)[BuildingCategory],
-  ][]) {
-    threshold -= spec.weight;
-    if (threshold < 0) return category;
+/**
+ * The weighted draw over the categories, from the caller's weights.
+ *
+ * The weights are relative, so `{ house: 3, farm: 1 }` and `{ house: 30, farm: 10 }` are the same
+ * map, and a category left at zero is simply never drawn.
+ */
+function drawCategory(
+  roll: number,
+  weighted: { category: BuildingCategory; weight: number }[],
+  totalWeight: number,
+): BuildingCategory {
+  let threshold = roll * totalWeight;
+  for (const entry of weighted) {
+    threshold -= entry.weight;
+    if (threshold < 0) return entry.category;
   }
-  return 'house';
+  return weighted[0].category;
 }
 
 /**

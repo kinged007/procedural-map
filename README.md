@@ -98,26 +98,27 @@ own size, and a single-tile map is unchanged.
 
 Every knob, with the value used when it is left out:
 
-| Option                  | Default          | What it changes                                                                                                                                                                                          |
-| ----------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `seed`                  | `583921`         | The whole map. The same seed and the same config always produce the same map.                                                                                                                            |
-| `width`, `height`       | `2048`, `1536`   | Tile size, up to 4096 by 4096.                                                                                                                                                                           |
-| `origin`                | `{ x: 0, y: 0 }` | Where this tile sits in its world.                                                                                                                                                                       |
-| `world`                 | tile size        | The world's size. Defaults to the tile, which is a world of one.                                                                                                                                         |
-| `terrain.variation`     | `0.35`           | How strongly the terrain field swings between its highs and lows, which is what decides where the meadow, scrub, and rock boundaries fall. It does not change how much water there is.                   |
-| `terrain.scale`         | `0.004`          | How large the patches of meadow, scrub, and forest are. Smaller is broader country, and far fewer trees. It does not move the coastline or the rock.                                                     |
-| `water.amount`          | `0.2`            | How much of the map is below the waterline. `1` is all water, `0` none.                                                                                                                                  |
-| `water.scale`           | `0.003`          | Despite the name, this is the scale of the **elevation** field, so it sets the size of the landforms and, with them, the size of the lakes and the extent of the rock. Larger is more, smaller features. |
-| `vegetation.density`    | `0.65`           | How many trees. `0` is bare ground.                                                                                                                                                                      |
-| `vegetation.clustering` | `0.8`            | How much the trees clump into groves rather than spreading evenly.                                                                                                                                       |
-| `roads.density`         | `0.5`            | How many roads, and how far a tier reaches.                                                                                                                                                              |
-| `rivers.density`        | `1`              | How many rivers. `0` publishes none at all, for a map whose water is only standing.                                                                                                                      |
-| `rivers.width`          | `12`             | Channel width in world units, which also sets the span recorded at a road crossing.                                                                                                                      |
-| `buildings.density`     | `0.5`            | The chance a site offered by a road is built on. `0` publishes no buildings.                                                                                                                             |
-| `buildings.spacing`     | `34`             | Smallest gap between two buildings, centre to centre, measured across the whole map.                                                                                                                     |
-| `buildings.setback`     | `16`             | How far a building's front wall stands off the road centreline. A farm sets its own.                                                                                                                     |
-| `buildings.ruin`        | `0`              | Share of buildings that have fallen down, `0` to `1`. A ruin keeps its footprint and stops being a wall. `0` is no opinion on how a building looks.                                                      |
-| `settlements.count`     | `2`              | How many settlements the map has. A map with no roads publishes none, whatever this is set to.                                                                                                           |
+| Option                  | Default                 | What it changes                                                                                                                                                                                          |
+| ----------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seed`                  | `583921`                | The whole map. The same seed and the same config always produce the same map.                                                                                                                            |
+| `width`, `height`       | `2048`, `1536`          | Tile size, up to 4096 by 4096.                                                                                                                                                                           |
+| `origin`                | `{ x: 0, y: 0 }`        | Where this tile sits in its world.                                                                                                                                                                       |
+| `world`                 | tile size               | The world's size. Defaults to the tile, which is a world of one.                                                                                                                                         |
+| `terrain.variation`     | `0.35`                  | How strongly the terrain field swings between its highs and lows, which is what decides where the meadow, scrub, and rock boundaries fall. It does not change how much water there is.                   |
+| `terrain.scale`         | `0.004`                 | How large the patches of meadow, scrub, and forest are. Smaller is broader country, and far fewer trees. It does not move the coastline or the rock.                                                     |
+| `water.amount`          | `0.2`                   | How much of the map is below the waterline. `1` is all water, `0` none.                                                                                                                                  |
+| `water.scale`           | `0.003`                 | Despite the name, this is the scale of the **elevation** field, so it sets the size of the landforms and, with them, the size of the lakes and the extent of the rock. Larger is more, smaller features. |
+| `vegetation.density`    | `0.65`                  | How many trees. `0` is bare ground.                                                                                                                                                                      |
+| `vegetation.clustering` | `0.8`                   | How much the trees clump into groves rather than spreading evenly.                                                                                                                                       |
+| `roads.density`         | `0.5`                   | How many roads, and how far a tier reaches.                                                                                                                                                              |
+| `rivers.density`        | `1`                     | How many rivers. `0` publishes none at all, for a map whose water is only standing.                                                                                                                      |
+| `rivers.width`          | `12`                    | Channel width in world units, which also sets the span recorded at a road crossing.                                                                                                                      |
+| `buildings.density`     | `0.5`                   | The chance a site offered by a road is built on. `0` publishes no buildings.                                                                                                                             |
+| `buildings.spacing`     | `34`                    | Smallest gap between two buildings, centre to centre, measured across the whole map.                                                                                                                     |
+| `buildings.setback`     | `16`                    | How far a building's front wall stands off the road centreline. A farm sets its own.                                                                                                                     |
+| `buildings.ruin`        | `0`                     | Share of buildings that have fallen down, `0` to `1`. A ruin keeps its footprint and stops being a wall. `0` is no opinion on how a building looks.                                                      |
+| `buildings.categories`  | `{ house: 8, farm: 1 }` | Relative weights over what a road gets built on. A weight of `0` is never placed, and a name the generator cannot place is rejected.                                                                     |
+| `settlements.count`     | `2`                     | How many settlements the map has. A map with no roads publishes none, whatever this is set to.                                                                                                           |
 
 Values outside a knob's range are rejected at the boundary rather than clamped silently.
 
@@ -148,8 +149,8 @@ from a road with its front wall facing it, publishing its footprint, a matching 
 belongs to. A standing building is a solid thing, so it blocks the walkability raster like the water
 and the rock do; a ruin carries no collision, so a character walks over the rubble. What a building
 looks like is the game's decision, so `state` is there to be ignored as much as read. `buildings.density`,
-`buildings.spacing`, `buildings.setback`, and `buildings.ruin` place them; the details and the fields
-are in [Consuming generated maps](docs/consuming-maps.md#4-buildings).
+`buildings.spacing`, `buildings.setback`, `buildings.ruin`, and `buildings.categories` place them; the
+details and the fields are in [Consuming generated maps](docs/consuming-maps.md#4-buildings).
 
 `map.settlements` holds the places: each one a centre standing on a road, a radius saying how far it
 reaches, a `clearing` of open ground at its middle where nothing is planted or built, the ids of the

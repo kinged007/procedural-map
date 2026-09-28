@@ -27,13 +27,14 @@ test('a tile with no origin and no world is the map it always was', () => {
   // course was cut at a water body's shore, again when centreline curve-fitting changed the
   // channels, again when a course was rejoined into one reach running to the water, and again when
   // settlements were published as a 1.4 collection, again when a settlement gained the `kind` read
-  // off its membership, again when a settlement opened a `clearing`, and again when a building
-  // gained the `state` that says whether it stands or has fallen down; this still guards against
-  // `origin`/`world` leaking into the terrain.
+  // off its membership, again when a settlement opened a `clearing`, again when a building gained
+  // the `state` that says whether it stands or has fallen down, and again when the category weights
+  // moved out of the code into the resolved config; this still guards against `origin`/`world`
+  // leaking into the terrain.
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    '4bb6a507accf673da20b9994a5debb8cf54b2ea026f856627aaef9bed90604d2',
+    'b3712b83e3011cfd0ac94d3a88d1f708ac31003702a7fe56015aac45604846c2',
   );
 });
 

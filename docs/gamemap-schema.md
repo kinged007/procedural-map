@@ -38,7 +38,7 @@ find out what kind of world it has just been handed.
 | ----------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `structures` holds buildings        | was always `[]`                  | Iterate it. Every entry is a building, so `category` and `rotation` are always present.                                                                                                                                      |
 | `structures` item shape is fixed    | narrower than the generic entity | `type` is `building`, and `category`, `state`, `width`, `depth`, `geometry`, `collision`, `asset` and `metadata` are required, except that `collision` is required of a `standing` building and forbidden on a `ruined` one. |
-| Generation config gains `buildings` | new optional config              | `buildings: { density, spacing, setback, ruin }`. Unset is `density: 0.5, spacing: 34, setback: 16, ruin: 0`.                                                                                                                |
+| Generation config gains `buildings` | new optional config              | `buildings: { density, spacing, setback, ruin, categories }`. Unset is `density: 0.5, spacing: 34, setback: 16, ruin: 0, categories: { house: 8, farm: 1 }`.                                                                 |
 
 A 1.2 map still validates as 1.2, and a 1.3 map does not validate as 1.2: the validator accepts
 `"1.3"` only, and `structures` is checked for the building shape rather than as a generic entity. A

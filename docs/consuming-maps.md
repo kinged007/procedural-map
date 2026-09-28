@@ -216,6 +216,28 @@ is a solid rectangle, so it is a footprint to fit an asset into and a wall to wa
 - `metadata.roadId` is the road it was placed against, and `metadata.setback` is how far its front wall
   stands from that road's centreline.
 
+**Which buildings a map has is your call.** `buildings.categories` is a set of relative weights over the
+categories, so a village of houses is `{ house: 1, farm: 0 }` and a farming valley is `{ house: 2,
+farm: 1 }`:
+
+```js
+generateMap({
+  seed: 583921,
+  width: 2048,
+  height: 1536,
+  buildings: { categories: { house: 1, farm: 0 } },
+});
+```
+
+They are relative, so they need not add to anything, and a category you leave out keeps its default
+weight rather than disappearing. A name the generator has no footprint for is rejected rather than
+ignored, so a misspelt category fails loudly instead of quietly doing nothing.
+
+One thing to expect: a weight is how often a category is **drawn**, not what share of the map it ends
+up as. A farm is four times the ground of a house and stands further back, so it refuses more sites
+than a house does and fewer of them survive. At the default one site in nine is drawn as a farm and
+about 6% of the buildings are one.
+
 **A standing building blocks the walkability raster.** It is in the same list as the water and the
 rock, so a character cannot walk through a wall without you making those cells walkable. If you want
 doorways, you find them yourself: nothing in the format says where a door is, and `metadata` has no room

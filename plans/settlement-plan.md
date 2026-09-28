@@ -18,7 +18,7 @@ Ordered by what unblocks the most, not by what is most fun to build.
 | S2 settlement boundaries                | not needed | a radius and a membership list already answer it, and a polygon would contradict the no-collision decision |
 | S3 central square                       | done       | `clearing`, a keep-out the tree and building placers honour, decided before both                           |
 | S4 settlement kind from density         | done       | `kind` is read off the membership, and there is no knob for it                                             |
-| S5 which categories a settlement places |            | two settlements of different kind draw different categories                                                |
+| S5 which categories a settlement places | done       | `buildings.categories`, relative weights the caller supplies; no category weight per kind                  |
 | S6 shoreline settlement and a pier      | building   | a pier stands in water, is attached to a settlement, and a building never does                             |
 | S7 ruins, from the PRD settlement note  | done       | `state` on a building, no collision on a ruin, and `kind` counts only what stands                          |
 | S8 a settlement as a player base        | done       | `spawnCandidates({ preferSettlements: true })` offers every settlement, on open ground                     |
@@ -198,15 +198,13 @@ catalogue the caller could extend; that is a different field and it is not this 
 
 ## Still open
 
-- **S5 is reframed.** The item as written — a category weight per settlement kind — is circular, and not
-  politely: `kind` is read off the membership, and the membership is built from the buildings, so a
-  building cannot choose its category from a kind that does not exist yet. It needs a two-pass placer or
-  a `kind` that is an input rather than derived, and the second is the contradiction S4 exists to avoid.
-  What the PRD actually asks for is narrower and not circular: "which building categories a map places",
-  carried over from v0.4 as choosing categories rather than drawing from a fixed weighted set. That is
-  the caller supplying the weights, which answers the PRD item, has no cycle, and is also what makes a
-  hamlet and a town look different without either one being told what it is. The set of categories stays
-  as content, so the weights only rebalance what already exists until someone wants more of them.
+- **S5 is done, as a reframing.** The item as written — a category weight per settlement kind — is
+  circular, and not politely: `kind` is read off the membership, and the membership is built from the
+  buildings, so a building cannot choose its category from a kind that does not exist yet. It needed a
+  two-pass placer or a `kind` that is an input rather than derived, and the second is the contradiction
+  S4 exists to avoid. The PRD asks the smaller question, "which building categories a map places", and
+  the caller supplying the weights answers it with no cycle. The section below says what it does,
+  including the part the measurements turned up: a weight is a draw rate and not a share.
 - **S6 is a new entity, not a building.** A pier stands in water, is walkable, and is attached to a
   settlement. A building does the opposite of all three: it stands on land, it is a wall, and it is
   placed against a road. Making a pier a building category would put an exception in the one
@@ -230,3 +228,23 @@ units of water at its closest point and 62 to 74% of all road points sit within 
 is therefore placed on a road point near a shore, reaches from the land across the water, and names the
 nearest settlement as the place it serves. Rivers already record `metadata.mouths`, which is a free
 jetty site on any map with a river reaching standing water, and a lake shore is the other.
+
+## S5 — which buildings a map has
+
+The weight is a **draw rate and not a share**, and that is the part worth writing down. A farm is four
+times the ground of a house and stands 48 back, so a farm drawn at a site is refused more often than a
+house is. The default draws one site in nine and the map comes out at 6.1% farms across twelve maps; at
+`{ house: 1, farm: 9 }` it comes out at 80.8%. Both numbers are measured rather than assumed, and read as
+a share of the finished map they would have looked broken.
+
+`buildings.categories` is relative weights, unset at `{ house: 8, farm: 1 }`. Three rules earn their
+place: a weight of zero is a category that is never placed, a category left out keeps the default weight
+so reweighting one does not silently drop the other, and a name the generator has no footprint for is
+rejected rather than ignored, because a weight that cannot be honoured is a setting that appears to do
+something and does not.
+
+The category draw gets a stream of its own, for the same reason the ruin and settlement draws do. A
+farm-heavy map is shorter than a house-only one because farms refuse neighbours, and that is a real
+consequence of the weight; it should not also reshuffle which sites were offered, which is what sharing
+the placement stream would have done. This is the one change in the settlement line that is not
+additive, and the pin moved with it. The default mix is unchanged at one site in nine.

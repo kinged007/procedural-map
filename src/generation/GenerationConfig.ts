@@ -1,3 +1,5 @@
+import type { BuildingCategory } from '../map/GameMap.js';
+
 export interface GenerationConfig {
   seed: number;
   width?: number;
@@ -42,7 +44,24 @@ export interface GenerationConfig {
    * `settlements.count`: at `1` every building is a ruin, and a settlement whose buildings are all
    * ruins is a dead one.
    */
-  buildings?: { density?: number; spacing?: number; setback?: number; ruin?: number };
+  buildings?: {
+    density?: number;
+    spacing?: number;
+    setback?: number;
+    ruin?: number;
+    /**
+     * How often each category is drawn, as relative weights. `{ house: 8, farm: 1 }` is the
+     * default, a farm-heavy world is `{ house: 2, farm: 1 }`, and a category left out keeps the
+     * default rather than dropping out, so asking for houses on their own means
+     * `{ house: 1, farm: 0 }`.
+     *
+     * The weights are the caller's because which buildings a map has is the caller's decision.
+     * They are relative, so they do not have to add up to anything, and a name the generator has
+     * no footprint for is rejected rather than ignored, since a weight on a building that cannot
+     * exist is a setting that does nothing.
+     */
+    categories?: Partial<Record<BuildingCategory, number>>;
+  };
   /**
    * The settlements on the map, each a centre with the buildings around it.
    *
@@ -66,7 +85,13 @@ export interface ResolvedGenerationConfig {
   vegetation: { density: number; clustering: number };
   roads: { density: number };
   rivers: { density: number; width: number };
-  buildings: { density: number; spacing: number; setback: number; ruin: number };
+  buildings: {
+    density: number;
+    spacing: number;
+    setback: number;
+    ruin: number;
+    categories: Record<BuildingCategory, number>;
+  };
   settlements: { count: number };
 }
 
@@ -81,6 +106,12 @@ export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
   vegetation: { density: 0.65, clustering: 0.8 },
   roads: { density: 0.5 },
   rivers: { density: 1, width: 12 },
-  buildings: { density: 0.5, spacing: 34, setback: 16, ruin: 0 },
+  buildings: {
+    density: 0.5,
+    spacing: 34,
+    setback: 16,
+    ruin: 0,
+    categories: { house: 8, farm: 1 },
+  },
   settlements: { count: 2 },
 };

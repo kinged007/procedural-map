@@ -1444,16 +1444,22 @@ Delivered in v0.5 so far:
   is the game's decision, a game that renders its own styles can ignore `state` entirely, and `ruin: 0`
   gives the generator no opinion. Watabou's per-building states are a style catalogue, which is a
   different thing from a share and would be a different field.
+- **Which building categories a map places is the caller's.** `buildings.categories` is a set of relative
+  weights, so a map of houses is `{ house: 1, farm: 0 }` and a farming valley is `{ house: 2, farm: 1 }`.
+  The set of categories stays small, so this rebalances what already exists rather than adding new
+  building types, which is content and is still open.
 
 Carried over from v0.4 and deferred here on purpose: plots and parcels. Choosing which categories get
-placed rather than drawing from a fixed weighted set is v0.5 work, and it is worth doing as the caller
-supplying the weights rather than as the plan originally framed it, which was a weight per settlement
-kind. That framing is circular: `kind` is read off the membership and the membership is built from the
-buildings, so a building cannot choose its category from a kind that does not exist yet. The PRD asks
-which categories a map places, and a caller-supplied weight table answers that with no cycle, and also
-makes a hamlet and a town look different without either being told what it is. A shoreline is v0.5
-work too, because v0.4 keeps the whole beach band clear of buildings, which is what leaves a port or a
-pier somewhere to stand.
+placed rather than drawing from a fixed weighted set is now v0.5 work and is done, as the caller
+supplying the weights rather than as the plan first framed it. A category weight per settlement kind
+would have been circular, since `kind` is read off the membership and the membership is built from the
+buildings, so a building cannot pick from a kind that does not exist yet; it needed a two-pass placer,
+or a `kind` that is an input rather than derived, and the second is the contradiction the derived kind
+exists to avoid. `buildings.categories` answers the PRD's actual question, which categories a map
+places, with no cycle. A weight is a draw rate and not a share of the finished map, because a farm is
+four times the ground of a house and refuses more sites than a house does: the default draws one site in
+nine and the map comes out at 6.1% farms. A shoreline is v0.5 work too, because v0.4 keeps the whole
+beach band clear of buildings, which is what leaves a port or a pier somewhere to stand.
 
 Measured and deliberately not built, so the reasons are on the record rather than implied:
 

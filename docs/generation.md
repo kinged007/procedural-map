@@ -160,7 +160,27 @@ A default map produces 45 to 55 buildings.
 
 Two categories, and a category earns its place by changing the placement rather than only the name:
 a `house` is 15 by 11 units and uses the configured setback, and a `farm` is 28 by 20 and stands 48
-units back, which is what a farmyard is. A farm is drawn in for one site in nine.
+units back, which is what a farmyard is.
+
+How often each is drawn is the caller's: `buildings.categories` is a set of relative weights, unset at
+`{ house: 8, farm: 1 }`, and a weight of zero is a category that is never placed. The weights are
+relative so they need not add to anything, and a name with no footprint is rejected rather than ignored,
+because a weight that cannot be honoured is a setting that appears to do something and does not. A
+category left out of the table keeps the default weight, so reweighting one does not silently drop the
+other.
+
+The weight governs the **draw**, and the finished map carries fewer farms than the draw asks for: at
+the default, one site in nine is drawn as a farm and about six in a hundred buildings end up being one,
+because a farm is four times the ground of a house and stands 48 back, so it refuses more sites than a
+house does. That gap is the reason the weight is not a share, and it is measured rather than assumed: at
+`{ house: 8, farm: 1 }` across twelve maps the draw is one in nine and the map comes out at 6.1% farms,
+and at `{ house: 1, farm: 9 }` it comes out at 80.8%.
+
+The category draw has a stream of its own, so reweighting the mix changes what stands on a site without
+reshuffling which sites are offered. A farm-heavy map is still shorter than a house-only one, because a
+farm refuses its neighbours, and that is a real consequence of the weight rather than an artefact of
+the numbers. The settlements change with it, because a settlement is defined by the buildings it holds;
+the roads, the water, the terrain, and the wood do not.
 
 `buildings.ruin` is the share of buildings that have fallen down, drawn once a building is placed and
 so leaving the sites exactly where they were. A ruin keeps its footprint and drops its collision,

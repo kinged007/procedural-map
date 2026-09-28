@@ -168,6 +168,10 @@ function configFromControls(): GenerationConfig {
       spacing: element<HTMLInputElement>('spacing').valueAsNumber,
       setback: element<HTMLInputElement>('setback').valueAsNumber,
       ruin: element<HTMLInputElement>('ruin').valueAsNumber / 100,
+      categories: {
+        house: element<HTMLInputElement>('weight-house').valueAsNumber,
+        farm: element<HTMLInputElement>('weight-farm').valueAsNumber,
+      },
     },
     settlements: { count: element<HTMLInputElement>('settlements').valueAsNumber },
   };
@@ -191,6 +195,8 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('spacing').value = String(config.buildings.spacing);
   element<HTMLInputElement>('setback').value = String(config.buildings.setback);
   element<HTMLInputElement>('ruin').value = String(config.buildings.ruin * 100);
+  element<HTMLInputElement>('weight-house').value = String(config.buildings.categories.house);
+  element<HTMLInputElement>('weight-farm').value = String(config.buildings.categories.farm);
   element<HTMLInputElement>('settlements').value = String(config.settlements.count);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);

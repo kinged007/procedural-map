@@ -1,4 +1,5 @@
 import type {
+  BuildingCategory,
   ForestEntity,
   GameMap,
   PolygonGeometry,
@@ -11,7 +12,7 @@ import type {
 import { boundsOf, circleIntersectsPolygon, polygonArea } from '../map/geometry.js';
 import { rasterizeWalkability } from '../navigation/walkability.js';
 import { assertValidMap } from '../validation/MapValidator.js';
-import { generateBuildings } from './buildings.js';
+import { generateBuildings, CATEGORIES } from './buildings.js';
 import { gridToEdgePolygons } from './contours.js';
 import { generateForests, markWalkableInside } from './forests.js';
 import { generateSettlements, settlementSites, type SettlementSite } from './settlements.js';
@@ -119,6 +120,38 @@ function resolveNumber(
     throw new RangeError(`${name} must be a finite number between ${minimum} and ${maximum}`);
   }
   return result;
+}
+
+/**
+ * The caller's category weights, filled in from the defaults and checked.
+ *
+ * A name with no footprint is rejected rather than dropped. A weight the generator cannot honour is
+ * a setting that appears to do something and does not, and a caller who has misspelled `house` is
+ * better served by a throw than by a map of farms. A category left out of the table keeps the default
+ * weight, so asking to reweight one does not silently drop the other.
+ */
+function resolveCategories(
+  weights: Partial<Record<BuildingCategory, number>> | undefined,
+): Record<BuildingCategory, number> {
+  const resolved = { ...DEFAULT_CONFIG.buildings.categories };
+  for (const [name, weight] of Object.entries(weights ?? {})) {
+    if (!(name in CATEGORIES))
+      throw new RangeError(
+        `buildings.categories.${name} is not a building the generator can place: ${Object.keys(CATEGORIES).join(', ')}`,
+      );
+    resolved[name as BuildingCategory] = resolveNumber(
+      weight,
+      0,
+      `buildings.categories.${name}`,
+      0,
+      Number.MAX_SAFE_INTEGER,
+    );
+  }
+  if (Object.values(resolved).every((weight) => weight <= 0))
+    throw new RangeError(
+      'buildings.categories must give at least one category a weight above zero',
+    );
+  return resolved;
 }
 
 export function resolveGenerationConfig(config: GenerationConfig): ResolvedGenerationConfig {
@@ -279,6 +312,7 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         0,
         1,
       ),
+      categories: resolveCategories(config.buildings?.categories),
     },
     settlements: {
       // A count, not a density: a caller asking for four settlements wants four, and a map with no
@@ -620,6 +654,10 @@ export function generateMap(config: GenerationConfig): GameMap {
   // no building's placement and no other building's facing. Setting it to 1 asks what the map would
   // look like abandoned, not for a different map.
   const ruinRandom = new Random(placement ^ 0x8c4d6a);
+  // The category draw gets a stream of its own for the same reason: a farm covers more ground than a
+  // house, so reweighting the mix legitimately refuses neighbours and changes the count, but it
+  // should not shuffle which sites were offered.
+  const categoryRandom = new Random(placement ^ 0x3f9a52);
   const structures = generateBuildings(
     resolved,
     roads,
@@ -629,6 +667,7 @@ export function generateMap(config: GenerationConfig): GameMap {
     sites.map((site) => site.clearing),
     () => buildingRandom.next(),
     () => ruinRandom.next(),
+    () => categoryRandom.next(),
   );
   const forests: ForestEntity[] = generateForests(vegetation);
   const settlements = generateSettlements(sites, structures);

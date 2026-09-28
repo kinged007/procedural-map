@@ -28,14 +28,18 @@ test('generation is byte-stable for the same config', () => {
   // `clearing`; 1.4 was never published, so the shape moved under the same version rather than
   // starting a 1.5 that no consumer had ever seen. The clearing moved this value for more than a new
   // field: it is a keep-out, so it took trees out of the wood and refused building sites, and
-  // deleting the field afterwards does not put them back. The last move, when a building gained the
-  // `state` that says whether it stands or has fallen down, is additive: deleting `state` and the
-  // resolved `buildings.ruin` reproduces the previous map exactly, which is what drawing the ruin
-  // from a stream of its own bought;
+  // deleting the field afterwards does not put them back. The next move, when a building gained the
+  // `state` that says whether it stands or has fallen down, was additive: deleting `state` and the
+  // resolved `buildings.ruin` reproduced the previous map exactly, which is what drawing the ruin
+  // from a stream of its own bought. The last move, moving the category weights out of the code and
+  // into `buildings.categories`, is not additive, and the category draw being given a stream of its
+  // own is why: a separate stream is a different sequence of numbers, so every building after the
+  // first draws a different category. Reweighting now moves no building's site, which was the point,
+  // and the default mix is unchanged at one site in nine;
   // `tests/tiling.test.mjs` holds the matching value for the map with the placement fields removed.
   assert.equal(
     stableHash(first),
-    '35ce57e20aeddc9ccbf987d4d874683df7132f169532e1f5f9d27375b1289dad',
+    '794e4d8f2201ca5a9b5747ad2bf82bd004d6cbaa4cfe90d723e94178b8737b55',
   );
 });
 

@@ -213,6 +213,33 @@
                 value="0"
                 required
               />
+              <label class="field-label" for="weight-house">House weight</label
+              ><input
+                class="number-input"
+                id="weight-house"
+                type="number"
+                min="0"
+                max="999"
+                step="1"
+                value="8"
+                required
+              />
+              <label class="field-label" for="weight-farm">Farm weight</label
+              ><input
+                class="number-input"
+                id="weight-farm"
+                type="number"
+                min="0"
+                max="999"
+                step="1"
+                value="1"
+                required
+              />
+              <p class="field-hint">
+                Relative weights over what a road gets built on. A weight of 0 is never placed. A
+                farm is four times the ground of a house, so the share of farms on the map is lower
+                than its weight asks for.
+              </p>
               <label class="field-label" for="river-width">River channel width (units)</label
               ><input
                 class="number-input"
