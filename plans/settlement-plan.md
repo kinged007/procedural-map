@@ -181,12 +181,34 @@ building placed after the first ruin, so setting `ruin: 1` would have answered a
 from the one asked. With its own stream the previous map is reproduced exactly by deleting the new
 field, which is what shows the change was additive and nothing else moved.
 
+**Whose decision a ruin is, and why the field exists anyway.** The consumer of this library decides what
+a building looks like: whether the settlement is apocalyptic, all in ruins, a row of sites for a player
+to build on, or a developed village is a game-side choice, and a game that renders its own styles has no
+need to read this one. Watabou, which the PRD names as the reference, does publish a per-building state
+and a ruin is one of its styles; that is a style catalogue rather than a placement decision, and the
+generator has no styles to catalogue.
+
+So the field is a convenience, not a contract, and a consumer may ignore `state` entirely and decide per
+building. It stays for one reason: it is the only field that makes an abandoned map expressible without
+a second placement pass. A ruin has to stop colliding, or it is a wall around rubble, and a settlement
+of ruins has to stop counting, or it calls itself a `town`. Expressing that needs a flag on the building
+whether the game reads it or not, and a share is a smaller way to ask for it than a per-building list.
+A generator that wanted to publish styles as well would add a `style` field beside `state`, with a
+catalogue the caller could extend; that is a different field and it is not this one.
+
 ## Still open
 
-- S5 needs a category weight per kind, and it is circular as written: `kind` is read off the
-  membership, and the membership is built from the buildings, so a building cannot choose its category
-  from a kind that does not exist yet. It needs either a two-pass placer or a `kind` that is an input
-  rather than derived, and the second would contradict S4. Content decision, held until someone wants
-  a hamlet and a town to look different.
-- S6 needs a shoreline site for a pier to stand on. The beach band is already kept clear of buildings,
-  which is what leaves that ground free. Mechanics, not content, but nothing asks for a harbour yet.
+- **S5 is reframed.** The item as written — a category weight per settlement kind — is circular, and not
+  politely: `kind` is read off the membership, and the membership is built from the buildings, so a
+  building cannot choose its category from a kind that does not exist yet. It needs a two-pass placer or
+  a `kind` that is an input rather than derived, and the second is the contradiction S4 exists to avoid.
+  What the PRD actually asks for is narrower and not circular: "which building categories a map places",
+  carried over from v0.4 as choosing categories rather than drawing from a fixed weighted set. That is
+  the caller supplying the weights, which answers the PRD item, has no cycle, and is also what makes a
+  hamlet and a town look different without either one being told what it is. The set of categories stays
+  as content, so the weights only rebalance what already exists until someone wants more of them.
+- **S6 needs a shoreline site for a pier to stand on.** The beach band is already kept clear of
+  buildings, which is what leaves that ground free, so this is mechanics rather than content. The open
+  question is what a pier is: a building that stands in water breaks the rule that a building is placed
+  against a road on land, so it is either a new entity type or a category with its own placement, and
+  the answer decides the schema.

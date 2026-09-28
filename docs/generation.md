@@ -175,6 +175,13 @@ hamlet, and the membership is unchanged: ruins are part of the place, just not p
 is what makes the second half of a dead settlement reachable, next to the first half, which is a
 settlement nobody built in at all.
 
+What a building looks like is a consumer's decision, not this one's. Whether a place is apocalyptic, a
+row of sites for a player to build on, or a developed village is a game-side choice, and a game that
+renders its own styles does not need `state` at all. The share is here so that an abandoned map is
+expressible without a second placement pass, and because rubble and a wall are different things to the
+walkability raster whether or not anyone reads the field. A caller who wants no opinion at all sets
+`ruin: 0`.
+
 `spacing` is re-checked as a global centre-to-centre minimum rather than only along one road, so
 buildings on two roads that run close together do not end up inside each other. It is also what makes
 `setback` behave oddly at the low end, which is worth knowing before reaching for it: pulling both

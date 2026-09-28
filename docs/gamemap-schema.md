@@ -495,7 +495,7 @@ interface BuildingEntity {
   type: 'building';
   /** What it is, which fixes its footprint and how far back it stands. */
   category: 'house' | 'farm';
-  /** Whether it stands or has fallen down. */
+  /** Whether it stands or has fallen down. A game that renders its own styles may ignore this. */
   state: 'standing' | 'ruined';
   position: Point;
   /** Radians: the compass direction the front of the building looks. */

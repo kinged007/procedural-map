@@ -116,7 +116,7 @@ Every knob, with the value used when it is left out:
 | `buildings.density`     | `0.5`            | The chance a site offered by a road is built on. `0` publishes no buildings.                                                                                                                             |
 | `buildings.spacing`     | `34`             | Smallest gap between two buildings, centre to centre, measured across the whole map.                                                                                                                     |
 | `buildings.setback`     | `16`             | How far a building's front wall stands off the road centreline. A farm sets its own.                                                                                                                     |
-| `buildings.ruin`        | `0`              | Share of buildings that have fallen down, `0` to `1`. A ruin keeps its footprint and stops being a wall.                                                                                                 |
+| `buildings.ruin`        | `0`              | Share of buildings that have fallen down, `0` to `1`. A ruin keeps its footprint and stops being a wall. `0` is no opinion on how a building looks.                                                      |
 | `settlements.count`     | `2`              | How many settlements the map has. A map with no roads publishes none, whatever this is set to.                                                                                                           |
 
 Values outside a knob's range are rejected at the boundary rather than clamped silently.
@@ -146,7 +146,8 @@ road's centreline inside a river's `geometry` is a road genuinely crossing that 
 from a road with its front wall facing it, publishing its footprint, a matching collision polygon, a
 `rotation`, a `category`, a `state` that says whether it stands or has fallen down, and the road it
 belongs to. A standing building is a solid thing, so it blocks the walkability raster like the water
-and the rock do; a ruin carries no collision, so a character walks over the rubble. `buildings.density`,
+and the rock do; a ruin carries no collision, so a character walks over the rubble. What a building
+looks like is the game's decision, so `state` is there to be ignored as much as read. `buildings.density`,
 `buildings.spacing`, `buildings.setback`, and `buildings.ruin` place them; the details and the fields
 are in [Consuming generated maps](docs/consuming-maps.md#4-buildings).
 

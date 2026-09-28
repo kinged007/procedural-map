@@ -1440,13 +1440,18 @@ Delivered in v0.5 so far:
   rubble, and `state` says which it is on every building. A ruin does not make a place bigger:
   `kind` counts what stands, so a village of shells is a hamlet. The two halves are reached by
   mixing parameters rather than by switches, so a dead settlement is either nobody built there or
-  everything there fell down.
+  everything there fell down. This is a convenience and not a style system: what a building looks like
+  is the game's decision, a game that renders its own styles can ignore `state` entirely, and `ruin: 0`
+  gives the generator no opinion. Watabou's per-building states are a style catalogue, which is a
+  different thing from a share and would be a different field.
 
 Carried over from v0.4 and deferred here on purpose: plots and parcels. Choosing which categories get
-placed rather than drawing from a fixed weighted set is also held, and not only for want of content: a
-building's category would have to be chosen from the settlement's `kind`, and `kind` is read off the
-membership that the buildings themselves make, so a building cannot pick from a kind that does not exist
-yet. It needs a two-pass placer, or a `kind` that is an input rather than derived. A shoreline is v0.5
+placed rather than drawing from a fixed weighted set is v0.5 work, and it is worth doing as the caller
+supplying the weights rather than as the plan originally framed it, which was a weight per settlement
+kind. That framing is circular: `kind` is read off the membership and the membership is built from the
+buildings, so a building cannot choose its category from a kind that does not exist yet. The PRD asks
+which categories a map places, and a caller-supplied weight table answers that with no cycle, and also
+makes a hamlet and a town look different without either being told what it is. A shoreline is v0.5
 work too, because v0.4 keeps the whole beach band clear of buildings, which is what leaves a port or a
 pier somewhere to stand.
 

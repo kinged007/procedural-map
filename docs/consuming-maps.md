@@ -227,6 +227,17 @@ rubble. The footprint stays, so a ruin is the same building, fallen, and not a s
 validator enforces both halves: a standing building without collision and a ruin carrying one are both
 rejected, because a map that simply omits the field would otherwise read as a field of walkable ruins.
 
+**This field is yours to ignore.** What a building looks like is a game-side decision: whether a
+settlement is apocalyptic, a set of sites for the player to build on, a ruin field, or a developed
+village is yours to choose, and a game that renders its own styles does not need to read `state` at
+all. Set `buildings.ruin` to `0` and the generator decides nothing about it. The field is here because
+rubble and a wall are different things to the walkability raster, and a game that never reads it still
+gets walkable ground where the ruins are.
+
+If you want style variation per building rather than one share for the whole map, that is a different
+field, and Watabou's per-building states are the reference for it rather than this. Nothing here stops
+you deriving that yourself from `id`: `state` is a hint about the ground, not a catalogue.
+
 Nothing about a building is a parcel. There is no plot, no boundary, and no ownership: a building is a
 rectangle standing on the ground, and the ground around it is ordinary terrain. A farm is a building
 that happens to stand 48 units back from a road rather than `buildings.setback`, not a field around it.
