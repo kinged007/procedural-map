@@ -602,26 +602,30 @@ nothing but open ground has nowhere to put one.
 
 ## docks
 
-`docks` is a `DockEntity[]`: the plank decks reaching from the land out over the water. A dock answers
-"where does this place reach the water", which neither `structures` nor `settlements` can: a building
-stands on land and a settlement is a place.
+`docks` is a `DockEntity[]`: the plank decks standing in the water off a shore. A dock answers "where
+does this place reach the water", which neither `structures` nor `settlements` can: a building stands
+on land and a settlement is a place.
 
 ```ts
 interface DockEntity {
   id: string;
   type: 'dock';
-  /** Where the deck meets the land, on the road that reached it. */
+  /** Where the deck is rooted, on the waterline where it meets the land. */
   position: Point;
-  /** The heading the deck runs along, out over the water. */
+  /** The heading the deck runs along, out from the bank over the water. */
   rotation: number;
   /** Full width of the deck, in world units. 16. */
   width: number;
-  /** How far the deck reaches from its anchor. Part of it is over the land. */
+  /**
+   * How far the deck runs out from the bank, in world units. The whole of a deck is over water, and
+   * this is measured to the last point the water allows rather than set to a fixed number.
+   */
   depth: number;
   /** The deck surface, and the shape the walkability raster carves back open. */
   geometry: PolygonGeometry;
   asset: AssetReference;
   metadata: {
+    /** The road that reaches this shore. The deck is rooted on the waterline, not on the road. */
     roadId?: string;
     /** The place this is the waterfront of. */
     settlementId: string;
@@ -631,30 +635,40 @@ interface DockEntity {
 }
 ```
 
-Four things follow from this shape, and a consumer that assumes otherwise will be wrong.
+Five things follow from this shape, and a consumer that assumes otherwise will be wrong.
+
+**A dock is a rectangle standing in the water, touching the bank at one end.** `position` is its root
+on the waterline, and the deck runs out from there along `rotation` for `depth`. A consumer drawing a
+pier anchors it at `position` and runs it along that heading. The whole rectangle is over water: the
+only part that may touch the bank is the root edge, and the median deck is measured at 0% of its area
+on land. A deck is never laid across the ground between a road and a lake.
 
 **A dock carries no collision, and a map that gives it one is rejected.** A deck is ground a character
 walks on rather than a wall, which is the opposite of a building. The raster is the other half of the
-same statement: a deck's cells are carved back open _after_ the blockers are filled, so a character
-can walk the length of the deck and step off the end of it. See
+same statement: a deck's cells are carved back open _after_ the blockers are filled, so a character can
+walk the length of the deck and step off the end of it. See
 [walking on the map](consuming-maps.md#walking-on-the-map).
 
-**A deck reaches into the water it names, and the far corners are not guaranteed to.** The placer
-checks that the far end of the _centreline_ is inside `waterId`, and a consumer should assume no more
-than that: a deck meeting a concave shore has one of its two far corners back on the sand. What is
-guaranteed is that the deck ends in water rather than stopping on the bank.
+**`depth` is measured, not a constant.** It is the distance from the root to the last point still
+inside `waterId`, measured across the deck's whole width rather than its centreline, so a pier in a
+narrow inlet is a short one and a pier off a broad shore is a full-length one, and neither ever lands
+on the far bank. It is between 12 and 40 units, and both ends are numbers a consumer can rely on: a
+deck shorter than 12 would not read as a deck, and a longer one is a jetty rather than a landing
+stage.
 
-**`settlementId` is required and `roadId` is not.** A deck is a place's waterfront, so the place is
-required and validation rejects a deck naming a settlement that is not on the map, or a `waterId` that
-is not either. `roadId` is optional for the same reason it is on a building: a deck can be reached over
-open ground rather than along a road.
+**`settlementId` is required, and it is required at the deck's own root.** A deck is a place's
+waterfront, so the place is required, validation rejects a deck naming a settlement that is not on the
+map or a `waterId` that is not either, and the generator places a deck only where its root falls
+inside some settlement's `radius`. `roadId` is optional for the same reason it is on a building: a deck
+can be reached over open ground rather than along a road, and it names the road that serves the shore
+rather than a point on the deck.
 
-**A deck is a place's waterfront, so the count is bounded by the shore and not by anything else.**
-`docks: { count }` is unset at `0`, which is a map of no harbours: a pier is a strong statement about
-a place and the generator has no opinion on whether any of them is a port. A map with no settlements
-publishes no docks at any count, and a settlement that stands nowhere near water has no waterfront to
-publish. It is _not_ bounded by the number of settlements, because one place on a long shore can carry
-several decks: two settlements reach sixteen on a 2048 by 1536 map, eight of them to one place.
+**The count is bounded by the shore and not by anything else.** `docks: { count }` is unset at `0`,
+which is a map of no harbours: a pier is a strong statement about a place and the generator has no
+opinion on whether any of them is a port. A map with no settlements publishes no docks at any count,
+and a settlement that stands nowhere near water has no waterfront to publish. It is _not_ bounded by
+the number of settlements, because one place on a long shore can carry several decks: two settlements
+reach sixteen on a 2048 by 1536 map, eight of them to one place.
 
 ## Asset references
 

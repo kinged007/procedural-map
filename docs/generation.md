@@ -285,23 +285,34 @@ same count always picks the same sites.
 
 ## Docks
 
-A dock is a plank deck reaching from the land out over the water, and it is a place's waterfront: a
-settlement within reach of the anchor is required, which is what keeps a harbour at a village rather
-than a jetty in the middle of an empty shore.
+A dock is a plank deck standing in the water off a shore, and it is a place's waterfront: a settlement
+has to reach the deck's root, which is what keeps a harbour at a village rather than a jetty in the
+middle of an empty shore.
 
-The road is the anchor, for the same reason it is for a building. A deck starts on a road and runs
-towards the nearest shore within 120 units, crossing however much land lies between and reaching 18
-past the water's edge. The land part was already open ground; the water part is what the deck exists
-for. The far end of the _centreline_ is checked to be inside the body of water the deck names, and the
-far corners are not required to be: a deck meeting a concave shore has one of them back on the sand.
+The road decides _which_ shore. A shore no road can reach is a shore with nobody on it, and a deck
+there would be a pier a cart could never get to. The deck itself is not laid from the road.
+
+A deck is a rectangle standing in the water and touching the bank at one end, rooted at the point on
+the shoreline nearest the road and running out from there away from the land. The first version laid it
+from the road to the shore and a short way past, which drew a plank across the beach with a stub in the
+water, and the whole area of a deck being water is the point of the shape. Over 110 decks the only
+points on land are the two root corners where the deck meets the bank, the tip corners are in water
+every time, and the median share of a deck's area over land is 0%.
+
+How far it runs is what the water allows rather than a fixed number. The reach is measured along the
+deck's own heading and clamped to the last point still inside the named body, and it is measured
+across the deck's whole width rather than its centreline, so a deck whose centreline is over water and
+whose corners are on the sand is not published. A pier in a narrow inlet is therefore a short pier and a
+pier off a broad shore is a full-length one, and neither ever lands on the far bank. Depths run between
+12 and 40: the narrowest dimension of a lake the generator draws that takes a road is 61 units, a
+tenth of them are under 82, and the median is 211, so 40 fits inside the smallest of them. A candidate
+whose water does not open up for 12 units is refused rather than published as a plank on the bank.
+
 The bounds test is on the deck's own corners rather than the centreline, because at a map edge a deck
-has a tip comfortably inside it and both far corners outside.
-
-A deck is 16 units across and reaches between 18 and 138, so two decks sharing a shore read as one
-wide pier with a gap in it. They are kept 30 apart and are refused where they would overlap a building,
-so a deck is never laid through a wall. Over 180 maps at up to 4096 by 4096 and ten seeds, 1065 decks
-were published with none invalid, none out of bounds, and every deck naming a place and a body of
-water that exist.
+has a tip comfortably inside it and both far corners outside. A deck is also kept 30 from any other deck
+and is refused where it would overlap a building, so two decks never share a shore and a pier is never
+drawn through a wall. Over 180 maps at up to 4096 by 4096 and ten seeds, 1065 decks were published
+with none invalid, none out of bounds, and every deck naming a place and a body of water that exist.
 
 The count is an upper bound, and **what bounds it is the shore**. A map with no settlements publishes
 no docks at any count, and a settlement standing nowhere near water has no waterfront — but it is not

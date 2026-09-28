@@ -30,20 +30,29 @@ const SPACING = 26;
 const DECK_WIDTH = 16;
 
 /**
- * How far past the water's edge the deck reaches, in world units.
+ * How far a deck runs out over the water, in world units.
  *
- * This is the part of a dock that is over water, and it is what the walkability carve opens. It has
- * to be a few cells at any sane cell size or the deck is a line the raster never sees, and it is not
- * much more than that, because a pier is a landing stage and not a jetty long enough to walk out of
- * sight of the shore.
+ * A deck is a rectangle standing in the water and touching the bank at one end, so this is the whole
+ * of it rather than the part that happens to be past a shoreline. A pier is a landing stage and not
+ * a jetty long enough to walk out of sight of the shore, and 40 fits inside the smallest lake the
+ * generator draws: over six maps the narrowest dimension of a lake that takes a road is 61 units,
+ * a tenth of them are under 82, and the median is 211.
  */
-const OVERHANG = 18;
+const REACH_OUT = 40;
+
+/**
+ * The shortest a deck may be and still be a deck, in world units.
+ *
+ * Below this the water does not open up behind the pier and the deck is a plank on the bank, so a
+ * candidate is refused rather than published at a length no character could tell from the shore.
+ */
+const MIN_DECK = 12;
 
 /**
  * How close one deck may come to another, centre to centre, in world units.
  *
- * A deck is 16 wide and reaches 18 to 138, so two within 20 of each other share their shore and read
- * as one wide pier with a gap in it. 30 keeps two decks apart and still lets a shore take several.
+ * Two decks within 20 of each other share their shore and read as one wide pier with a gap in it.
+ * 30 keeps two decks apart and still lets a shore take several.
  */
 const MIN_SEPARATION = 30;
 
@@ -59,11 +68,16 @@ const MIN_SEPARATION = 30;
  * reach sixteen on a 2048 by 1536 map, eight to one of them.
  *
  * The road is the anchor for the same reason it is for a building. Nothing is scattered across open
- * ground, and a deck that starts on a road is a deck a cart can reach. The deck runs from the anchor
- * towards the nearest shore, crossing however much land lies between and reaching `OVERHANG` past the
- * water's edge. The land part is ground that was already open, and the water part is the part the
- * walkability raster carves back open, so a character can walk the length of the deck and step off it
- * into a boat.
+ * ground, and a shore a road cannot reach is a shore with nobody on it. The road decides *which*
+ * shore; the deck itself is not laid from the road. A deck is a rectangle standing in the water and
+ * touching the bank at one end, rooted at the point on the shoreline nearest the road and running
+ * out from there away from the land. Laying it from the road instead would draw a plank across the
+ * beach, which is not a pier and is what the first version of this did.
+ *
+ * How far it runs is what the water allows rather than a fixed number: the reach is measured along
+ * the deck's own heading and clamped to the last point still inside the named water, so a pier in a
+ * narrow inlet is a short pier and a pier off a broad shore is a full-length one, and neither ever
+ * lands on the far bank.
  *
  * `ponytail:` the shore is found by walking the edges of every water polygon, which costs the
  * contour length of the water within `REACH` of a station. Index the water's edges into a uniform
@@ -95,12 +109,18 @@ export function generateDocks(
   const docks: DockEntity[] = [];
   for (const { station, road } of candidates) {
     if (docks.length >= count) break;
+
+    const shore = nearestShore(station, water);
+    if (!shore || shore.gap === 0 || shore.gap > REACH) continue;
     // A deck is a place's waterfront, so the place has to be there. Nearest wins, which is the same
     // rule the settlement membership uses, so a shore between two centres is not in two harbours.
+    // The test is against the deck's own root rather than the road station it was found from: a
+    // consumer can only check membership against what the map publishes, and the deck is published
+    // rooted on the waterline, which is up to `REACH` further out than the station.
     let settlement: SettlementEntity | undefined;
     let settlementGap = Number.POSITIVE_INFINITY;
     for (const place of settlements) {
-      const gap = distance(place.position, station);
+      const gap = distance(place.position, shore.point);
       if (gap <= place.radius && gap < settlementGap) {
         settlement = place;
         settlementGap = gap;
@@ -108,31 +128,37 @@ export function generateDocks(
     }
     if (!settlement) continue;
 
-    const shore = nearestShore(station, water);
-    if (!shore || shore.gap === 0 || shore.gap > REACH) continue;
-    // The deck runs from the anchor at the nearest point on the shore, and reaches `OVERHANG` past
-    // it, so the far end is standing water however far the road is from the edge.
-    const depth = shore.gap + OVERHANG;
-    const tip = {
-      x: station.x + ((shore.point.x - station.x) / shore.gap) * depth,
-      y: station.y + ((shore.point.y - station.y) / shore.gap) * depth,
+    // The deck is rooted on the shoreline and runs out from there, away from the land the road is
+    // on. The heading is the same line the road approaches along, continued past the bank, so the
+    // deck is perpendicular-ish to the shore it stands on rather than lying along it.
+    const heading = {
+      x: (shore.point.x - station.x) / shore.gap,
+      y: (shore.point.y - station.y) / shore.gap,
     };
-    const geometry = roadRibbon([station, tip], DECK_WIDTH);
+    // How far the water runs out along that heading, measured to the last point still inside the
+    // named body. Measuring rather than assuming is what keeps a pier in a narrow inlet short
+    // instead of laying it across to the far bank.
+    const depth = openReach(shore.point, heading, shore.body);
+    if (depth < MIN_DECK) continue;
+    const tip = {
+      x: shore.point.x + heading.x * depth,
+      y: shore.point.y + heading.y * depth,
+    };
+    const geometry = roadRibbon([shore.point, tip], DECK_WIDTH);
     if (!geometry) continue;
     // The bounds test is on the deck's own corners rather than on the centreline, because the two
     // are not the same at a map edge: a deck running along a shore near the border has a tip
     // comfortably inside it and both far corners outside. A polygon outside the map is not a valid
     // one, so the corner is what has to fit.
     if (geometry.points.some((p) => p.x < 0 || p.y < 0 || p.x > width || p.y > height)) continue;
-    // The tip is what makes this a dock rather than a plank on the bank: if it is not in the water it
-    // was found by, the "shore" was a river 18 units away and the deck stops short of everything.
-    if (!pointInPolygon(tip, shore.body.collision)) continue;
     // Two decks sharing a shore read as one wide pier with a gap in it, and a deck laid through a
-    // building is a deck through a wall, so both are refused at the same distance.
+    // building is a deck through a wall, so both are refused at the same distance. A deck now stands
+    // in the water rather than across the land, so the building test is a formality; it is kept
+    // because a pier drawn over a building is a pier nobody can read either way.
     if (
       docks.some(
         (dock) =>
-          distance(dock.position, station) < MIN_SEPARATION ||
+          distance(dock.position, shore.point) < MIN_SEPARATION ||
           overlaps(dock.geometry, geometry) ||
           buildings.some((building) => overlaps(building.geometry, geometry)),
       )
@@ -142,8 +168,8 @@ export function generateDocks(
     docks.push({
       id: `dock-${docks.length + 1}`,
       type: 'dock',
-      position: station,
-      rotation: Math.atan2(tip.y - station.y, tip.x - station.x),
+      position: shore.point,
+      rotation: Math.atan2(heading.y, heading.x),
       width: DECK_WIDTH,
       depth,
       geometry,
@@ -156,6 +182,36 @@ export function generateDocks(
     });
   }
   return docks;
+}
+
+/**
+ * How far the water runs out from `root` along `heading`, capped at `REACH_OUT`.
+ *
+ * The whole rectangle has to fit, not just its centreline: a deck whose centreline is over water and
+ * whose far corners are on the sand is a plank half laid. So the test is the deck's two tip corners
+ * and its far edge as well as its own centre, which is what stops a pier running along a curving
+ * shore from ending with a corner ashore.
+ */
+function openReach(root: Point, heading: Point, body: WaterRegion): number {
+  const across = { x: -heading.y, y: heading.x };
+  const inWater = (p: Point) => pointInPolygon(p, body.collision);
+  let last = 0;
+  for (let step = 1; step <= REACH_OUT; step += 1) {
+    const distance = step;
+    const centre = { x: root.x + heading.x * distance, y: root.y + heading.y * distance };
+    if (!inWater(centre)) break;
+    const left = {
+      x: centre.x + across.x * (DECK_WIDTH / 2),
+      y: centre.y + across.y * (DECK_WIDTH / 2),
+    };
+    const right = {
+      x: centre.x - across.x * (DECK_WIDTH / 2),
+      y: centre.y - across.y * (DECK_WIDTH / 2),
+    };
+    if (!inWater(left) || !inWater(right)) break;
+    last = distance;
+  }
+  return last;
 }
 
 interface Shore {

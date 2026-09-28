@@ -124,17 +124,85 @@ test('every dock names a settlement that exists and a body of water its deck rea
 test('a deck is reached along a road, which is the only thing that offers a site', () => {
   const map = harbour();
   for (const dock of map.docks) {
-    assert.ok(dock.metadata.roadId, 'a deck says which road reached it');
+    assert.ok(dock.metadata.roadId, 'a deck says which road reaches it');
     const road = map.roads.find((r) => r.id === dock.metadata.roadId);
     assert.ok(road, 'and the road is on the map');
-    // The anchor is a station on that road's centreline, interpolated between its path points, so
-    // the test is the distance to the polyline rather than to a point in it. A deck standing in the
-    // water on its own would be reachable from nowhere.
+    // The deck is rooted on the waterline rather than on the road, so what the road has to satisfy
+    // is that it comes within reach. A shore no road can reach is a shore with nobody on it, and a
+    // deck standing in it would be a pier a cart could never get to.
     assert.ok(
-      distanceToPath(dock.position, road.path) < 0.5,
-      'the anchor stands on the road that reached it',
+      distanceToPath(dock.position, road.path) <= 120,
+      'a road reaches the shore the deck is rooted on',
     );
   }
+});
+
+test('a deck stands in the water, rooted at the bank, and does not run across the land', () => {
+  // The first version laid the deck from the road to the shore and a short way past it, which drew a
+  // plank across the beach and left a stub in the water. A pier starts where the land ends: the whole
+  // deck is over water, and the only part that may touch the bank is the edge it is rooted on.
+  for (const seed of [1, 7, 42, 583921, 777, 31415, 99999, 123456]) {
+    const map = harbour({ seed });
+    for (const dock of map.docks) {
+      const water = map.water.find((w) => w.id === dock.metadata.waterId);
+      const forward = { x: Math.cos(dock.rotation), y: Math.sin(dock.rotation) };
+      const across = { x: -forward.y, y: forward.x };
+      // The far end is standing water, which is what makes this a dock rather than a plank on the
+      // bank, and both of its corners are in the water rather than on the sand behind it.
+      const tip = {
+        x: dock.position.x + forward.x * dock.depth,
+        y: dock.position.y + forward.y * dock.depth,
+      };
+      for (const [name, p] of [
+        ['the far end', tip],
+        [
+          'the far left corner',
+          { x: tip.x + across.x * (dock.width / 2), y: tip.y + across.y * (dock.width / 2) },
+        ],
+        [
+          'the far right corner',
+          { x: tip.x - across.x * (dock.width / 2), y: tip.y - across.y * (dock.width / 2) },
+        ],
+      ])
+        assert.ok(pointInPolygon(p, water.collision), `${name} of a deck is in the water it names`);
+      // And the deck's own area is water, not a ramp. Sampling the rectangle rather than its corners
+      // is what catches a deck that grazes a sand spit without either corner noticing.
+      let onLand = 0;
+      let sampled = 0;
+      for (let t = 0.5; t < dock.depth; t += 1)
+        for (let s = -dock.width / 2 + 0.5; s < dock.width / 2; s += 1) {
+          sampled += 1;
+          if (
+            !pointInPolygon(
+              {
+                x: dock.position.x + forward.x * t + across.x * s,
+                y: dock.position.y + forward.y * t + across.y * s,
+              },
+              water.collision,
+            )
+          )
+            onLand += 1;
+        }
+      assert.ok(
+        onLand / sampled < 0.1,
+        `a deck is over water, not land (${((onLand / sampled) * 100).toFixed(1)}% on land)`,
+      );
+    }
+  }
+});
+
+test('a deck is as long as the water allows, and no longer', () => {
+  // A fixed length would lay a pier across a narrow inlet to the far bank. The reach is measured
+  // instead, so an inlet gives a short deck and a broad shore a full-length one.
+  const depths = [1, 7, 42, 583921, 777, 31415].flatMap((seed) =>
+    harbour({ seed }).docks.map((dock) => dock.depth),
+  );
+  assert.ok(Math.min(...depths) >= 12, 'no deck is too short to be one');
+  assert.ok(Math.max(...depths) <= 40, 'and none is longer than a landing stage');
+  assert.ok(
+    Math.max(...depths) - Math.min(...depths) > 0,
+    'the water decides, so a map with both an inlet and an open shore gets two lengths',
+  );
 });
 
 /** Nearest distance from a point to a polyline, which is how a station between path points is found. */
@@ -185,24 +253,43 @@ test('a deck is ground a character can walk on, and the water under it is opened
 });
 
 test('a deck reaches the shore rather than making an island of its own', () => {
-  // A deck that opened water but stopped short of the land would be a walkable patch in a lake, and
-  // a consumer would place a character on it with no way off. Every open cell under a deck has to be
-  // reachable on foot from the deck's own anchor.
+  // A deck rooted on the waterline has to be carved back out of the shoreline itself, and the
+  // shoreline is exactly where the raster is most conservative: it blocks a cell the water merely
+  // touches. So the root cell is carved rather than open, and this is the test that the root is
+  // still joined to the land. Every open cell under a deck has to be reachable on foot.
   for (const cellSize of [4, 8, 16, 32, 64]) {
     const map = harbour();
     const raster = rasterizeWalkability(map, { cellSize });
     for (const dock of map.docks) {
-      const anchor =
-        Math.floor(dock.position.y / cellSize) * raster.columns +
-        Math.floor(dock.position.x / cellSize);
-      assert.equal(raster.cells[anchor], 0, 'the anchor is on ground a character can stand on');
+      const cells = cellsUnder(raster, dock.geometry);
+      if (cells.length === 0) continue;
+      // The flood is from the nearest open ground to the deck's root, which is the shore it is
+      // rooted on: a deck joined to nothing is a walkable patch in a lake.
+      const anchor = nearestOpenCell(raster, dock.position);
+      assert.ok(anchor >= 0, `the shore a deck is rooted on is open ground at ${cellSize}`);
       const seen = reachable(raster, anchor);
-      for (const cell of cellsUnder(raster, dock.geometry))
+      for (const cell of cells)
         if (raster.cells[cell] === 0)
           assert.equal(seen[cell], 1, `a deck cell is reachable from its own shore at ${cellSize}`);
     }
   }
 });
+
+/** The cell nearest `point` that is open, or -1 when the whole neighbourhood is blocked. */
+function nearestOpenCell(raster, point) {
+  const column = Math.floor(point.x / raster.cellSize);
+  const row = Math.floor(point.y / raster.cellSize);
+  for (let radius = 0; radius < 12; radius += 1)
+    for (let dr = -radius; dr <= radius; dr += 1)
+      for (let dc = -radius; dc <= radius; dc += 1) {
+        const r = row + dr;
+        const c = column + dc;
+        if (r < 0 || c < 0 || r >= raster.rows || c >= raster.columns) continue;
+        const cell = r * raster.columns + c;
+        if (raster.cells[cell] === 0) return cell;
+      }
+  return -1;
+}
 
 test('two decks do not share a shore, and no deck is laid through a building', () => {
   const map = harbour({ seed: 777 });

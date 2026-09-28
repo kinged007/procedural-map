@@ -12,16 +12,16 @@ Ordered by what unblocks the most, not by what is most fun to build.
 
 ## Status
 
-| Item                                    | State      | Gate                                                                                                       |
-| --------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
-| S1 centre, membership, and a count knob | done       | `tests/settlement.test.mjs`, count, membership, empties                                                    |
-| S2 settlement boundaries                | not needed | a radius and a membership list already answer it, and a polygon would contradict the no-collision decision |
-| S3 central square                       | done       | `clearing`, a keep-out the tree and building placers honour, decided before both                           |
-| S4 settlement kind from density         | done       | `kind` is read off the membership, and there is no knob for it                                             |
-| S5 which categories a settlement places | done       | `buildings.categories`, relative weights the caller supplies; no category weight per kind                  |
-| S6 shoreline settlement and a pier      | done       | a `docks` collection of walkable decks on a shore a settlement stands on                                   |
-| S7 ruins, from the PRD settlement note  | done       | `state` on a building, no collision on a ruin, and `kind` counts only what stands                          |
-| S8 a settlement as a player base        | done       | `spawnCandidates({ preferSettlements: true })` offers every settlement, on open ground                     |
+| Item                                    | State      | Gate                                                                                                        |
+| --------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------- |
+| S1 centre, membership, and a count knob | done       | `tests/settlement.test.mjs`, count, membership, empties                                                     |
+| S2 settlement boundaries                | not needed | a radius and a membership list already answer it, and a polygon would contradict the no-collision decision  |
+| S3 central square                       | done       | `clearing`, a keep-out the tree and building placers honour, decided before both                            |
+| S4 settlement kind from density         | done       | `kind` is read off the membership, and there is no knob for it                                              |
+| S5 which categories a settlement places | done       | `buildings.categories`, relative weights the caller supplies; no category weight per kind                   |
+| S6 shoreline settlement and a pier      | done       | a `docks` collection of walkable decks, rooted on a waterline a road reaches and running out over the water |
+| S7 ruins, from the PRD settlement note  | done       | `state` on a building, no collision on a ruin, and `kind` counts only what stands                           |
+| S8 a settlement as a player base        | done       | `spawnCandidates({ preferSettlements: true })` offers every settlement, on open ground                      |
 
 ## S1 — centre, membership, and a count knob
 
@@ -237,6 +237,16 @@ thing the build found was a real bug: the bounds test was on the centreline tip,
 along a shore near a map border has a tip comfortably inside the map and both far corners outside it.
 The test is now on the deck's own corners, and it was `assertValidMap` inside `generateMap` that
 caught it.
+
+The third thing was found by looking at a picture rather than by a test. The deck was rooted on the
+road and ran to the shore and a short way past, which is a plank across the beach with a stub in the
+water rather than a pier. A deck is a rectangle standing in the water and touching the bank at one
+end: the road decides _which_ shore, and the deck is rooted on the waterline there. How long it runs is
+measured to the last point the water allows, across the deck's whole width rather than its centreline,
+so a pier in a narrow inlet is short and one off a broad shore is full length. Over 110 decks the only
+points on land are the two root corners where the deck meets the bank, and the median share of a deck's
+area over land is 0%. The test that catches it samples the deck's rectangle rather than its corners,
+because a deck grazing a sand spit shows up in neither corner.
 
 ## S5 — which buildings a map has
 

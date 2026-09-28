@@ -322,8 +322,8 @@ clearing so the polygon stays inside the bounds.
 
 ### 6. Docks
 
-`map.docks` holds the plank decks reaching out over the water. There are none unless you ask for them:
-`docks: { count }` is unset at `0`.
+`map.docks` holds the plank decks standing in the water off a shore. There are none unless you ask for
+them: `docks: { count }` is unset at `0`.
 
 ```js
 const map = generateMap({ seed: 583921, width: 2048, height: 1536, docks: { count: 4 } });
@@ -347,8 +347,11 @@ end. And the count is bounded by the shore rather than by anything you set: a ma
 publishes no docks however many you ask for, and `count: 16` on a map with two settlements on one long
 shore fills.
 
-The deck's own `geometry` is the rectangle it is drawn and carved as, 16 units across and reaching 18
-past the water's edge, so `width` and `depth` describe it without a consumer re-deriving anything.
+The deck's own `geometry` is the rectangle it is drawn and carved as: 16 units across, rooted at
+`position` on the waterline, running out over the water for `depth`. The whole of it is water, so
+there is no land crossing for a consumer to reason about — a pier is anchored at `position` and drawn
+along `rotation`. `depth` is measured rather than fixed and runs from 12 to 40, so a pier in a narrow
+inlet is a short one and a pier off a broad shore is a full-length one.
 
 ## Walking on the map
 

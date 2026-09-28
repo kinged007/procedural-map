@@ -1393,7 +1393,7 @@ Potential systems:
 - neighbourhoods;
 - settlement boundaries;
 - which building categories a map places;
-- NEW - A dock is a settlement's waterfront: a walkable deck standing in the water, on a road point within reach of a shore, naming the place it serves and the body of water it stands in. It is a new entity and not a building category, because a pier stands in water, is ground a character walks on, and is reached by a place rather than by a road frontage. The walkability raster carves the water a deck covers back open.
+- NEW - A dock is a settlement's waterfront: a walkable deck rooted on the waterline of a shore a road reaches, running out over the water for as far as the water allows, and naming the place it serves and the body of water it stands in. It is a new entity and not a building category, because a pier stands in water, is ground a character walks on, and is reached by a place rather than by a road frontage. The walkability raster carves the water a deck covers back open.
 - NEW - Settlements may be considered a player base or spawn point. we want parameters that can define the quantity of settlements to spawn, and mixed with the housing and other params, we may generate maps with a dead settlement (ie. no surrounding buildings, or its all in ruins.)
 
 Delivered in v0.5 so far:
@@ -1462,13 +1462,20 @@ nine and the map comes out at 6.1% farms. A shoreline is v0.5 work too, because 
 beach band clear of buildings, which is what leaves a port or a pier somewhere to stand.
 
 **A pier is delivered, as its own collection rather than a shoreline category.** `docks` is a
-`DockEntity[]` of walkable plank decks, anchored on a road point within 120 units of a shore, reaching
-18 past the water's edge, and naming the settlement it is the waterfront of. It is a new entity and not
-a building category because a pier does the opposite of everything a building does: it stands in water
-rather than on land, is ground a character walks on rather than a wall, and is reached by a place rather
-than by a road frontage. A building category would have put an exception in the one placement path that
-is currently uniform, and a ruin of a pier is not a thing, so the `state` field the ruins added would
-have had to be forbidden on one branch of the category union.
+`DockEntity[]` of walkable plank decks, each rooted on the waterline of a shore a road comes within
+120 units of, and running out over the water for whatever distance the water allows. It is a new entity
+and not a building category because a pier does the opposite of everything a building does: it stands
+in water rather than on land, is ground a character walks on rather than a wall, and is reached by a
+place rather than by a road frontage. A building category would have put an exception in the one
+placement path that is currently uniform, and a ruin of a pier is not a thing, so the `state` field
+the ruins added would have had to be forbidden on one branch of the category union.
+
+The road decides *which* shore; the deck is not laid from the road. The first version ran a deck from
+the road point to the shore and a short way past, which drew a plank across the beach with a stub in
+the water, and the whole area of a deck being water is the reason the shape is what it is. How long a
+deck is is measured along its own heading to the last point still inside the named water, and across
+its whole width rather than its centreline, so a pier in a narrow inlet is short and one off a broad
+shore is full length, and neither ever lands on the far bank.
 
 The one genuinely new mechanical part is that a deck is **walkable and the ground under it is water
 that blocks**. The raster fills water as blocked, so a deck is carved back open afterwards, as a

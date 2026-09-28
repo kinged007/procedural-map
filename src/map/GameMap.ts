@@ -184,17 +184,21 @@ export interface BuildingEntity extends MapEntity {
  */
 export interface DockEntity extends MapEntity {
   type: 'dock';
-  /** Where the deck meets the land, on the road that reached it. */
+  /** Where the deck is rooted, on the waterline where it meets the land. */
   position: Point;
   /**
-   * Radians, the heading the deck runs along, out from the land over the water. This is the same
+   * Radians, the heading the deck runs along, out from the bank over the water. This is the same
    * handedness as a building's, so a consumer that rotates an asset by `rotation` needs no second
    * convention.
    */
   rotation: number;
   /** Full width of the deck, in world units. */
   width: number;
-  /** How far the deck reaches from its anchor, in world units. Part of it is over the land. */
+  /**
+   * How far the deck runs out from the bank, in world units. The whole of a deck is over water, and
+   * this is measured to the last point the water allows rather than set to a fixed number, so a pier
+   * in a narrow inlet is a short one and a pier off a broad shore is a full-length one.
+   */
   depth: number;
   /**
    * The deck surface. The same rectangle the published `width` and `depth` describe, and the shape
@@ -203,7 +207,11 @@ export interface DockEntity extends MapEntity {
   geometry: PolygonGeometry;
   asset: AssetReference;
   metadata: {
-    /** The road the deck is reached along, absent for one reached over open ground. */
+    /**
+     * The road that reaches this shore, absent for one reached over open ground. The deck is rooted on
+     * the waterline rather than on the road, so this names which road serves the pier rather than
+     * where it begins.
+     */
     roadId?: string;
     /** The place this is the waterfront of. */
     settlementId: string;

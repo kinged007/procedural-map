@@ -162,13 +162,13 @@ you cannot walk. A settlement with no buildings is a dead settlement, and mixing
 than in the middle of a field, pass `preferSettlements: true` to `spawnCandidates`; to put the middle
 of the place, build at `settlement.position`, which is inside its clearing and on the road.
 
-`map.docks` holds the plank decks reaching from the land out over the water, and there are none unless
-`docks.count` asks for them. A deck stands on a road, reaches past the shoreline, names the settlement
-it is the waterfront of and the body of water it stands in, and carries no collision: it is ground a
-character walks on, and the walkability grid carves the water it covers back open, so a character can
-walk the length of a pier. To know which places are ports, read the docks and collect their
-`settlementId`s. A dock is 16 units across and reaches 18 past the water's edge, which is what the
-grid can see at `cellSize: 16` and finer; below that a pier may contribute no cell at all.
+`map.docks` holds the plank decks standing in the water off a shore, and there are none unless
+`docks.count` asks for them. A deck is rooted on the waterline and runs out over the water, names the
+settlement it is the waterfront of and the body of water it stands in, and carries no collision: it is
+ground a character walks on, and the walkability grid carves the water it covers back open, so a
+character can walk the length of a pier. To know which places are ports, read the docks and collect
+their `settlementId`s. A deck is 16 units across and 12 to 40 long, which is what the grid can see at
+`cellSize: 16` and finer; below that a pier may contribute no cell at all.
 
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 
