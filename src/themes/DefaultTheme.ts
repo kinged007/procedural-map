@@ -28,4 +28,9 @@ export const defaultTheme: MapTheme = {
     outline: '#5d4a3a',
   },
   docks: { deck: '#c2a276', outline: '#6b543a' },
+  // A mine, a fishing spot and a huntable wood are marked rather than filled, so these are all
+  // darker than the ground they sit on and none of them is a colour a player would mistake for
+  // water. The fishing mark is the only one that could be confused with a wave, which is why it is a
+  // ring with a stroke through it rather than a dot.
+  resources: { mine: '#4a3b2c', fishing: '#2f6f7e', hunting: '#3d5a2e' },
 };

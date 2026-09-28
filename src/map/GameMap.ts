@@ -220,6 +220,56 @@ export interface DockEntity extends MapEntity {
   };
 }
 
+/**
+ * A place where something can be gathered, and the ground that makes it worth gathering there.
+ *
+ * A resource site is a marker and not a thing. It publishes no ore, no fish and no game, because
+ * what a mine yields is the game's business and the generator has no geology: it knows where a rock
+ * ends, where water deepens and where a wood is big enough to hunt, and that is the whole of what it
+ * says. A consumer decides a site is iron, or silver, or nothing at all, and builds whatever it
+ * decides there. It carries no `collision`, and the validator refuses one that does, for the same
+ * reason a forest hull and a dock carry none: a site is a mark on the ground, not an obstacle.
+ *
+ * The three kinds are the three affordances the terrain offers, and they are not interchangeable: a
+ * mine is on a rock, a fishing spot is in water, a huntable wood is in trees.
+ */
+export interface ResourceSiteEntity extends MapEntity {
+  type: 'resource-site';
+  kind: 'mine' | 'fishing' | 'hunting';
+  /**
+   * The site itself. A mine is just inside the rock face it is cut into, a fishing spot is in the
+   * water, and a huntable wood is at the middle of its grove.
+   */
+  position: Point;
+  /**
+   * Radians, and only meaningful for a `mine`: the direction the entrance faces, which points away
+   * from the rock and so out into open ground. A mine without it would be a mark on a cliff with no
+   * way in, and the validator refuses one. A fishing spot and a huntable wood have no facing and
+   * publish none, the same way a building has a facing and a road does not.
+   */
+  rotation?: number;
+  asset: AssetReference;
+  metadata: {
+    /** The rock a mine is cut into. */
+    rockId?: string;
+    /** The body of water a fishing spot lies in. */
+    waterId?: string;
+    /** The grove a hunting site stands in. */
+    forestId?: string;
+    /**
+     * How far a fishing spot is from the nearest shoreline of its own body, in world units. Measured,
+     * not configured, so a consumer that disagrees with `access` can read the number instead.
+     */
+    distanceToShore?: number;
+    /**
+     * How a fishing spot is reached: `land` when it stands close enough to the bank to walk out to,
+     * and `water` when it stands off in open water and needs a boat. Every other kind of site is
+     * reached over the ground and publishes neither field.
+     */
+    access?: 'land' | 'water';
+  };
+}
+
 export interface SpatialFields {
   columns: number;
   rows: number;
@@ -272,6 +322,7 @@ export interface GameMap {
   structures: BuildingEntity[];
   settlements: SettlementEntity[];
   docks: DockEntity[];
+  resourceSites: ResourceSiteEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };

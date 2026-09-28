@@ -340,6 +340,72 @@ cell the raster can see none of it: at `cellSize: 32` a pier contributes one cel
 usually none. The bake itself is unchanged — 8ms on a 4096 by 4096 map at `cellSize: 4` with and
 without docks, and the placement is under 1% of generation time.
 
+## Resource sites
+
+A resource site is a place worth gathering something at, and it is published in a new `resourceSites`
+collection. The generator is deliberately neutral about what a site yields: there is no geology on the
+map, because the fields are elevation, moisture and vegetation and nothing in a `GameMap` says where
+iron is as opposed to copper or flint. A site is named for the affordance it sits on — a rock face,
+open water, a wood — and the caller decides what that is worth and builds there. A map that placed its
+own mines would be a generator with a fantasy bolted to it.
+
+All three counts default to `0`, which is a map that says nothing. They are separate numbers rather
+than one because the ground offers them wildly unevenly: a default map has 4.7 rock regions with about
+4,000 units of face between them, but only 4.5 bodies of water big enough to fish and sixteen to
+twenty-three woods big enough to hunt. A shared count would be tuned against the scarcest of the three
+and would quietly cap the other two.
+
+**Mines are cut into rock faces, and their arrow points out.** The face is walked at 8-unit steps and
+the outward normal taken at each sample, which is the direction that leaves the rock, so it is the
+direction out. Where a concave section leaves both perpendiculars outside the polygon the normal is not
+unique, and the one with the clearer approach wins, which is the one a character would dig towards. A
+notch, where the rock wraps around three sides, has no such side and is not a face anyone can dig into.
+
+The marker sits 4 units _inside_ the boundary. That is the overlap that makes it checkable rather than a
+matter of taste: a consumer can run `pointInPolygon` against the rock it names and get an answer that
+means something, where a marker sitting exactly on the boundary is ambiguous to the same test. The
+entrance is then required to have open ground within 16 units along the arrow. Measured over six maps at
+2048 by 1536, 98.6% of rock-face samples clear that and 99.1% clear 24, so 16 costs about one face in
+seventy and drops the cliff-inside-a-cliff samples an arrow would otherwise point at solid rock.
+
+Only rock and water are tested for that approach. A tree near a mine mouth is a wood, and a character
+walks around one; a second rock face opposite the first is a wall. Trees are deliberately not in this
+test, because refusing a face over a single trunk would take whole hillsides out of the candidate pool
+for something that is not in the way.
+
+**Fishing spots are in the water, and say how far out they are.** The distance is measured to the
+nearest shore of the spot's _own_ body, islands included, and `access` is derived from it: `land` within
+32 units, `water` beyond. Both are published because they answer different questions — `access` is the
+verdict, `distanceToShore` is the measurement behind it, so a caller that would rather its spots were 50
+units out reads the number and ignores the verdict. 32 is the one judgement in the file rather than a
+measurement, because how far a character will wade is the game's decision; over eight maps the split it
+produces is 49% land and 51% water, so neither mode is decorative.
+
+A spot is not refused for being unreachable from land, because a spot out of reach of a bank is the
+whole point of one. But a body has to be worth fishing first. The water on a generated map is sharply
+bimodal: over eight maps the median body is 5.5k square units, which is a puddle, and the size
+distribution jumps rather than tapers, so any floor at all lands in the same gap. At 20,000 there are
+4.5 bodies per map, with inradii of 36 to 187 units — enough open water to put a spot genuinely out of
+reach of a bank, which the largest reaches by 180 units.
+
+**Hunting sites are in woods that were measured to be enterable.** A site names a grove with at least 20
+trees and `walkableInside` set, and sits at the middle of its hull, which is inside it because a hull
+is convex. The 20 is a floor because `densityPct` cannot tell a copse from a wood: it reads 100 on
+every hull on a default map, since a hull is drawn tight around its own canopies, so canopy coverage is
+full by construction and the field carries no information. `walkableInside` is the field that earns its
+place — it is the measured answer to whether a character can get into a grove and back out, which is
+what separates a wood from a thicket.
+
+This is also why the sites are placed after the map is built. A mine's approach and a wood's
+enterability are both questions about finished ground, and `walkableInside` in particular is measured on
+the raster once every other collection exists. Asking earlier would see every grove as unenterable and
+publish no hunting at all.
+
+Sites draw from two separate streams, so a caller tuning the mine count gets the fishing spots they
+asked for rather than a different set because a number moved, and neither draws from the placement
+stream, so nothing else on the map moves. The cost is a flat array walk and nothing more at the default
+of zero; at 64 of each on a 2048 by 1536 map it is about 7% of generation time.
+
 ## Tiles
 
 The four fields are sampled at `origin + local`, so a tile is a window onto one landscape rather than

@@ -33,4 +33,10 @@ export interface MapTheme {
    * handed an undefined fill.
    */
   docks?: { deck: string; outline: string };
+  /**
+   * Resource site colours, one per kind, because the three are told apart by shape as well as by
+   * colour and a consumer overriding one has not overridden the others. Optional, for the same reason
+   * as `docks`.
+   */
+  resources?: { mine: string; fishing: string; hunting: string };
 }

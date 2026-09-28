@@ -1406,49 +1406,49 @@ Delivered in v0.5 so far:
   from the road network, so a caller asking for four gets four whether the network has four pieces or
   two. The network supplies the sites, the caller supplies the number.
 - A settlement carries no collision: its `radius` says how far a place reaches, not where you cannot
-  walk. A consumer testing the ground it covers uses the distance itself, the same way it treats a
-  forest hull.
+walk. A consumer testing the ground it covers uses the distance itself, the same way it treats a
+forest hull.
 - **A dead settlement is reachable by mixing the parameters rather than by a switch.** Membership is by
-  proximity, so a centre that ends up with nothing near it publishes an empty `buildingIds`, which
-  validation accepts. A high `settlements.count` against `buildings.density: 0` publishes a map of
-  places and no buildings at all.
+proximity, so a centre that ends up with nothing near it publishes an empty `buildingIds`, which
+validation accepts. A high `settlements.count` against `buildings.density: 0` publishes a map of
+places and no buildings at all.
 - The generator does not designate a player base. The note above says a settlement *may* be one, which
-  is a consumer's choice of where to start, so a settlement carries no `role` field until something
-  writes one. A caller asks for one instead: `spawnCandidates(..., { preferSettlements: true })` puts
-  each settlement centre first and tags it with `settlementId`, and the rest of the count is filled
-  from the roomiest ground as usual.
+is a consumer's choice of where to start, so a settlement carries no `role` field until something
+writes one. A caller asks for one instead: `spawnCandidates(..., { preferSettlements: true })` puts
+each settlement centre first and tags it with `settlementId`, and the rest of the count is filled
+from the roomiest ground as usual.
 - A settlement carries a `kind` of `hamlet`, `village`, or `town`, read off how many buildings it
-  holds rather than configured, so a dead settlement reads as a hamlet. The thresholds match the range
-  the generator actually reaches, which the settlement radius bounds: a settlement holds at most about
-  a dozen buildings, so a `town` here is a large village, and a caller wanting a real town needs a
-  knob on the radius first.
+holds rather than configured, so a dead settlement reads as a hamlet. The thresholds match the range
+the generator actually reaches, which the settlement radius bounds: a settlement holds at most about
+a dozen buildings, so a `town` here is a large village, and a caller wanting a real town needs a
+knob on the radius first.
 - **A central square, as a `clearing` rather than a drawn plaza.** The item is on the list above, and
-  what a consumer can draw for itself is not the point: a consumer drawing a square over a wood still
-  gets a square over a wood. Each settlement publishes a `clearing`, 28 units of reach around its
-  centre, and the sites are chosen before the trees and the buildings so that nothing is planted or
-  built in it. A consumer places the middle of a place at `position`, which is inside the clearing and
-  on the road. It carries no collision, because the point is to make the ground open.
+what a consumer can draw for itself is not the point: a consumer drawing a square over a wood still
+gets a square over a wood. Each settlement publishes a `clearing`, 28 units of reach around its
+centre, and the sites are chosen before the trees and the buildings so that nothing is planted or
+built in it. A consumer places the middle of a place at `position`, which is inside the clearing and
+on the road. It carries no collision, because the point is to make the ground open.
 - Every building belongs to exactly one settlement, the one whose centre is nearest. Reaches on centres
-  that are a radius apart do overlap, and a building claimed by two places has no meaning for a
-  consumer resolving a name.
+that are a radius apart do overlap, and a building claimed by two places has no meaning for a
+consumer resolving a name.
 - A centre prefers a main road to a lane, `primary` before `secondary` before `path`, so a place
-  grows where the traffic is. A map whose network is all lanes still publishes its settlements, on
-  lanes.
+grows where the traffic is. A map whose network is all lanes still publishes its settlements, on
+lanes.
 - Because a clearing is a keep-out, `settlements.count` now decides which trees and buildings exist:
-  the count fixes where the clearings are, and they are ground the placers must leave alone.
+the count fixes where the clearings are, and they are ground the placers must leave alone.
 - **The second half of a dead settlement: ruins.** `buildings.ruin` is the share of buildings that have
-  fallen down. A ruin keeps its footprint and drops its `collision`, so a character walks over the
-  rubble, and `state` says which it is on every building. A ruin does not make a place bigger:
-  `kind` counts what stands, so a village of shells is a hamlet. The two halves are reached by
-  mixing parameters rather than by switches, so a dead settlement is either nobody built there or
-  everything there fell down. This is a convenience and not a style system: what a building looks like
-  is the game's decision, a game that renders its own styles can ignore `state` entirely, and `ruin: 0`
-  gives the generator no opinion. Watabou's per-building states are a style catalogue, which is a
-  different thing from a share and would be a different field.
+fallen down. A ruin keeps its footprint and drops its `collision`, so a character walks over the
+rubble, and `state` says which it is on every building. A ruin does not make a place bigger:
+`kind` counts what stands, so a village of shells is a hamlet. The two halves are reached by
+mixing parameters rather than by switches, so a dead settlement is either nobody built there or
+everything there fell down. This is a convenience and not a style system: what a building looks like
+is the game's decision, a game that renders its own styles can ignore `state` entirely, and `ruin: 0`
+gives the generator no opinion. Watabou's per-building states are a style catalogue, which is a
+different thing from a share and would be a different field.
 - **Which building categories a map places is the caller's.** `buildings.categories` is a set of relative
-  weights, so a map of houses is `{ house: 1, farm: 0 }` and a farming valley is `{ house: 2, farm: 1 }`.
-  The set of categories stays small, so this rebalances what already exists rather than adding new
-  building types, which is content and is still open.
+weights, so a map of houses is `{ house: 1, farm: 0 }` and a farming valley is `{ house: 2, farm: 1 }`.
+The set of categories stays small, so this rebalances what already exists rather than adding new
+building types, which is content and is still open.
 
 Carried over from v0.4 and deferred here on purpose: plots and parcels. Choosing which categories get
 placed rather than drawing from a fixed weighted set is now v0.5 work and is done, as the caller
@@ -1491,14 +1491,14 @@ statement about a place, and the generator has no opinion on whether any of them
 Measured and deliberately not built, so the reasons are on the record rather than implied:
 
 - A settlement needs no terrain site test. Across 64 centres on 16 maps, none landed on rock, in water,
-  or on a beach, and none on steep ground, because the road generator already refuses to cross water
-  or impassable rock and keeps a margin from a shoreline. Every point on a road is good ground by
-  construction, so a site test would re-check an invariant the roads already hold.
+or on a beach, and none on steep ground, because the road generator already refuses to cross water
+or impassable rock and keeps a margin from a shoreline. Every point on a road is good ground by
+construction, so a site test would re-check an invariant the roads already hold.
 - A settlement publishes no boundary polygon. The radius and the membership list already answer whether
-  a building is inside a place, and a polygon would contradict the decision that a settlement is a
-  distance and not a shape.
+a building is inside a place, and a polygon would contradict the decision that a settlement is a
+distance and not a shape.
 - There is no central square. A consumer draws one from `position`, `radius`, and `kind`. A plaza that
-  reserves ground or blocks movement would be a different feature and is not planned.
+reserves ground or blocks movement would be a different feature and is not planned.
 
 Generation parameters might include:
 
@@ -1525,6 +1525,58 @@ Add environmental features surrounding settlements:
 - clearings;
 - isolated buildings;
 - vegetation transitions.
+- NEW - lets also think about resource collection types, like a mine for different ores, on rock edges, fishing spots, forests for hunting, etc. lets indicate locations that make environmental sense, the game can decide what to put there.
+
+Delivered so far:
+
+- **Resource sites are delivered, as a new `resourceSites` collection.** The item above asks the
+  generator to indicate where collection would make sense and to leave the game to decide what to put
+  there, and the second half is the load-bearing half: the generator has no geology, so that decision
+  is a fact about the map rather than a preference, and a map that placed its own iron would be a
+  generator with a fantasy bolted to it. A site is therefore named for the affordance it sits on — a
+  rock face, open water, a wood — and the caller decides what that is worth.
+- **A mine is cut into a rock face and faces out of it.** The face is walked at 8-unit steps and the
+  outward normal taken, which is the direction that leaves the rock, so it is the direction out. Where
+  a concave section leaves both perpendiculars outside the polygon, the one with the clearer approach
+  wins; a notch, where the rock wraps around three sides, is not a face anyone can dig into. The marker
+  sits 4 units inside the boundary, which is the overlap made checkable: a consumer can run
+  `pointInPolygon` against the rock it names and get an answer that means something. The entrance
+  requires open ground within 16 units, which costs about one face in seventy — 98.6% of faces clear
+  it — and drops the cliff-inside-a-cliff samples an arrow would otherwise point at solid rock. Only
+  rock and water are tested for that: a tree near a mouth is a wood and a character walks around one,
+  so refusing a face over a single trunk would take whole hillsides out of the pool for something that
+  is not in the way.
+- **A fishing spot is in the water and says how far out it is.** `distanceToShore` is measured to the
+  nearest shore of its own body, islands included, and `access` is derived from it: `land` within 32
+  units, `water` beyond. Both are published, because the verdict and the measurement answer different
+  questions and a caller that would rather its spots were 50 units out reads the number. 32 is the one
+  judgement rather than a measurement in the whole feature, because how far a character will wade is
+  the game's decision; it produces a 49/51 split over eight maps, so neither mode is decorative. A
+  spot is not refused for being unreachable from land, since a spot out of reach of a bank is the point
+  of one. A body has to be worth fishing first, and the water on a map is sharply bimodal — the median
+  body is 5.5k square units, a puddle, and the distribution jumps rather than tapers, so any floor lands
+  in the same gap. At 20,000 there are 4.5 bodies per map with inradii of 36 to 187 units, and the
+  largest reaches 180 units from shore.
+- **A huntable wood is measured before it is offered.** A site names a grove of 20 trees or more with
+  `walkableInside` set, and sits at the middle of its hull, which is inside it because a hull is
+  convex. The 20 is a floor because `densityPct` cannot tell a copse from a wood: it reads 100 on
+  every hull on a default map, because a hull is drawn tight around its own canopies, so coverage is
+  full by construction and the field carries no information. `walkableInside` is the field that earns
+  its place, and it is why the sites are placed after the map is built — asked earlier, every grove
+  would look unenterable and no hunting at all would be published.
+- **The three counts are separate and all default to `0`.** A default map says nothing about where
+  anything is gathered, which is the honest answer. They are three numbers because the ground offers
+  them wildly unevenly: 4.7 rock regions and about 4,000 units of face, but 4.5 fishable bodies and 16
+  to 23 huntable woods. A shared count would be tuned against the scarcest and would quietly cap the
+  other two, so `hunting: 64` publishes every wood there is and no more.
+- **Sites carry no collision**, the third surface in this format with none of it, after a forest hull
+  and a deck. A site is a mark on the ground, not a thing standing in it.
+
+Still open on this milestone: fields, orchards, fences and trails. Farms, clearings and isolated
+buildings are already delivered — a farm is a building category since v0.5, a clearing is a settlement's
+own since v0.5, and an isolated building is what a dead settlement is. Fences and trails are the two
+that are a genuinely new question rather than more of this: a fence has to decide whether it blocks,
+which is a navigation call and not a placement one.
 
 ---
 
@@ -1538,7 +1590,7 @@ Add:
 - paths;
 - river crossing structures, on the sites v0.3 publishes;
 - barriers.
-- NEW - Enemy spawn locations. Games will decide how to render the asset, but lets call it enemy bases. a custom parameters to determine quantity and minimum distance from a settlement.
+- NEW - Enemy spawn locations, like settlements (for player), enemy settlements basically. Games will decide how to render the asset, but lets call it enemy settlements. a custom parameters to determine quantity and minimum distance from a settlement. Preferred locations would be dense forests (with a way to get out), rocky areas, remote locations, open locations, away from settlements. 
 
 ---
 

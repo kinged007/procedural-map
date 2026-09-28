@@ -32,6 +32,7 @@ const fixture = (overrides) => ({
   vegetation: [],
   structures: [],
   docks: [],
+  resourceSites: [],
   roads: [],
   barriers: [],
   ...overrides,

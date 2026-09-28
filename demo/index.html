@@ -198,6 +198,29 @@
                   <span>No harbours</span><span>A pier on every shore a place stands on</span>
                 </div>
               </div>
+              <div class="range-field">
+                <label for="mine">Mines<output id="mine-value" for="mine">0</output></label
+                ><input id="mine" type="range" min="0" max="16" value="0" />
+                <div class="range-hints">
+                  <span>No mines</span><span>Rock faces with open ground in front</span>
+                </div>
+              </div>
+              <div class="range-field">
+                <label for="fishing"
+                  >Fishing spots<output id="fishing-value" for="fishing">0</output></label
+                ><input id="fishing" type="range" min="0" max="16" value="0" />
+                <div class="range-hints">
+                  <span>No spots</span><span>Water a boat or a bank can reach</span>
+                </div>
+              </div>
+              <div class="range-field">
+                <label for="hunting"
+                  >Huntable woods<output id="hunting-value" for="hunting">0</output></label
+                ><input id="hunting" type="range" min="0" max="16" value="0" />
+                <div class="range-hints">
+                  <span>No woods</span><span>Groves big enough to hold game</span>
+                </div>
+              </div>
               <label class="field-label" for="setback">Building setback from road (units)</label
               ><input
                 class="number-input"
@@ -329,6 +352,10 @@
             <div class="stat">
               <span class="stat-label">DOCKS</span><strong id="dock-count">—</strong
               ><span class="stat-detail" id="dock-detail">decks · shores</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">RESOURCE SITES</span><strong id="resource-count">—</strong
+              ><span class="stat-detail" id="resource-detail">mines · fishing · hunting</span>
             </div>
             <div class="stat">
               <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong

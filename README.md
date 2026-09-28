@@ -120,6 +120,9 @@ Every knob, with the value used when it is left out:
 | `buildings.categories`  | `{ house: 8, farm: 1 }` | Relative weights over what a road gets built on. A weight of `0` is never placed, and a name the generator cannot place is rejected.                                                                     |
 | `settlements.count`     | `2`                     | How many settlements the map has. A map with no roads publishes none, whatever this is set to.                                                                                                           |
 | `docks.count`           | `0`                     | How many plank decks reach out over the water. A dock is a settlement's waterfront, so a map with no settlements publishes none, and `0` is a map of no harbours.                                        |
+| `resources.mine`        | `0`                     | Upper bound on mine sites cut into rock faces. A face is only offered if the ground in front of it is open, and a map with no rock publishes none.                                                       |
+| `resources.fishing`     | `0`                     | Upper bound on fishing spots in the water. Only bodies of 20,000 square units or more are fished, so a map of ponds publishes none.                                                                      |
+| `resources.hunting`     | `0`                     | Upper bound on huntable woods. A grove needs 20 trees and open ground inside it, which a default map holds 16 to 23 times.                                                                               |
 
 Values outside a knob's range are rejected at the boundary rather than clamped silently.
 
@@ -169,6 +172,15 @@ ground a character walks on, and the walkability grid carves the water it covers
 character can walk the length of a pier. To know which places are ports, read the docks and collect
 their `settlementId`s. A deck is 16 units across and 12 to 40 long, which is what the grid can see at
 `cellSize: 16` and finer; below that a pier may contribute no cell at all.
+
+`map.resourceSites` holds the places worth gathering something at, and they are all `0` by default:
+the generator has no geology, so it will not tell you where iron is. It tells you where a rock face
+has open ground in front of it, where there is open water and how far out it is, and where a wood is
+big enough to hold game — and you decide what each of those is worth. A `mine` sits just inside its
+rock and `rotation` points the entrance out of it, a `fishing` spot is in the water and carries
+`access: 'land' | 'water'` alongside the measured `distanceToShore`, and a `hunting` site names a grove
+that was measured to be enterable. None of them blocks anything, so a site is a mark on the ground and
+not a thing in it.
 
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 

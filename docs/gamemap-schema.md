@@ -13,9 +13,10 @@ elided with a comment rather than truncated silently.
 
 ## What changed in 1.4
 
-1.4 adds a `settlements` collection and a `docks` one. Before it a map had houses but no village:
-buildings were placed one at a time against a road and nothing said which of them belonged together, and
-nothing said a place reached the water.
+1.4 adds a `settlements` collection, a `docks` one and a `resourceSites` one. Before it a map had
+houses but no village: buildings were placed one at a time against a road and nothing said which of
+them belonged together, nothing said a place reached the water, and nothing said where the ground was
+worth gathering on.
 
 | Change                                | Kind                    | What a consumer does                                                                                                                |
 | ------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,11 +26,16 @@ nothing said a place reached the water.
 | Generation config gains `settlements` | new optional config     | `settlements: { count }`. Unset is `count: 2`, and a map with no roads publishes none.                                              |
 | `docks` holds decks                   | new required collection | Iterate it. Each entry is a deck standing in water, with the place it serves and the water it stands in.                            |
 | A dock carries no collision           | new                     | A deck is ground to walk on, and the walkability raster carves the water it covers back open.                                       |
+| `resourceSites` holds sites           | new required collection | Iterate it. Each entry is a `mine`, a `fishing` spot or a `hunting` site, named for the ground it sits on.                          |
+| A mine faces out of its rock          | new                     | `rotation` is the entrance direction, and it is required on a mine and forbidden on the other two kinds.                            |
+| A site carries no collision           | new                     | A site is a mark on the ground, not a thing in it.                                                                                  |
+| Generation config gains `resources`   | new optional config     | `resources: { mine, fishing, hunting }`. All three unset is `0`: the generator has no geology and says nothing by default.          |
 | A building says whether it stands     | new required field      | `state` is `standing` or `ruined`. A ruin carries no `collision`, so rubble is walkable.                                            |
 
 A 1.3 map still validates as 1.3, and a 1.4 map does not validate as 1.3: the validator accepts
-`"1.4"` only, `settlements` and `docks` are required, and both are checked for their shape. A 1.3 map
-read by a 1.4 consumer has neither, so anything that renders or uses places has to cope with none.
+`"1.4"` only, `settlements`, `docks` and `resourceSites` are required, and all three are checked for
+their shape. A 1.3 map read by a 1.4 consumer has none, so anything that renders or uses places has to
+cope with none.
 
 ## What changed in 1.3
 
@@ -86,17 +92,19 @@ interface GameMap {
   structures: BuildingEntity[];
   settlements: SettlementEntity[];
   docks: DockEntity[];
+  resourceSites: ResourceSiteEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };
 }
 ```
 
-All twelve of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`, `structures`,
-`settlements`, `docks`, `roads`, and `barriers` are required, even when the collection is empty.
-`metadataLayers` is optional.
-A generated map fills `structures` with buildings, `settlements` with places, and `docks` with decks —
-though `docks` is empty unless asked for — and leaves `barriers` empty.
+All thirteen of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`,
+`structures`, `settlements`, `docks`, `resourceSites`, `roads`, and `barriers` are required, even when
+the collection is empty. `metadataLayers` is optional.
+A generated map fills `structures` with buildings, `settlements` with places, `docks` with decks and
+`resourceSites` with sites to gather at — though the last two are empty unless asked for — and leaves
+`barriers` empty.
 
 `bounds` is the size of the world in world units. Every coordinate in the map is absolute and lies
 inside it.
@@ -675,6 +683,92 @@ opinion on whether any of them is a port. A map with no settlements publishes no
 and a settlement that stands nowhere near water has no waterfront to publish. It is _not_ bounded by
 the number of settlements, because one place on a long shore can carry several decks: two settlements
 reach sixteen on a 2048 by 1536 map, eight of them to one place.
+
+## resourceSites
+
+`resourceSites` is a `ResourceSiteEntity[]`: the places worth gathering something at. It answers
+"where is the ground that makes gathering make sense", which nothing else on the map can — `terrain`
+says what the ground _is_, and a rock region is a thousand square units of face a consumer has to
+reduce to a site on its own.
+
+**The generator is neutral about what a site yields.** There is no geology on the map: the fields are
+elevation, moisture and vegetation, and nothing in a `GameMap` says where iron is as opposed to copper
+or flint. A site is therefore named for the affordance it sits on — a rock face, open water, a wood —
+and the consumer decides whether that is iron or flint or nothing, and builds there. A map that
+declared its own ores would be a generator with a fantasy bolted to it.
+
+```ts
+interface ResourceSiteEntity {
+  id: string;
+  type: 'resource-site';
+  kind: 'mine' | 'fishing' | 'hunting';
+  /**
+   * A mine is just inside the rock face it is cut into, a fishing spot is in the water, and a
+   * hunting site is at the middle of its grove.
+   */
+  position: Point;
+  /**
+   * Radians, and a `mine` only: the direction the entrance faces, pointing away from the rock and so
+   * out into open ground. Required on a mine and forbidden on the other two kinds.
+   */
+  rotation?: number;
+  asset: AssetReference;
+  metadata: {
+    /** A mine: the rock it is cut into. */
+    rockId?: string;
+    /** A fishing spot: the body of water it lies in. */
+    waterId?: string;
+    /** A hunting site: the grove it stands in. */
+    forestId?: string;
+    /** A fishing spot: the measured distance to the nearest shore of `waterId`. */
+    distanceToShore?: number;
+    /** A fishing spot: how it is reached. */
+    access?: 'land' | 'water';
+  };
+}
+```
+
+Four things follow from this shape, and a consumer that assumes otherwise will be wrong.
+
+**The three kinds are not interchangeable, and each names the one thing it stands on.** Validation
+rejects a `mine` with no `rockId`, a `fishing` spot with no `waterId`, and a `hunting` site with no
+`forestId`, and rejects any of them naming something not published. A `rockId` has to resolve to a
+region whose `kind` is `rock` and not to terrain at large, because a mine is cut into a face and a
+mine cut into a meadow is a hole in a field.
+
+**A mine is inside the rock and its arrow points out of it.** `position` is the boundary pushed 4
+units in, which is the overlap that makes it checkable: a consumer can run `pointInPolygon` against
+the rock it names and get an answer that means something, where a marker sitting exactly on the
+boundary is ambiguous to the same test. `rotation` is the outward normal at that point, so
+`position + 16 * (cos, sin)` is clear of the rock by construction — the generator only publishes faces
+where it is, and a test holds that over every site on every seed.
+
+**A fishing spot is in the water and says how far out it is.** `distanceToShore` is measured to the
+nearest shore of _its own_ body, islands included, and `access` is derived from it: `land` within 32
+units, `water` beyond. Both numbers are published because they answer different questions — `access` is
+the verdict the generator gives, and the distance is the measurement behind it, so a consumer that
+would rather its spots were 50 units out reads the number and ignores the verdict. Nothing needs
+walking to reach a `water` spot, which is the whole point of it, so a spot is not refused for being
+unreachable from land.
+
+**A hunting site is in a wood that was measured to be enterable.** It names a grove with at least 20
+trees and `metadata.walkableInside` set, and sits inside its hull. The 20 is a floor because
+`densityPct` cannot tell a copse from a wood: it reads 100 on every hull on a default map, since a
+hull is drawn tight around its own canopies, so canopy coverage is full by construction.
+`walkableInside` is the field that answers whether a character can get in and back out.
+
+**All three counts are upper bounds, and all three default to `0`.** `resources: { mine, fishing,
+hunting }` is unset at zero across the board, which is a map that says nothing about where anything is
+gathered. They are three numbers rather than one because the ground offers them wildly unevenly: a
+default map has 4.7 rock regions with about 4,000 units of face between them, but only 4.5 bodies of
+water big enough to fish and sixteen to twenty-three woods big enough to hunt, so a shared count would
+be tuned against the scarcest of the three and would quietly cap the other two. Asking for 64 mines
+and 64 fishing spots gets both; asking for 64 hunting sites gets every wood there is, which is fewer.
+A map with no rock publishes no mines at any count.
+
+A site carries no `collision`, and validation rejects one that does. A site is a mark on the ground,
+not a thing standing in it — the third reason in this format for a surface to carry no collision,
+after a forest hull and a deck.
 
 ## Asset references
 

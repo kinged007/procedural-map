@@ -358,6 +358,54 @@ there is no land crossing for a consumer to reason about — a pier is anchored 
 along `rotation`. `depth` is measured rather than fixed and runs from 12 to 40, so a pier in a narrow
 inlet is a short one and a pier off a broad shore is a full-length one.
 
+### 7. Resource sites
+
+`map.resourceSites` holds the places worth gathering something at. They are all `0` by default, and
+that is the honest default rather than a missing feature: **the generator has no geology and will not
+tell you where iron is.** It tells you where the ground is worth building on.
+
+```js
+const map = generateMap({
+  seed: 583921,
+  width: 2048,
+  height: 1536,
+  resources: { mine: 6, fishing: 6, hunting: 4 },
+});
+for (const site of map.resourceSites) console.log(site.kind, site.position, site.metadata);
+```
+
+Each entry is a `mine`, a `fishing` spot or a `hunting` site, and each names the one thing it stands
+on — a `rockId`, a `waterId` or a `forestId` — so all three ids resolve against collections you
+already have. You decide what a site is worth: a mine is iron, or silver, or a hand-dug hole, and the
+map has no opinion.
+
+**A mine is inside the rock and its `rotation` points out of it.** The position is the rock face
+pushed 4 units in, so `pointInPolygon` against the rock it names is unambiguous, and the generator only
+picks faces that have open ground within 16 units along the arrow. Place a mine mouth at `position` and
+run its door along `rotation`.
+
+**A fishing spot is in the water, and `access` says how you get there.** `land` means close enough to
+the bank to walk out to it; `water` means you need a boat. `distanceToShore` is published beside it and
+is a measurement rather than a verdict — read the number instead if you would rather your spots were
+further out than the generator's 32-unit line. A `water` spot is deliberately not reachable from land;
+nothing is wrong with it.
+
+```js
+const boatSpots = map.resourceSites.filter(
+  (site) => site.kind === 'fishing' && site.metadata.access === 'water',
+);
+```
+
+**A hunting site is in a wood you can get into.** It names a grove with 20 trees or more and open
+ground inside its hull, measured on the same raster you would bake. It is a marker for an area, so
+place your hunt anywhere inside `metadata.forestId`'s hull rather than only at the site.
+
+Three things to plan around. A site carries no collision and blocks nothing — a site is a mark on the
+ground, not a thing standing in it, so put your own building there and it is yours to collide. The
+counts are upper bounds, and bounded very unevenly: a default map has 4.7 rock regions and thousands of
+units of face, but only 4.5 fishable bodies and 16 to 23 huntable woods, so `hunting: 64` gives you
+every wood there is and no more. And a map with no rock publishes no mines at any count.
+
 ## Walking on the map
 
 For a per-frame movement check, do not walk the geometry. Bake it once and read a byte.
@@ -609,8 +657,11 @@ So the map is not mistaken for more than it is:
 - **No barriers.** `map.barriers` is empty on a generated map; it is where an imported wall, gate, or
   fence belongs.
 - **No plots, parcels, or resources.** Buildings are published, but a building is a rectangle on the
-  ground, not a parcel it sits in. Plots are the v0.5 roadmap. Settlements are published — see below —
-  but a settlement is a centre and a list of the buildings around it, not land divided between owners.
+  ground, not a parcel it sits in. Settlements are published — see below — but a settlement is a centre
+  and a list of the buildings around it, not land divided between owners. `resourceSites` says where
+  gathering would make sense and deliberately does not say what a site yields: there is no ore, no
+  fish and no game in a `GameMap`, because the generator has no geology and a fantasy bolted to it is a
+  different product.
 - **No bridges or fords.** Rivers are published, and a road records the site of each crossing its
   surface reached, but nothing is built there. A river also blocks the walkability raster where a road
   goes over it, so a character cannot walk the crossing until you make those cells walkable. A river

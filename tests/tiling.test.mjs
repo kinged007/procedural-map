@@ -31,12 +31,13 @@ test('a tile with no origin and no world is the map it always was', () => {
   // the `state` that says whether it stands or has fallen down, again when the category weights
   // moved out of the code into the resolved config, and again when docks were published as a 1.4
   // collection. That last one published no docks at all: a `docks: []` is still a key on the map, so
-  // the hash moves and the terrain does not. This still guards against `origin`/`world` leaking into
-  // the terrain.
+  // the hash moves and the terrain does not. Resource sites moved it once more for the same reason,
+  // and again published nothing at the default of zero. This still guards against
+  // `origin`/`world` leaking into the terrain.
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    '5602361cc81aee41de3cbca943e275ac5ba5288285a79c4e92a02cb3f552ef9a',
+    '533e00eb1dd4bb0a556de74dc9e6377f46f2ef7846ece60c0d01af84ed961b4a',
   );
 });
 

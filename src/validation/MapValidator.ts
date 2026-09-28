@@ -414,6 +414,7 @@ export function validateMap(data: unknown): ValidationResult {
       'structures',
       'settlements',
       'docks',
+      'resourceSites',
       'roads',
       'barriers',
     ] as const;
@@ -425,6 +426,17 @@ export function validateMap(data: unknown): ValidationResult {
     if (Array.isArray(data.structures))
       for (const building of data.structures)
         if (isRecord(building) && typeof building.id === 'string') buildingIds.add(building.id);
+    const forestIds = new Set<string>();
+    if (Array.isArray(data.forests))
+      for (const forest of data.forests)
+        if (isRecord(forest) && typeof forest.id === 'string') forestIds.add(forest.id);
+    // Only rock, not terrain at large: a mine is cut into a face, and a `rockId` naming a meadow is
+    // a mine cut into a field.
+    const rockIds = new Set<string>();
+    if (Array.isArray(data.terrain))
+      for (const region of data.terrain)
+        if (isRecord(region) && region.kind === 'rock' && typeof region.id === 'string')
+          rockIds.add(region.id);
     const settlementIds = new Set<string>();
     if (Array.isArray(data.settlements))
       for (const settlement of data.settlements)
@@ -446,7 +458,8 @@ export function validateMap(data: unknown): ValidationResult {
             collection === 'forests' ||
             collection === 'structures' ||
             collection === 'settlements' ||
-            collection === 'docks';
+            collection === 'docks' ||
+            collection === 'resourceSites';
           validator.entity(entity, `${collection}[${index}]`, bounds!, !specialized);
           if (!isRecord(entity)) return;
           if (
@@ -526,6 +539,80 @@ export function validateMap(data: unknown): ValidationResult {
               `${collection}[${index}]`,
               'must be a dock with a positive size, a deck, no collision, and a settlement and a body of water',
             );
+
+          if (
+            collection === 'resourceSites' &&
+            (entity.type !== 'resource-site' ||
+              !['mine', 'fishing', 'hunting'].includes(entity.kind as string) ||
+              entity.collision !== undefined ||
+              !isRecord(entity.metadata))
+          )
+            validator.error(
+              `${collection}[${index}]`,
+              'must be a mine, a fishing spot or a hunting site, with a kind and no collision',
+            );
+
+          // A site names the ground it is on, so a name resolving to nothing is a site a consumer
+          // cannot build on. Each kind has to name the one thing it stands in, because the three are
+          // not interchangeable: a mine on a beach is a hole in the sand.
+          if (collection === 'resourceSites' && isRecord(entity.metadata)) {
+            const required = {
+              mine: 'rockId',
+              fishing: 'waterId',
+              hunting: 'forestId',
+            } as const;
+            const named = required[entity.kind as keyof typeof required];
+            if (named) {
+              const value = entity.metadata[named];
+              const known =
+                named === 'rockId' ? rockIds : named === 'waterId' ? waterIds : forestIds;
+              if (typeof value !== 'string' || !value.length)
+                validator.error(
+                  `${collection}[${index}].metadata.${named}`,
+                  `a ${entity.kind} site must name the ${named.replace('Id', '')} it stands on`,
+                );
+              else if (!known.has(value))
+                validator.error(
+                  `${collection}[${index}].metadata.${named}`,
+                  named === 'rockId'
+                    ? 'must name a rock region published in terrain'
+                    : named === 'waterId'
+                      ? 'must name a body of water published in water'
+                      : 'must name a forest published in forests',
+                );
+            }
+            // The entrance is what makes a mine a mine rather than a dot on a cliff, and the other
+            // two kinds have no facing to publish, so both directions are refused rather than
+            // allowed to go unchecked.
+            if (
+              entity.kind === 'mine' &&
+              !validator.finite(entity.rotation, `${collection}[${index}].rotation`)
+            )
+              validator.error(
+                `${collection}[${index}].rotation`,
+                'a mine must face out of its rock',
+              );
+            if (entity.kind !== 'mine' && entity.rotation !== undefined)
+              validator.error(
+                `${collection}[${index}].rotation`,
+                'only a mine has a facing, since only a mine is cut into something',
+              );
+            // `distanceToShore` is published so a consumer that would rather its spots were further
+            // out can read the number instead of taking `access` on trust, so it has to be there.
+            if (entity.kind === 'fishing')
+              if (
+                !validator.finite(
+                  entity.metadata.distanceToShore,
+                  `${collection}[${index}].metadata.distanceToShore`,
+                ) ||
+                (entity.metadata.distanceToShore as number) < 0 ||
+                !['land', 'water'].includes(entity.metadata.access as string)
+              )
+                validator.error(
+                  `${collection}[${index}].metadata`,
+                  'a fishing spot must say how far it is from the bank and whether it is reached from land or from water',
+                );
+          }
 
           if (
             collection === 'settlements' &&

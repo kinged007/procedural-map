@@ -44,9 +44,12 @@ const ranges = [
   'spacing',
   'settlements',
   'docks',
+  'mine',
+  'fishing',
+  'hunting',
 ] as const;
 // The ranges that are a count in world units rather than a percentage, so they read as a number.
-const unitRanges = new Set(['spacing', 'settlements', 'docks']);
+const unitRanges = new Set(['spacing', 'settlements', 'docks', 'mine', 'fishing', 'hunting']);
 const numberFormat = new Intl.NumberFormat('en');
 const descriptions: Record<MapView, string> = {
   styled: 'Grassland, open water & clustered woodland',
@@ -176,6 +179,11 @@ function configFromControls(): GenerationConfig {
     },
     settlements: { count: element<HTMLInputElement>('settlements').valueAsNumber },
     docks: { count: element<HTMLInputElement>('docks').valueAsNumber },
+    resources: {
+      mine: element<HTMLInputElement>('mine').valueAsNumber,
+      fishing: element<HTMLInputElement>('fishing').valueAsNumber,
+      hunting: element<HTMLInputElement>('hunting').valueAsNumber,
+    },
   };
 }
 
@@ -201,6 +209,9 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('weight-farm').value = String(config.buildings.categories.farm);
   element<HTMLInputElement>('settlements').value = String(config.settlements.count);
   element<HTMLInputElement>('docks').value = String(config.docks.count);
+  element<HTMLInputElement>('mine').value = String(config.resources.mine);
+  element<HTMLInputElement>('fishing').value = String(config.resources.fishing);
+  element<HTMLInputElement>('hunting').value = String(config.resources.hunting);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);
   element<HTMLInputElement>('origin-x').value = String(config.origin.x);
@@ -255,6 +266,21 @@ function showMap(nextMap: GameMap, source: string, elapsed?: number) {
       }`
     : 'no places on this map';
   element('dock-count').textContent = numberFormat.format(map.docks.length);
+  // The site detail reports how the fishing spots divide, because that split is the one a caller
+  // tuning `resources.fishing` cannot predict: it is a property of how much water there is and how
+  // far out it goes, not of the count.
+  const sites = { mine: 0, fishing: 0, hunting: 0 };
+  let land = 0;
+  for (const site of map.resourceSites) {
+    sites[site.kind] += 1;
+    if (site.kind === 'fishing' && site.metadata.access === 'land') land += 1;
+  }
+  element('resource-count').textContent = numberFormat.format(map.resourceSites.length);
+  element('resource-detail').textContent = map.resourceSites.length
+    ? `${sites.mine} mines · ${sites.fishing} fishing${
+        sites.fishing ? ` (${land} from land)` : ''
+      } · ${sites.hunting} hunting`
+    : 'no sites · the map decides nothing';
   element('dock-detail').textContent = map.docks.length
     ? `${numberFormat.format(map.docks.length)} deck${
         map.docks.length === 1 ? '' : 's'

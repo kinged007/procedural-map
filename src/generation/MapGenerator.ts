@@ -14,6 +14,7 @@ import { assertValidMap } from '../validation/MapValidator.js';
 import { generateBuildings, CATEGORIES } from './buildings.js';
 import { gridToEdgePolygons } from './contours.js';
 import { generateDocks } from './docks.js';
+import { generateResourceSites } from './resources.js';
 import { generateForests, markWalkableInside } from './forests.js';
 import { generateSettlements, settlementSites, type SettlementSite } from './settlements.js';
 import { generateRoads } from './roads/RoadGenerator.js';
@@ -119,6 +120,29 @@ function resolveNumber(
   if (!Number.isFinite(result) || result < minimum || result > maximum) {
     throw new RangeError(`${name} must be a finite number between ${minimum} and ${maximum}`);
   }
+  return result;
+}
+
+/**
+ * A count, which is a whole number or nothing.
+ *
+ * `resolveNumber` bounds-checks, and every quantity that is a rate or a scale is legitimately
+ * fractional, so it cannot do this itself. A count is different: `2.5` is not a number of
+ * settlements, and the loops that read it test `length >= count`, so a float is silently rounded up
+ * and the caller is handed a different number than the one they asked for, with nothing said. That
+ * was already true of `settlements.count` and `docks.count`; it is checked here for every count
+ * rather than only for the new ones, because a count that is sometimes validated and sometimes not
+ * is worse than either.
+ */
+function resolveCount(
+  value: number | undefined,
+  fallback: number,
+  name: string,
+  maximum: number,
+): number {
+  const result = resolveNumber(value, fallback, name, 0, maximum);
+  if (!Number.isInteger(result))
+    throw new RangeError(`${name} must be a whole number, not ${result}`);
   return result;
 }
 
@@ -318,11 +342,10 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
       // A count, not a density: a caller asking for four settlements wants four, and a map with no
       // roads has nowhere to put even one, so the ceiling is generous and the road network is what
       // actually limits it.
-      count: resolveNumber(
+      count: resolveCount(
         config.settlements?.count,
         DEFAULT_CONFIG.settlements.count,
         'settlements.count',
-        0,
         64,
       ),
     },
@@ -330,7 +353,30 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
       // A count, and an upper bound rather than a promise for the same reason the settlement count is
       // one: a dock is a settlement's waterfront, so the settlements and the shorelines are what
       // actually limit it, and a map with no settlements has no harbours at any count.
-      count: resolveNumber(config.docks?.count, DEFAULT_CONFIG.docks.count, 'docks.count', 0, 64),
+      count: resolveCount(config.docks?.count, DEFAULT_CONFIG.docks.count, 'docks.count', 64),
+    },
+    resources: {
+      // Three upper bounds rather than one, because the ground offers the three unevenly: a face to
+      // mine is plentiful and a wood to hunt is scarce, so a shared count would be tuned against the
+      // scarcest of them and would quietly cap the other two.
+      mine: resolveCount(
+        config.resources?.mine,
+        DEFAULT_CONFIG.resources.mine,
+        'resources.mine',
+        64,
+      ),
+      fishing: resolveCount(
+        config.resources?.fishing,
+        DEFAULT_CONFIG.resources.fishing,
+        'resources.fishing',
+        64,
+      ),
+      hunting: resolveCount(
+        config.resources?.hunting,
+        DEFAULT_CONFIG.resources.hunting,
+        'resources.hunting',
+        64,
+      ),
     },
   };
 }
@@ -738,6 +784,9 @@ export function generateMap(config: GenerationConfig): GameMap {
     structures,
     settlements,
     docks,
+    // Filled in below, once the map exists. A site is a question about the finished ground, so it is
+    // asked of the finished map rather than of the collections as they are assembled.
+    resourceSites: [],
     roads,
     barriers: [],
     metadataLayers: { fields, generation: resolved, waterLevel: level },
@@ -745,6 +794,18 @@ export function generateMap(config: GenerationConfig): GameMap {
   // Forests do not block, so this grid is the same one a consumer would bake and does not depend on
   // them. Measuring the clearings against it is what stops the field being a guess.
   markWalkableInside(forests, rasterizeWalkability(map, { cellSize: FOREST_CLEARANCE_CELL }));
+  // Resource sites come after that, and they depend on it: a huntable wood is one whose hull reports
+  // open ground inside, which is exactly the field measured on the line above. Asking before it was
+  // measured would see every grove as unenterable and publish no hunting at all.
+  //
+  // Two streams, so that asking for more mines does not reshuffle which fishing spots a caller also
+  // asked for. Neither draws from `placement`, so none of this moves anything else on the map.
+  const mineRandom = new Random(placement ^ 0x2f6d11);
+  const fishRandom = new Random(placement ^ 0x71c4a9);
+  map.resourceSites = generateResourceSites(map, resolved.resources, {
+    mine: () => mineRandom.next(),
+    fishing: () => fishRandom.next(),
+  });
   assertValidMap(map);
   return map;
 }

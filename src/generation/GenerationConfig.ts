@@ -84,6 +84,21 @@ export interface GenerationConfig {
    * and the generator has no opinion on whether any of them is a port.
    */
   docks?: { count?: number };
+  /**
+   * The places worth gathering something at: mines on rock faces, fishing spots in water, and
+   * huntable woods.
+   *
+   * Each is an upper bound, and they are separate because the ground offers them unevenly. A default
+   * map has 4.7 rock regions with about 4,000 units of face between them, but only 4.5 bodies of
+   * water big enough to fish and sixteen woods big enough to hunt, so a single shared count would
+   * have to be tuned against whichever of the three is scarcest.
+   *
+   * `0` across the board is the default, and the generator's default says something deliberate: it
+   * has no geology. The map says where a rock ends and where water deepens, not that one is iron and
+   * the next is flint, so a map that placed its own mines would be a generator with a fantasy bolted
+   * to it. Ask for sites, get ground worth building on, and decide what a site is worth yourself.
+   */
+  resources?: { mine?: number; fishing?: number; hunting?: number };
 }
 
 export interface ResolvedGenerationConfig {
@@ -106,6 +121,7 @@ export interface ResolvedGenerationConfig {
   };
   settlements: { count: number };
   docks: { count: number };
+  resources: { mine: number; fishing: number; hunting: number };
 }
 
 export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
@@ -128,4 +144,5 @@ export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
   },
   settlements: { count: 2 },
   docks: { count: 0 },
+  resources: { mine: 0, fishing: 0, hunting: 0 },
 };

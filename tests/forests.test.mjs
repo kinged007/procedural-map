@@ -308,6 +308,7 @@ const forestFixture = (overrides) => {
     structures: [],
     settlements: [],
     docks: [],
+    resourceSites: [],
     roads: [],
     barriers: [],
     ...overrides,

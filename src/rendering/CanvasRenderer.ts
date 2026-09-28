@@ -5,6 +5,7 @@ import type {
   GameMap,
   Point,
   PolygonGeometry,
+  ResourceSiteEntity,
   RoadEntity,
   SettlementEntity,
   WaterRegion,
@@ -89,6 +90,63 @@ function drawDocks(context: CanvasRenderingContext2D, docks: DockEntity[], theme
       context.stroke();
     }
     context.restore();
+  }
+}
+
+/**
+ * Resource sites, drawn as the three marks they are.
+ *
+ * A mine gets an arrow rather than a dot, because the arrow is the information: it is the direction
+ * the entrance faces, so a reader can see at a glance which way is out of the rock. A fishing spot
+ * gets a ring, and a huntable wood a cross, so the three are told apart at a zoom where a dot is a
+ * few pixels across. None of it is a scale drawing: a consumer drawing its own mine replaces all of
+ * it, and the geometry it needs is the position, the facing and the name in `metadata`.
+ */
+function drawResourceSites(
+  context: CanvasRenderingContext2D,
+  sites: ResourceSiteEntity[],
+  scale: number,
+  theme: MapTheme,
+): void {
+  const palette = theme.resources ?? defaultTheme.resources!;
+  for (const site of sites) {
+    const { x, y } = site.position;
+    const size = 5 / scale;
+    context.strokeStyle =
+      site.kind === 'mine'
+        ? palette.mine
+        : site.kind === 'fishing'
+          ? palette.fishing
+          : palette.hunting;
+    context.lineWidth = 1.2 / scale;
+    context.beginPath();
+    if (site.kind === 'mine') {
+      const heading = site.rotation ?? 0;
+      const forward = { x: Math.cos(heading), y: Math.sin(heading) };
+      // A shaft driven into the face, with the head of the arrow where the ground opens up. It reads
+      // as a direction rather than as a spike, which is the whole of what a mine marker is for.
+      context.moveTo(x - forward.x * size, y - forward.y * size);
+      context.lineTo(x + forward.x * size, y + forward.y * size);
+      const barb = 0.45;
+      for (const side of [1, -1]) {
+        const angle = heading + side * barb * Math.PI;
+        context.moveTo(x + forward.x * size, y + forward.y * size);
+        context.lineTo(
+          x + forward.x * size * 0.5 + Math.cos(angle) * size * 0.5,
+          y + forward.y * size * 0.5 + Math.sin(angle) * size * 0.5,
+        );
+      }
+    } else if (site.kind === 'fishing') {
+      context.arc(x, y, size * 0.8, 0, Math.PI * 2);
+      context.moveTo(x - size * 0.4, y);
+      context.lineTo(x + size * 0.4, y);
+    } else {
+      context.moveTo(x - size * 0.7, y - size * 0.7);
+      context.lineTo(x + size * 0.7, y + size * 0.7);
+      context.moveTo(x + size * 0.7, y - size * 0.7);
+      context.lineTo(x - size * 0.7, y + size * 0.7);
+    }
+    context.stroke();
   }
 }
 
@@ -753,6 +811,12 @@ export class CanvasRenderer {
       // the trees are only ever cleared far enough away for a trunk not to be inside a wall, so a
       // canopy can still overhang a roof.
       if (styled && map.structures.length > 0) drawBuildings(context, map.structures, theme);
+      // Over the canopies, like the buildings and for a stronger reason. A site is an annotation
+      // rather than a thing in the scene, and a hunting site is by definition in the middle of a wood,
+      // so a marker drawn under the trees is not occasionally hidden: it is never visible. A mine
+      // drawn on top of a canopy is a mark over ground that is still there, which is what it is.
+      if (styled && map.resourceSites.length > 0)
+        drawResourceSites(context, map.resourceSites, scale, theme);
 
       if (view === 'collision') {
         context.fillStyle = '#b45f4533';
@@ -776,6 +840,7 @@ export class CanvasRenderer {
           ...map.structures,
           ...map.settlements,
           ...map.docks,
+          ...map.resourceSites,
           ...map.roads,
           ...map.barriers,
         ]) {

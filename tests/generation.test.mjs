@@ -37,11 +37,14 @@ test('generation is byte-stable for the same config', () => {
   // first draws a different category. Reweighting now moves no building's site, which was the point,
   // and the default mix is unchanged at one site in nine. The last move published docks as a 1.4
   // collection, which moved the hash without moving the map: a `docks: []` is a key on the map and
-  // the hash reads keys, and the default count of 0 is a map of no harbours.
+  // the hash reads keys, and the default count of 0 is a map of no harbours. Then resource sites were
+  // published the same way, for the same reason and with the same effect: a `resourceSites: []` is a
+  // key, and the default of zero across all three kinds is a map that says nothing about where iron
+  // is. Both collections are required, so a map that omits one is invalid rather than sparse.
   // `tests/tiling.test.mjs` holds the matching value for the map with the placement fields removed.
   assert.equal(
     stableHash(first),
-    'a488aa4fdbed63a5f1ff20a2353782b3d65a4bd53e2d7d1b55bbdac1724094fb',
+    '7e641c45d6e9597a23d98f9837fb798e83110cbc52d4788f0cf444757ceefaa7',
   );
 });
 

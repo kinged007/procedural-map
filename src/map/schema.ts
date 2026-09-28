@@ -14,7 +14,7 @@ export const gameMapSchema = {
   $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.4.json',
   title: 'GameMap v1.4',
   description:
-    'A forest carries no collision, and a settlement carries none either. A forest geometry is a hull for broadphase, rendering and a minimap, and it deliberately over-covers the clearings between trees so that a consumer can test one bounds box instead of every tree on the map. A settlement radius is a statement about where a place ends, not a wall: it claims buildings by proximity and a consumer wanting the ground it covers tests the distance itself. A settlement with no buildings is a settlement, which is what a dead one is. A dock carries no collision either, for the opposite reason to a building: a deck is ground a character walks on rather than a wall, and the walkability raster carves the water it covers back open.',
+    'A forest carries no collision, and a settlement carries none either. A forest geometry is a hull for broadphase, rendering and a minimap, and it deliberately over-covers the clearings between trees so that a consumer can test one bounds box instead of every tree on the map. A settlement radius is a statement about where a place ends, not a wall: it claims buildings by proximity and a consumer wanting the ground it covers tests the distance itself. A settlement with no buildings is a settlement, which is what a dead one is. A dock carries no collision either, for the opposite reason to a building: a deck is ground a character walks on rather than a wall, and the walkability raster carves the water it covers back open. A resource site carries none for a third reason: it is a mark on the ground saying this is worth building on, and not a thing standing there.',
   type: 'object',
   required: [
     'version',
@@ -27,6 +27,7 @@ export const gameMapSchema = {
     'structures',
     'settlements',
     'docks',
+    'resourceSites',
     'roads',
     'barriers',
   ],
@@ -41,6 +42,7 @@ export const gameMapSchema = {
     structures: { type: 'array', items: { $ref: '#/$defs/building' } },
     settlements: { type: 'array', items: { $ref: '#/$defs/settlement' } },
     docks: { type: 'array', items: { $ref: '#/$defs/dock' } },
+    resourceSites: { type: 'array', items: { $ref: '#/$defs/resourceSite' } },
     roads: { type: 'array', items: { $ref: '#/$defs/road' } },
     barriers: { type: 'array', items: { $ref: '#/$defs/entity' } },
     metadataLayers: { $ref: '#/$defs/metadataLayers' },
@@ -253,6 +255,65 @@ export const gameMapSchema = {
           // A deck is ground a character walks on, so it must not carry a collision. A dock that
           // blocked movement would be the opposite of what it is, which is the same reason a forest
           // hull carries none: both are surfaces, and neither is a wall.
+          not: { required: ['collision'] },
+        },
+      ],
+    },
+    resourceSite: {
+      allOf: [
+        { $ref: '#/$defs/entity' },
+        {
+          type: 'object',
+          required: ['type', 'kind', 'position', 'metadata'],
+          properties: {
+            type: { const: 'resource-site' },
+            kind: { enum: ['mine', 'fishing', 'hunting'] },
+            rotation: { type: 'number' },
+            metadata: {
+              type: 'object',
+              properties: {
+                rockId: { type: 'string', minLength: 1 },
+                waterId: { type: 'string', minLength: 1 },
+                forestId: { type: 'string', minLength: 1 },
+                distanceToShore: { type: 'number', minimum: 0 },
+                access: { enum: ['land', 'water'] },
+              },
+              additionalProperties: { $ref: '#/$defs/jsonValue' },
+            },
+          },
+          allOf: [
+            {
+              // A mine is a mouth in a rock face, so it names the rock and carries the direction the
+              // entrance faces. `rotation` is absent on the other two kinds, which have no facing:
+              // there is nothing to point out of a wood, and a fishing spot is in the water rather
+              // than on a wall.
+              if: { properties: { kind: { const: 'mine' } }, required: ['kind'] },
+              then: { required: ['rotation'] },
+            },
+            {
+              if: { properties: { kind: { const: 'mine' } }, required: ['kind'] },
+              then: {
+                properties: { metadata: { required: ['rockId'] } },
+              },
+              else: { properties: { not: { required: ['rotation'] } } },
+            },
+            {
+              // A fishing spot is in water and says how far out it is, which is the number a
+              // consumer that disagrees with `access` reads instead of taking the verdict on trust.
+              if: { properties: { kind: { const: 'fishing' } }, required: ['kind'] },
+              then: {
+                properties: {
+                  metadata: { required: ['waterId', 'distanceToShore', 'access'] },
+                },
+              },
+            },
+            {
+              if: { properties: { kind: { const: 'hunting' } }, required: ['kind'] },
+              then: { properties: { metadata: { required: ['forestId'] } } },
+            },
+          ],
+          // A site is a mark on the ground, not an obstacle, so it carries no collision. The same
+          // reason a forest hull, a settlement and a dock carry none.
           not: { required: ['collision'] },
         },
       ],
