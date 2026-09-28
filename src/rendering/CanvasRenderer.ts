@@ -1,6 +1,7 @@
 import type {
   BuildingEntity,
   CollisionGeometry,
+  DockEntity,
   GameMap,
   Point,
   PolygonGeometry,
@@ -46,6 +47,49 @@ export interface RenderOptions {
   zoom?: number;
   pan?: Point;
   navigation?: NavigationOverlay;
+}
+
+/**
+ * Draws the plank decks reaching out over the water.
+ *
+ * A deck is a surface rather than a structure, so it is drawn as one: the published deck rectangle
+ * filled as boards running its length, with a rail line down each side rather than walls, which is
+ * what separates a pier from a building at the zoom a building reads at. The shape comes entirely
+ * from `geometry` and `rotation`, so a game that swaps in its own asset has the same rectangle to fit
+ * it into.
+ */
+function drawDocks(context: CanvasRenderingContext2D, docks: DockEntity[], theme: MapTheme): void {
+  const palette = theme.docks ?? defaultTheme.docks!;
+  for (const dock of docks) {
+    polygonPath(context, dock.geometry);
+    context.fillStyle = palette.deck;
+    context.fill();
+    context.strokeStyle = palette.outline;
+    context.lineWidth = 1.1;
+    context.stroke();
+    // The boards, clipped to the deck so they stop at the rail rather than at the fill rule's edge.
+    // Planks are laid across a pier rather than along it, so each is a segment along the deck's
+    // width, stepped along its length: the drawing says decking, and the gap it leaves at each step
+    // is what a consumer drawing its own asset will want to know the deck is made of.
+    context.save();
+    polygonPath(context, dock.geometry);
+    context.clip();
+    context.strokeStyle = palette.outline;
+    context.globalAlpha = 0.4;
+    context.lineWidth = 0.7;
+    const { x, y } = dock.position;
+    const forward = { x: Math.cos(dock.rotation), y: Math.sin(dock.rotation) };
+    const across = { x: -forward.y, y: forward.x };
+    for (let step = 0; step <= dock.depth; step += 4) {
+      const cx = x + forward.x * step;
+      const cy = y + forward.y * step;
+      context.beginPath();
+      context.moveTo(cx - (across.x * dock.width) / 2, cy - (across.y * dock.width) / 2);
+      context.lineTo(cx + (across.x * dock.width) / 2, cy + (across.y * dock.width) / 2);
+      context.stroke();
+    }
+    context.restore();
+  }
 }
 
 function polygonPath(context: CanvasRenderingContext2D, geometry: PolygonGeometry) {
@@ -481,6 +525,17 @@ function drawSettlements(context: CanvasRenderingContext2D, map: GameMap, scale:
     context.lineWidth = 2 / scale;
     context.stroke();
   }
+  // A deck, drawn as the deck, so a place that is a port reads as one here as well as in the styled
+  // view. Which place a deck belongs to is in its `settlementId`, and nothing is drawn twice for
+  // that: a deck is in one place, which is the rule that makes membership a partition.
+  for (const dock of map.docks) {
+    polygonPath(context, dock.geometry);
+    context.fillStyle = '#8a6a3d';
+    context.fill();
+    context.strokeStyle = '#4a3805';
+    context.lineWidth = 1.4 / scale;
+    context.stroke();
+  }
 }
 
 export class CanvasRenderer {
@@ -639,6 +694,10 @@ export class CanvasRenderer {
       // here was a square of a deck in the wrong place, which is worse than no marker.
       if (styled && map.roads.length > 0) drawRoads(context, map.roads, theme);
       if (styled) drawMouths(context, map.water, theme);
+      // A dock is drawn over the water, under the roads: a deck reaching out from a shore, with the
+      // road it is reached along running to its root.
+      if (styled && map.docks.length > 0) drawDocks(context, map.docks, theme);
+      if (styled) drawMouths(context, map.water, theme);
       // A settlement's clearing, over the road it sits on. It is open ground, so it is drawn as
       // ground rather than as an object: a green at the middle of a place, with the road running
       // through it.
@@ -716,6 +775,7 @@ export class CanvasRenderer {
           ...map.vegetation,
           ...map.structures,
           ...map.settlements,
+          ...map.docks,
           ...map.roads,
           ...map.barriers,
         ]) {

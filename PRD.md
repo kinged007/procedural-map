@@ -1266,7 +1266,7 @@ A building is a solid rectangle standing on the ground, published in `structures
 - The footprint is the collision, exactly as water and roads are, so a consumer never reconciles two shapes. The renderer works the front wall out from `position` and `rotation` rather than from the order of the ring, so a hand-written map that wrote the ring the other way round still draws.
 - A category earns its place by changing the placement, not only the name. A house is small and uses the configured setback; a farm is larger and stands well back from the road, which is what a farmyard is. Two categories are enough to carry that, and a third that only changed the asset would not be a category.
 - Spacing is a global centre-to-centre minimum rather than a gap along one road, so buildings on two roads that run close together do not end up inside each other. It also makes `setback` behave oddly at the low end: pulling both rows in towards a road pulls them into each other, and below the spacing they cancel out and the map gets fewer buildings. A control that is not monotone is called out here rather than left to be discovered.
-- A building is refused a site in the water, on rock, in a road, on a beach, or under a tree. A beach is the one of these that nothing refuses to walk on: a building is kept off it anyway, because a house standing on the sand is a house nobody would build, and because a shoreline is where a port, a pier, or a boat shed belongs. Keeping the band clear is what leaves that ground for a category able to claim it, which is v0.5 work; the v0.4 rule is only that nothing stands there yet. Trees are generated first, so a tree is the reason a building is dropped and not the other way round: the wood is worth more to a map than the house beside it.
+- A building is refused a site in the water, on rock, in a road, on a beach, or under a tree. A beach is the one of these that nothing refuses to walk on: a building is kept off it anyway, because a house standing on the sand is a house nobody would build, and because a shoreline is where a port, a pier, or a boat shed belongs. Keeping the band clear is what leaves that ground for a dock, which is v0.5 work and is delivered; the v0.4 rule is only that nothing stands there yet. Trees are generated first, so a tree is the reason a building is dropped and not the other way round: the wood is worth more to a map than the house beside it.
 - A building blocks the walkability raster, in the same list as water and rock. Nothing in the format says where a door is, so a consumer wanting a doorway finds it itself.
 - A building is not a parcel. There is no plot, no boundary, and no ownership: it is a rectangle standing on ordinary ground, and the ground around it is ordinary terrain.
 
@@ -1393,7 +1393,7 @@ Potential systems:
 - neighbourhoods;
 - settlement boundaries;
 - which building categories a map places;
-- shoreline categories, including a port or a pier that stands in the water.
+- NEW - A dock is a settlement's waterfront: a walkable deck standing in the water, on a road point within reach of a shore, naming the place it serves and the body of water it stands in. It is a new entity and not a building category, because a pier stands in water, is ground a character walks on, and is reached by a place rather than by a road frontage. The walkability raster carves the water a deck covers back open.
 - NEW - Settlements may be considered a player base or spawn point. we want parameters that can define the quantity of settlements to spawn, and mixed with the housing and other params, we may generate maps with a dead settlement (ie. no surrounding buildings, or its all in ruins.)
 
 Delivered in v0.5 so far:
@@ -1461,6 +1461,25 @@ four times the ground of a house and refuses more sites than a house does: the d
 nine and the map comes out at 6.1% farms. A shoreline is v0.5 work too, because v0.4 keeps the whole
 beach band clear of buildings, which is what leaves a port or a pier somewhere to stand.
 
+**A pier is delivered, as its own collection rather than a shoreline category.** `docks` is a
+`DockEntity[]` of walkable plank decks, anchored on a road point within 120 units of a shore, reaching
+18 past the water's edge, and naming the settlement it is the waterfront of. It is a new entity and not
+a building category because a pier does the opposite of everything a building does: it stands in water
+rather than on land, is ground a character walks on rather than a wall, and is reached by a place rather
+than by a road frontage. A building category would have put an exception in the one placement path that
+is currently uniform, and a ruin of a pier is not a thing, so the `state` field the ruins added would
+have had to be forbidden on one branch of the category union.
+
+The one genuinely new mechanical part is that a deck is **walkable and the ground under it is water
+that blocks**. The raster fills water as blocked, so a deck is carved back open afterwards, as a
+second pass of the same fill rather than an exception to the rule that keeps the blocker rule intact
+and makes the carve auditable: a cell a deck opened was blocked by water a moment earlier.
+
+What the build measured, and it corrected a claim made before it: the count is bounded by the
+**shore**, not by the number of settlements. One place on a long shoreline carries up to eight decks,
+so two settlements reach sixteen on a 2048 by 1536 map. The default is `0` — a pier is a strong
+statement about a place, and the generator has no opinion on whether any of them is a port.
+
 Measured and deliberately not built, so the reasons are on the record rather than implied:
 
 - A settlement needs no terrain site test. Across 64 centres on 16 maps, none landed on rock, in water,
@@ -1508,8 +1527,6 @@ Add:
 - bridges;
 - walls;
 - gates;
-- docks;
-- piers;
 - paths;
 - river crossing structures, on the sites v0.3 publishes;
 - barriers.

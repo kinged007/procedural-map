@@ -413,16 +413,27 @@ export function validateMap(data: unknown): ValidationResult {
       'forests',
       'structures',
       'settlements',
+      'docks',
       'roads',
       'barriers',
     ] as const;
     for (const collection of collections)
       if (!Array.isArray(data[collection])) validator.error(collection, 'must be an array');
-    // Read before the loop below, so a settlement can be checked against the buildings that exist.
+    // Read before the loop below, so a settlement can be checked against the buildings that exist
+    // and a dock against the place and the water it names.
     const buildingIds = new Set<string>();
     if (Array.isArray(data.structures))
       for (const building of data.structures)
         if (isRecord(building) && typeof building.id === 'string') buildingIds.add(building.id);
+    const settlementIds = new Set<string>();
+    if (Array.isArray(data.settlements))
+      for (const settlement of data.settlements)
+        if (isRecord(settlement) && typeof settlement.id === 'string')
+          settlementIds.add(settlement.id);
+    const waterIds = new Set<string>();
+    if (Array.isArray(data.water))
+      for (const body of data.water)
+        if (isRecord(body) && typeof body.id === 'string') waterIds.add(body.id);
     if (bounds) {
       for (const collection of collections) {
         const entities = data[collection];
@@ -434,7 +445,8 @@ export function validateMap(data: unknown): ValidationResult {
             collection === 'vegetation' ||
             collection === 'forests' ||
             collection === 'structures' ||
-            collection === 'settlements';
+            collection === 'settlements' ||
+            collection === 'docks';
           validator.entity(entity, `${collection}[${index}]`, bounds!, !specialized);
           if (!isRecord(entity)) return;
           if (
@@ -473,6 +485,48 @@ export function validateMap(data: unknown): ValidationResult {
               `${collection}[${index}]`,
               'must be a building with a category, a state, a footprint, and collision unless it is a ruin',
             );
+          // A dock names the place it is the waterfront of and the water it stands in, so a name
+          // that resolves to nothing is a harbour a consumer cannot place. `roadId` is optional, as
+          // it is on a building: a deck can be reached over open ground.
+          if (collection === 'docks' && isRecord(entity.metadata)) {
+            for (const field of ['settlementId', 'waterId'] as const) {
+              const named = entity.metadata[field];
+              if (typeof named !== 'string' || !named.length) continue;
+              const known = field === 'settlementId' ? settlementIds : waterIds;
+              if (!known.has(named))
+                validator.error(
+                  `${collection}[${index}].metadata.${field}`,
+                  field === 'settlementId'
+                    ? 'must name a settlement published in settlements'
+                    : 'must name a body of water published in water',
+                );
+            }
+          }
+
+          if (
+            collection === 'docks' &&
+            (entity.type !== 'dock' ||
+              !validator.finite(entity.width, `${collection}[${index}].width`) ||
+              (entity.width as number) <= 0 ||
+              !validator.finite(entity.depth, `${collection}[${index}].depth`) ||
+              (entity.depth as number) <= 0 ||
+              !validator.finite(entity.rotation, `${collection}[${index}].rotation`) ||
+              !validator.polygon(entity.geometry, `${collection}[${index}].geometry`, bounds!) ||
+              // A deck is ground a character walks on, so a dock carrying a collision is refused
+              // rather than merely allowed to omit one, the same as a ruin carrying a wall.
+              entity.collision !== undefined ||
+              !isRecord(entity.metadata) ||
+              typeof entity.metadata.settlementId !== 'string' ||
+              entity.metadata.settlementId.length === 0 ||
+              typeof entity.metadata.waterId !== 'string' ||
+              entity.metadata.waterId.length === 0 ||
+              (entity.metadata.roadId !== undefined && typeof entity.metadata.roadId !== 'string'))
+          )
+            validator.error(
+              `${collection}[${index}]`,
+              'must be a dock with a positive size, a deck, no collision, and a settlement and a body of water',
+            );
+
           if (
             collection === 'settlements' &&
             (entity.type !== 'settlement' ||

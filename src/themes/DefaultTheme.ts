@@ -27,4 +27,5 @@ export const defaultTheme: MapTheme = {
     ruin: '#a89c86',
     outline: '#5d4a3a',
   },
+  docks: { deck: '#c2a276', outline: '#6b543a' },
 };

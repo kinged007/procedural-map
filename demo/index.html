@@ -191,6 +191,13 @@
                   <span>No places</span><span>Every one the roads can hold</span>
                 </div>
               </div>
+              <div class="range-field">
+                <label for="docks">Docks<output id="docks-value" for="docks">0</output></label
+                ><input id="docks" type="range" min="0" max="16" value="0" />
+                <div class="range-hints">
+                  <span>No harbours</span><span>A pier on every shore a place stands on</span>
+                </div>
+              </div>
               <label class="field-label" for="setback">Building setback from road (units)</label
               ><input
                 class="number-input"
@@ -318,6 +325,10 @@
             <div class="stat">
               <span class="stat-label">SETTLEMENTS</span><strong id="settlement-count">—</strong
               ><span class="stat-detail" id="settlement-detail">hamlets · villages · towns</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">DOCKS</span><strong id="dock-count">—</strong
+              ><span class="stat-detail" id="dock-detail">decks · shores</span>
             </div>
             <div class="stat">
               <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong

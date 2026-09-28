@@ -14,6 +14,7 @@ import { rasterizeWalkability } from '../navigation/walkability.js';
 import { assertValidMap } from '../validation/MapValidator.js';
 import { generateBuildings, CATEGORIES } from './buildings.js';
 import { gridToEdgePolygons } from './contours.js';
+import { generateDocks } from './docks.js';
 import { generateForests, markWalkableInside } from './forests.js';
 import { generateSettlements, settlementSites, type SettlementSite } from './settlements.js';
 import { generateRoads } from './roads/RoadGenerator.js';
@@ -325,6 +326,12 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         0,
         64,
       ),
+    },
+    docks: {
+      // A count, and an upper bound rather than a promise for the same reason the settlement count is
+      // one: a dock is a settlement's waterfront, so the settlements and the shorelines are what
+      // actually limit it, and a map with no settlements has no harbours at any count.
+      count: resolveNumber(config.docks?.count, DEFAULT_CONFIG.docks.count, 'docks.count', 0, 64),
     },
   };
 }
@@ -671,6 +678,20 @@ export function generateMap(config: GenerationConfig): GameMap {
   );
   const forests: ForestEntity[] = generateForests(vegetation);
   const settlements = generateSettlements(sites, structures);
+  // Docks come last of all, because a deck is a settlement's waterfront: it needs the places to
+  // exist before it can name the one it serves, and the buildings to exist before it can refuse to
+  // run a deck through a wall.
+  const dockRandom = new Random(placement ^ 0x4d1c05);
+  const docks = generateDocks(
+    roads,
+    water,
+    settlements,
+    structures,
+    resolved.docks.count,
+    resolved.width,
+    resolved.height,
+    () => dockRandom.next(),
+  );
   // A tile at an origin needs to be distinguishable from the same tile at the origin, or assembling
   // a world puts duplicate entity ids in it. The single-tile id is left as it was.
   const placementTag =
@@ -707,6 +728,7 @@ export function generateMap(config: GenerationConfig): GameMap {
     forests,
     structures,
     settlements,
+    docks,
     roads,
     barriers: [],
     metadataLayers: { fields, generation: resolved, waterLevel: level },

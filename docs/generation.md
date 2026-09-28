@@ -283,6 +283,46 @@ Because a clearing is a keep-out, asking for a different number of settlements c
 clearings are and therefore which trees and buildings exist. The site stream is still its own, so the
 same count always picks the same sites.
 
+## Docks
+
+A dock is a plank deck reaching from the land out over the water, and it is a place's waterfront: a
+settlement within reach of the anchor is required, which is what keeps a harbour at a village rather
+than a jetty in the middle of an empty shore.
+
+The road is the anchor, for the same reason it is for a building. A deck starts on a road and runs
+towards the nearest shore within 120 units, crossing however much land lies between and reaching 18
+past the water's edge. The land part was already open ground; the water part is what the deck exists
+for. The far end of the _centreline_ is checked to be inside the body of water the deck names, and the
+far corners are not required to be: a deck meeting a concave shore has one of them back on the sand.
+The bounds test is on the deck's own corners rather than the centreline, because at a map edge a deck
+has a tip comfortably inside it and both far corners outside.
+
+A deck is 16 units across and reaches between 18 and 138, so two decks sharing a shore read as one
+wide pier with a gap in it. They are kept 30 apart and are refused where they would overlap a building,
+so a deck is never laid through a wall. Over 180 maps at up to 4096 by 4096 and ten seeds, 1065 decks
+were published with none invalid, none out of bounds, and every deck naming a place and a body of
+water that exist.
+
+The count is an upper bound, and **what bounds it is the shore**. A map with no settlements publishes
+no docks at any count, and a settlement standing nowhere near water has no waterfront — but it is not
+bounded by the number of settlements, because one place on a long shore can carry several: two
+settlements reach sixteen on a 2048 by 1536 map, eight of them to one place. The default is `0`, which
+is a map of no harbours: a pier is a strong statement about a place, and the generator has no opinion
+on whether any of them is a port.
+
+**The deck is carved into the walkability raster after the blockers are filled.** A cell is blocked if
+any part of it is covered by water, and a deck stands in water, so without a carve a pier would be a
+picture of a walkway a character cannot stand on. The carve is a second pass of the same fill, written
+as 0 instead of 1, which keeps the rule the map states intact and makes the carve auditable: a cell a
+deck opened was blocked by water a moment earlier and the deck covered it. It opens water and nothing
+else, and a deck never makes an island — every open cell under a deck is reachable on foot from the
+deck's own anchor, at every cell size from 4 to 64.
+
+The cost of that carve is resolution rather than time. A deck is 16 units across, so below a 32-unit
+cell the raster can see none of it: at `cellSize: 32` a pier contributes one cell or none, and at 64
+usually none. The bake itself is unchanged — 8ms on a 4096 by 4096 map at `cellSize: 4` with and
+without docks, and the placement is under 1% of generation time.
+
 ## Tiles
 
 The four fields are sampled at `origin + local`, so a tile is a window onto one landscape rather than

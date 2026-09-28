@@ -28,13 +28,15 @@ test('a tile with no origin and no world is the map it always was', () => {
   // channels, again when a course was rejoined into one reach running to the water, and again when
   // settlements were published as a 1.4 collection, again when a settlement gained the `kind` read
   // off its membership, again when a settlement opened a `clearing`, again when a building gained
-  // the `state` that says whether it stands or has fallen down, and again when the category weights
-  // moved out of the code into the resolved config; this still guards against `origin`/`world`
-  // leaking into the terrain.
+  // the `state` that says whether it stands or has fallen down, again when the category weights
+  // moved out of the code into the resolved config, and again when docks were published as a 1.4
+  // collection. That last one published no docks at all: a `docks: []` is still a key on the map, so
+  // the hash moves and the terrain does not. This still guards against `origin`/`world` leaking into
+  // the terrain.
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    'b3712b83e3011cfd0ac94d3a88d1f708ac31003702a7fe56015aac45604846c2',
+    '5602361cc81aee41de3cbca943e275ac5ba5288285a79c4e92a02cb3f552ef9a',
   );
 });
 

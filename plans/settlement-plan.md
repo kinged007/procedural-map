@@ -19,7 +19,7 @@ Ordered by what unblocks the most, not by what is most fun to build.
 | S3 central square                       | done       | `clearing`, a keep-out the tree and building placers honour, decided before both                           |
 | S4 settlement kind from density         | done       | `kind` is read off the membership, and there is no knob for it                                             |
 | S5 which categories a settlement places | done       | `buildings.categories`, relative weights the caller supplies; no category weight per kind                  |
-| S6 shoreline settlement and a pier      | building   | a pier stands in water, is attached to a settlement, and a building never does                             |
+| S6 shoreline settlement and a pier      | done       | a `docks` collection of walkable decks on a shore a settlement stands on                                   |
 | S7 ruins, from the PRD settlement note  | done       | `state` on a building, no collision on a ruin, and `kind` counts only what stands                          |
 | S8 a settlement as a player base        | done       | `spawnCandidates({ preferSettlements: true })` offers every settlement, on open ground                     |
 
@@ -205,7 +205,7 @@ catalogue the caller could extend; that is a different field and it is not this 
   S4 exists to avoid. The PRD asks the smaller question, "which building categories a map places", and
   the caller supplying the weights answers it with no cycle. The section below says what it does,
   including the part the measurements turned up: a weight is a draw rate and not a share.
-- **S6 is a new entity, not a building.** A pier stands in water, is walkable, and is attached to a
+- **S6 is done, as a new collection.** A pier stands in water, is walkable, and is attached to a
   settlement. A building does the opposite of all three: it stands on land, it is a wall, and it is
   placed against a road. Making a pier a building category would put an exception in the one
   placement path that is currently uniform, and a ruin of a pier is not a thing, so the field S7 added
@@ -228,6 +228,15 @@ units of water at its closest point and 62 to 74% of all road points sit within 
 is therefore placed on a road point near a shore, reaches from the land across the water, and names the
 nearest settlement as the place it serves. Rivers already record `metadata.mouths`, which is a free
 jetty site on any map with a river reaching standing water, and a lake shore is the other.
+
+What the build turned up, and it is worth having written down because it changed the documentation
+rather than the code. The count is bounded by the **shore**, not by the number of places. One
+settlement on a long shoreline can carry eight decks, so the claim that a map with two settlements
+cannot publish four docks is false, and it was corrected everywhere it had been written. The other
+thing the build found was a real bug: the bounds test was on the centreline tip, and a deck running
+along a shore near a map border has a tip comfortably inside the map and both far corners outside it.
+The test is now on the deck's own corners, and it was `assertValidMap` inside `generateMap` that
+caught it.
 
 ## S5 — which buildings a map has
 

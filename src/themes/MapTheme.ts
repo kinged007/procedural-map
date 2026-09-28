@@ -26,4 +26,11 @@ export interface MapTheme {
     ruin: string;
     outline: string;
   };
+  /**
+   * Dock colours. Optional, for the same reason as `structures`: a theme written before docks
+   * existed still renders. It is a group of its own rather than two fields on `structures` because
+   * that group is read as a whole, and a theme supplying buildings but not docks would otherwise be
+   * handed an undefined fill.
+   */
+  docks?: { deck: string; outline: string };
 }

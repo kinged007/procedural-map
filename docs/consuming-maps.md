@@ -53,7 +53,7 @@ The generator has no fixed world scale. Its constants are tuned so a 2048x1536 m
 in practice means one world unit reads as roughly one metre in a top-down game. Pick a global scale
 factor at import time if you need a different unit.
 
-## Five things to build
+## Six things to build
 
 ### 1. Ground surface
 
@@ -320,6 +320,36 @@ and the nearest blocker to a centre is never closer than 27 units.
 Read the polygon rather than assuming 28: a centre within 28 units of a map edge gets a smaller
 clearing so the polygon stays inside the bounds.
 
+### 6. Docks
+
+`map.docks` holds the plank decks reaching out over the water. There are none unless you ask for them:
+`docks: { count }` is unset at `0`.
+
+```js
+const map = generateMap({ seed: 583921, width: 2048, height: 1536, docks: { count: 4 } });
+for (const dock of map.docks) {
+  console.log(dock.metadata.settlementId, dock.metadata.waterId, dock.width, dock.depth);
+}
+```
+
+A dock is a place's waterfront, so it names the settlement it serves and the water it stands in, and
+both ids resolve. That is the whole join: to know which places are ports, read `docks` and collect the
+`settlementId`s. One place can have several decks if its shore is long, and a place with no deck is a
+place that does not stand on a shore.
+
+```js
+const ports = new Set(map.docks.map((dock) => dock.metadata.settlementId));
+```
+
+Two things to plan around. A dock carries no collision and is **walkable**: the walkability raster
+carves the water it covers back open, so a character can walk the length of a pier and stand at the
+end. And the count is bounded by the shore rather than by anything you set: a map with no settlements
+publishes no docks however many you ask for, and `count: 16` on a map with two settlements on one long
+shore fills.
+
+The deck's own `geometry` is the rectangle it is drawn and carved as, 16 units across and reaching 18
+past the water's edge, so `width` and `depth` describe it without a consumer re-deriving anything.
+
 ## Walking on the map
 
 For a per-frame movement check, do not walk the geometry. Bake it once and read a byte.
@@ -338,7 +368,8 @@ raster.cells[row * raster.columns + column]; // 0 open, 1 blocked
 
 ### The fill rule, stated once
 
-**A cell is blocked if any part of it is covered by a water polygon or a rock region.**
+**A cell is blocked if any part of it is covered by a water polygon or a rock region.** A dock's deck
+is the single exception, carved back open afterwards.
 
 Three consequences follow, and all of them are deliberate:
 
@@ -354,6 +385,19 @@ Three consequences follow, and all of them are deliberate:
 Trees are **not** in the raster. A tree blocks a small trunk circle inside a large canopy, and baking
 the canopy would seal the clearings a player is meant to walk through between trees. Trunks are
 resolved on top, per chunk, which is what keeps a grove walkable.
+
+**A dock's deck is in the raster, written after the blockers.** This is the one thing that opens a cell
+the fill rule would have blocked, and it is the reason a character can walk out along a pier and stand
+at the end of it. It is a second pass of the same fill rather than an exception to the rule: a cell a
+deck opens was blocked by water a moment earlier and the deck covered it, which is the one thing a
+consumer has to know in order to draw a pier. A dock therefore never makes an island — every open cell
+under a deck is reachable on foot from the deck's own anchor, because the deck starts on the road that
+reached it.
+
+What a deck does cost is resolution. A deck is 16 units across, so below a 32-unit cell the raster can
+see none of it: no cell centre lands inside a deck narrower than half a cell. At `cellSize: 32` a pier
+may contribute one cell or none, and at `cellSize: 64` usually none. That is the granularity of the
+grid rather than a failure of the carve, and it is the same ceiling the whole field has.
 
 That has a consequence worth planning around: **`cellSize` is also the granularity of tree
 collision.** A trunk marks every cell its circle touches, so a trunk 4 units across blocks a 32x32

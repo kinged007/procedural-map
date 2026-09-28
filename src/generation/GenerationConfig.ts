@@ -72,6 +72,18 @@ export interface GenerationConfig {
    * is what a dead settlement is.
    */
   settlements?: { count?: number };
+  /**
+   * The plank decks reaching from the land out over the water.
+   *
+   * `count` is how many docks a map has, and it is an upper bound rather than a promise: a dock is
+   * the waterfront of a settlement, so a map with no settlements publishes none however many are
+   * asked for, and a place that stands nowhere near water has no waterfront. It is not bounded by the
+   * number of places, because one place on a long shore can have several decks.
+   *
+   * `0` is the default, which is a map of no harbours: a pier is a strong statement about a place,
+   * and the generator has no opinion on whether any of them is a port.
+   */
+  docks?: { count?: number };
 }
 
 export interface ResolvedGenerationConfig {
@@ -93,6 +105,7 @@ export interface ResolvedGenerationConfig {
     categories: Record<BuildingCategory, number>;
   };
   settlements: { count: number };
+  docks: { count: number };
 }
 
 export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
@@ -114,4 +127,5 @@ export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
     categories: { house: 8, farm: 1 },
   },
   settlements: { count: 2 },
+  docks: { count: 0 },
 };

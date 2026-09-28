@@ -10,7 +10,7 @@ import type {
 } from '../map/GameMap.js';
 import { circleIntersectsPolygon } from '../map/geometry.js';
 import type { ResolvedGenerationConfig } from './GenerationConfig.js';
-import { distance, roadRibbon } from './ribbon.js';
+import { distance, roadRibbon, stations } from './ribbon.js';
 
 /**
  * What each category is, and how it stands relative to a road.
@@ -147,25 +147,6 @@ export function generateBuildings(
     }
   }
   return buildings;
-}
-
-/** Walks a centreline, offering a point every `spacing` units of arc length. */
-function* stations(path: Point[], spacing: number): Generator<{ point: Point; index: number }> {
-  if (path.length < 2) return;
-  // The first station is one spacing in, so nothing is built on a road's blunt end.
-  let travelled = spacing;
-  for (let index = 0; index < path.length - 1; index += 1) {
-    const a = path[index];
-    const b = path[index + 1];
-    const length = distance(a, b);
-    if (length === 0) continue;
-    while (travelled <= length) {
-      const t = travelled / length;
-      yield { point: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, index };
-      travelled += spacing;
-    }
-    travelled -= length;
-  }
 }
 
 /** Unit heading of the segment `index` runs along. */

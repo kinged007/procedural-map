@@ -13,8 +13,9 @@ elided with a comment rather than truncated silently.
 
 ## What changed in 1.4
 
-1.4 adds a `settlements` collection. Before it a map had houses but no village: buildings were placed
-one at a time against a road and nothing said which of them belonged together.
+1.4 adds a `settlements` collection and a `docks` one. Before it a map had houses but no village:
+buildings were placed one at a time against a road and nothing said which of them belonged together, and
+nothing said a place reached the water.
 
 | Change                                | Kind                    | What a consumer does                                                                                                                |
 | ------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -22,11 +23,13 @@ one at a time against a road and nothing said which of them belonged together.
 | `settlements` membership is by id     | new                     | `metadata.buildingIds` names the buildings, and may be empty: a settlement nobody built in is still one.                            |
 | A settlement carries no collision     | new                     | Its `radius` says how far the place reaches. It is not a wall, so a consumer testing the ground it covers uses the distance itself. |
 | Generation config gains `settlements` | new optional config     | `settlements: { count }`. Unset is `count: 2`, and a map with no roads publishes none.                                              |
+| `docks` holds decks                   | new required collection | Iterate it. Each entry is a deck standing in water, with the place it serves and the water it stands in.                            |
+| A dock carries no collision           | new                     | A deck is ground to walk on, and the walkability raster carves the water it covers back open.                                       |
 | A building says whether it stands     | new required field      | `state` is `standing` or `ruined`. A ruin carries no `collision`, so rubble is walkable.                                            |
 
 A 1.3 map still validates as 1.3, and a 1.4 map does not validate as 1.3: the validator accepts
-`"1.4"` only, `settlements` is required, and it is checked for the settlement shape. A 1.3 map read by a
-1.4 consumer has no settlements, so anything that renders or uses places has to cope with none.
+`"1.4"` only, `settlements` and `docks` are required, and both are checked for their shape. A 1.3 map
+read by a 1.4 consumer has neither, so anything that renders or uses places has to cope with none.
 
 ## What changed in 1.3
 
@@ -82,17 +85,18 @@ interface GameMap {
   forests: ForestEntity[];
   structures: BuildingEntity[];
   settlements: SettlementEntity[];
+  docks: DockEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };
 }
 ```
 
-All eleven of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`, `structures`,
-`settlements`, `roads`, and `barriers` are required, even when the collection is empty.
+All twelve of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`, `structures`,
+`settlements`, `docks`, `roads`, and `barriers` are required, even when the collection is empty.
 `metadataLayers` is optional.
-A generated map fills `structures` with buildings and `settlements` with places, and leaves `barriers`
-empty.
+A generated map fills `structures` with buildings, `settlements` with places, and `docks` with decks —
+though `docks` is empty unless asked for — and leaves `barriers` empty.
 
 `bounds` is the size of the world in world units. Every coordinate in the map is absolute and lies
 inside it.
@@ -596,6 +600,62 @@ render an empty place, which is the correct result and not a data error.
 A map with no roads publishes no settlements, because a centre is placed on a road and a map with
 nothing but open ground has nowhere to put one.
 
+## docks
+
+`docks` is a `DockEntity[]`: the plank decks reaching from the land out over the water. A dock answers
+"where does this place reach the water", which neither `structures` nor `settlements` can: a building
+stands on land and a settlement is a place.
+
+```ts
+interface DockEntity {
+  id: string;
+  type: 'dock';
+  /** Where the deck meets the land, on the road that reached it. */
+  position: Point;
+  /** The heading the deck runs along, out over the water. */
+  rotation: number;
+  /** Full width of the deck, in world units. 16. */
+  width: number;
+  /** How far the deck reaches from its anchor. Part of it is over the land. */
+  depth: number;
+  /** The deck surface, and the shape the walkability raster carves back open. */
+  geometry: PolygonGeometry;
+  asset: AssetReference;
+  metadata: {
+    roadId?: string;
+    /** The place this is the waterfront of. */
+    settlementId: string;
+    /** The body of water the deck stands in. */
+    waterId: string;
+  };
+}
+```
+
+Four things follow from this shape, and a consumer that assumes otherwise will be wrong.
+
+**A dock carries no collision, and a map that gives it one is rejected.** A deck is ground a character
+walks on rather than a wall, which is the opposite of a building. The raster is the other half of the
+same statement: a deck's cells are carved back open _after_ the blockers are filled, so a character
+can walk the length of the deck and step off the end of it. See
+[walking on the map](consuming-maps.md#walking-on-the-map).
+
+**A deck reaches into the water it names, and the far corners are not guaranteed to.** The placer
+checks that the far end of the _centreline_ is inside `waterId`, and a consumer should assume no more
+than that: a deck meeting a concave shore has one of its two far corners back on the sand. What is
+guaranteed is that the deck ends in water rather than stopping on the bank.
+
+**`settlementId` is required and `roadId` is not.** A deck is a place's waterfront, so the place is
+required and validation rejects a deck naming a settlement that is not on the map, or a `waterId` that
+is not either. `roadId` is optional for the same reason it is on a building: a deck can be reached over
+open ground rather than along a road.
+
+**A deck is a place's waterfront, so the count is bounded by the shore and not by anything else.**
+`docks: { count }` is unset at `0`, which is a map of no harbours: a pier is a strong statement about
+a place and the generator has no opinion on whether any of them is a port. A map with no settlements
+publishes no docks at any count, and a settlement that stands nowhere near water has no waterfront to
+publish. It is _not_ bounded by the number of settlements, because one place on a long shore can carry
+several decks: two settlements reach sixteen on a 2048 by 1536 map, eight of them to one place.
+
 ## Asset references
 
 `asset` is a `{ category, variant }` pair, and the generator uses a fixed vocabulary:
@@ -606,6 +666,8 @@ nothing but open ground has nowhere to put one.
 | `water`      | `water.lake` / `water.river` | `lake-1`, `lake-2`, ... / `river-1`                       |
 | `vegetation` | `vegetation.tree`            | `oak-1`..`oak-3`, `birch-1`..`birch-3`                    |
 | `roads`      | `road.<kind>`                | `<kind>-1`                                                |
+| `structures` | `structure.house` / `.farm`  | `<category>-1`, or `<category>-ruin` for a ruin           |
+| `docks`      | `structure.dock`             | `plank-1`                                                 |
 
 `asset.category` is `terrain.grass` for every terrain kind including rock and beach; the kind is
 carried by `variant`. Switch on the semantic `kind` field, not on the asset, when behaviour depends

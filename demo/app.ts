@@ -43,9 +43,10 @@ const ranges = [
   'buildings',
   'spacing',
   'settlements',
+  'docks',
 ] as const;
 // The ranges that are a count in world units rather than a percentage, so they read as a number.
-const unitRanges = new Set(['spacing', 'settlements']);
+const unitRanges = new Set(['spacing', 'settlements', 'docks']);
 const numberFormat = new Intl.NumberFormat('en');
 const descriptions: Record<MapView, string> = {
   styled: 'Grassland, open water & clustered woodland',
@@ -174,6 +175,7 @@ function configFromControls(): GenerationConfig {
       },
     },
     settlements: { count: element<HTMLInputElement>('settlements').valueAsNumber },
+    docks: { count: element<HTMLInputElement>('docks').valueAsNumber },
   };
 }
 
@@ -198,6 +200,7 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('weight-house').value = String(config.buildings.categories.house);
   element<HTMLInputElement>('weight-farm').value = String(config.buildings.categories.farm);
   element<HTMLInputElement>('settlements').value = String(config.settlements.count);
+  element<HTMLInputElement>('docks').value = String(config.docks.count);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);
   element<HTMLInputElement>('origin-x').value = String(config.origin.x);
@@ -251,6 +254,16 @@ function showMap(nextMap: GameMap, source: string, elapsed?: number) {
         dead ? ` · ${dead} dead` : ''
       }`
     : 'no places on this map';
+  element('dock-count').textContent = numberFormat.format(map.docks.length);
+  element('dock-detail').textContent = map.docks.length
+    ? `${numberFormat.format(map.docks.length)} deck${
+        map.docks.length === 1 ? '' : 's'
+      } · ${new Set(map.docks.map((dock) => dock.metadata.waterId)).size} shore${
+        map.docks.length === 1 ? '' : 's'
+      }`
+    : map.settlements.length
+      ? 'no place stands on a shore'
+      : 'no places to have a waterfront';
   const coverage =
     (map.water.reduce((total, lake) => total + polygonArea(lake.geometry), 0) / (width * height)) *
     100;

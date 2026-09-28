@@ -35,11 +35,13 @@ test('generation is byte-stable for the same config', () => {
   // into `buildings.categories`, is not additive, and the category draw being given a stream of its
   // own is why: a separate stream is a different sequence of numbers, so every building after the
   // first draws a different category. Reweighting now moves no building's site, which was the point,
-  // and the default mix is unchanged at one site in nine;
+  // and the default mix is unchanged at one site in nine. The last move published docks as a 1.4
+  // collection, which moved the hash without moving the map: a `docks: []` is a key on the map and
+  // the hash reads keys, and the default count of 0 is a map of no harbours.
   // `tests/tiling.test.mjs` holds the matching value for the map with the placement fields removed.
   assert.equal(
     stableHash(first),
-    '794e4d8f2201ca5a9b5747ad2bf82bd004d6cbaa4cfe90d723e94178b8737b55',
+    'a488aa4fdbed63a5f1ff20a2353782b3d65a4bd53e2d7d1b55bbdac1724094fb',
   );
 });
 

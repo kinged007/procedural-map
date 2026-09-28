@@ -119,6 +119,7 @@ Every knob, with the value used when it is left out:
 | `buildings.ruin`        | `0`                     | Share of buildings that have fallen down, `0` to `1`. A ruin keeps its footprint and stops being a wall. `0` is no opinion on how a building looks.                                                      |
 | `buildings.categories`  | `{ house: 8, farm: 1 }` | Relative weights over what a road gets built on. A weight of `0` is never placed, and a name the generator cannot place is rejected.                                                                     |
 | `settlements.count`     | `2`                     | How many settlements the map has. A map with no roads publishes none, whatever this is set to.                                                                                                           |
+| `docks.count`           | `0`                     | How many plank decks reach out over the water. A dock is a settlement's waterfront, so a map with no settlements publishes none, and `0` is a map of no harbours.                                        |
 
 Values outside a knob's range are rejected at the boundary rather than clamped silently.
 
@@ -160,6 +161,14 @@ you cannot walk. A settlement with no buildings is a dead settlement, and mixing
 `settlements.count` against a low `buildings.density` produces them. To start a character in one rather
 than in the middle of a field, pass `preferSettlements: true` to `spawnCandidates`; to put the middle
 of the place, build at `settlement.position`, which is inside its clearing and on the road.
+
+`map.docks` holds the plank decks reaching from the land out over the water, and there are none unless
+`docks.count` asks for them. A deck stands on a road, reaches past the shoreline, names the settlement
+it is the waterfront of and the body of water it stands in, and carries no collision: it is ground a
+character walks on, and the walkability grid carves the water it covers back open, so a character can
+walk the length of a pier. To know which places are ports, read the docks and collect their
+`settlementId`s. A dock is 16 units across and reaches 18 past the water's edge, which is what the
+grid can see at `cellSize: 16` and finer; below that a pier may contribute no cell at all.
 
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 

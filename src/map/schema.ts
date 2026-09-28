@@ -14,7 +14,7 @@ export const gameMapSchema = {
   $id: 'https://procedural-map-mvp.dev/schemas/game-map-1.4.json',
   title: 'GameMap v1.4',
   description:
-    'A forest carries no collision, and a settlement carries none either. A forest geometry is a hull for broadphase, rendering and a minimap, and it deliberately over-covers the clearings between trees so that a consumer can test one bounds box instead of every tree on the map. A settlement radius is a statement about where a place ends, not a wall: it claims buildings by proximity and a consumer wanting the ground it covers tests the distance itself. A settlement with no buildings is a settlement, which is what a dead one is.',
+    'A forest carries no collision, and a settlement carries none either. A forest geometry is a hull for broadphase, rendering and a minimap, and it deliberately over-covers the clearings between trees so that a consumer can test one bounds box instead of every tree on the map. A settlement radius is a statement about where a place ends, not a wall: it claims buildings by proximity and a consumer wanting the ground it covers tests the distance itself. A settlement with no buildings is a settlement, which is what a dead one is. A dock carries no collision either, for the opposite reason to a building: a deck is ground a character walks on rather than a wall, and the walkability raster carves the water it covers back open.',
   type: 'object',
   required: [
     'version',
@@ -26,6 +26,7 @@ export const gameMapSchema = {
     'forests',
     'structures',
     'settlements',
+    'docks',
     'roads',
     'barriers',
   ],
@@ -39,6 +40,7 @@ export const gameMapSchema = {
     forests: { type: 'array', items: { $ref: '#/$defs/forest' } },
     structures: { type: 'array', items: { $ref: '#/$defs/building' } },
     settlements: { type: 'array', items: { $ref: '#/$defs/settlement' } },
+    docks: { type: 'array', items: { $ref: '#/$defs/dock' } },
     roads: { type: 'array', items: { $ref: '#/$defs/road' } },
     barriers: { type: 'array', items: { $ref: '#/$defs/entity' } },
     metadataLayers: { $ref: '#/$defs/metadataLayers' },
@@ -223,6 +225,35 @@ export const gameMapSchema = {
               else: { not: { required: ['collision'] } },
             },
           ],
+        },
+      ],
+    },
+    dock: {
+      allOf: [
+        { $ref: '#/$defs/entity' },
+        {
+          type: 'object',
+          required: ['type', 'position', 'rotation', 'width', 'depth', 'geometry', 'metadata'],
+          properties: {
+            type: { const: 'dock' },
+            width: { type: 'number', exclusiveMinimum: 0 },
+            depth: { type: 'number', exclusiveMinimum: 0 },
+            geometry: { $ref: '#/$defs/polygon' },
+            metadata: {
+              type: 'object',
+              required: ['settlementId', 'waterId'],
+              properties: {
+                roadId: { type: 'string', minLength: 1 },
+                settlementId: { type: 'string', minLength: 1 },
+                waterId: { type: 'string', minLength: 1 },
+              },
+              additionalProperties: { $ref: '#/$defs/jsonValue' },
+            },
+          },
+          // A deck is ground a character walks on, so it must not carry a collision. A dock that
+          // blocked movement would be the opposite of what it is, which is the same reason a forest
+          // hull carries none: both are surfaces, and neither is a wall.
+          not: { required: ['collision'] },
         },
       ],
     },

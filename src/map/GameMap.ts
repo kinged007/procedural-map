@@ -174,6 +174,44 @@ export interface BuildingEntity extends MapEntity {
   };
 }
 
+/**
+ * A plank deck reaching from the land out over the water, and the place it serves.
+ *
+ * A dock is not a building. A building stands on land, is a wall, and is placed against a road; a
+ * dock stands in water, is ground a character walks on, and is placed where a settlement meets a
+ * shore. It carries no `collision`, and the validator refuses one that does, for the same reason a
+ * forest hull carries none: a deck that blocked movement would be the opposite of what it is.
+ */
+export interface DockEntity extends MapEntity {
+  type: 'dock';
+  /** Where the deck meets the land, on the road that reached it. */
+  position: Point;
+  /**
+   * Radians, the heading the deck runs along, out from the land over the water. This is the same
+   * handedness as a building's, so a consumer that rotates an asset by `rotation` needs no second
+   * convention.
+   */
+  rotation: number;
+  /** Full width of the deck, in world units. */
+  width: number;
+  /** How far the deck reaches from its anchor, in world units. Part of it is over the land. */
+  depth: number;
+  /**
+   * The deck surface. The same rectangle the published `width` and `depth` describe, and the shape
+   * the walkability raster carves back open, so the ground a character walks is the ground drawn.
+   */
+  geometry: PolygonGeometry;
+  asset: AssetReference;
+  metadata: {
+    /** The road the deck is reached along, absent for one reached over open ground. */
+    roadId?: string;
+    /** The place this is the waterfront of. */
+    settlementId: string;
+    /** The body of water the deck stands in. */
+    waterId: string;
+  };
+}
+
 export interface SpatialFields {
   columns: number;
   rows: number;
@@ -225,6 +263,7 @@ export interface GameMap {
   forests: ForestEntity[];
   structures: BuildingEntity[];
   settlements: SettlementEntity[];
+  docks: DockEntity[];
   roads: RoadEntity[];
   barriers: MapEntity[];
   metadataLayers?: { fields?: SpatialFields; [key: string]: unknown };
