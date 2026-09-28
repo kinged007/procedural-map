@@ -29,6 +29,10 @@ const generateButton = element<HTMLButtonElement>('generate-button');
 const exportButton = element<HTMLButtonElement>('export-button');
 const importButton = element<HTMLButtonElement>('import-button');
 const cellSizeInput = element<HTMLSelectElement>('cell-size');
+// The range sliders, each of which carries a badge and a track fill. A control that shows its value
+// in a box of its own is not one of these, and putting it here breaks every slider below it: the
+// loop writes to `<id>-value`, a control with no such badge throws, and the sliders after it go
+// stale without any visible error.
 const ranges = [
   'density',
   'water',
@@ -38,7 +42,6 @@ const ranges = [
   'rivers',
   'buildings',
   'spacing',
-  'ruin',
   'settlements',
 ] as const;
 // The ranges that are a count in world units rather than a percentage, so they read as a number.
@@ -122,9 +125,11 @@ function refreshRanges() {
     const maximum = Number(input.max || 100);
     const fill = ((input.valueAsNumber - minimum) / (maximum - minimum || 1)) * 100;
     input.style.setProperty('--progress', `${fill}%`);
-    element<HTMLOutputElement>(`${id}-value`).value = unitRanges.has(id)
-      ? input.value
-      : `${input.value}%`;
+    // The badge is looked up rather than fetched through `element`, which throws on a missing node.
+    // A required control should be missing loudly; an optional badge should not take the sliders
+    // below it down with it.
+    const badge = document.getElementById(`${id}-value`) as HTMLOutputElement | null;
+    if (badge) badge.value = unitRanges.has(id) ? input.value : `${input.value}%`;
   }
 }
 
