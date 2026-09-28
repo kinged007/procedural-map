@@ -149,11 +149,13 @@ walkability raster like the water and the rock do. `buildings.density`, `buildin
 [Consuming generated maps](docs/consuming-maps.md#4-buildings).
 
 `map.settlements` holds the places: each one a centre standing on a road, a radius saying how far it
-reaches, the ids of the buildings inside it, and a `kind` of `hamlet`, `village`, or `town` read off
-how many buildings it holds. A settlement carries no collision, because its radius says where a place
-ends rather than where you cannot walk. A settlement with no buildings is a dead settlement, and mixing
-a high `settlements.count` against a low `buildings.density` produces them. To start a character in
-one rather than in the middle of a field, pass `preferSettlements: true` to `spawnCandidates`.
+reaches, a `clearing` of open ground at its middle where nothing is planted or built, the ids of the
+buildings inside it, and a `kind` of `hamlet`, `village`, or `town` read off how many buildings it
+holds. A settlement carries no collision, because its radius says where a place ends rather than where
+you cannot walk. A settlement with no buildings is a dead settlement, and mixing a high
+`settlements.count` against a low `buildings.density` produces them. To start a character in one rather
+than in the middle of a field, pass `preferSettlements: true` to `spawnCandidates`; to put the middle
+of the place, build at `settlement.position`, which is inside its clearing and on the road.
 
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 

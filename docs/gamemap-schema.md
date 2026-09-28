@@ -18,7 +18,7 @@ one at a time against a road and nothing said which of them belonged together.
 
 | Change                                | Kind                    | What a consumer does                                                                                                                |
 | ------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `settlements` holds places            | new required collection | Iterate it. Each entry is a settlement with a `kind`, a `position`, a `radius`, and the buildings inside it.                        |
+| `settlements` holds places            | new required collection | Iterate it. Each entry is a settlement with a `kind`, a `position`, a `radius`, a `clearing`, and the buildings inside it.          |
 | `settlements` membership is by id     | new                     | `metadata.buildingIds` names the buildings, and may be empty: a settlement nobody built in is still one.                            |
 | A settlement carries no collision     | new                     | Its `radius` says how far the place reaches. It is not a wall, so a consumer testing the ground it covers uses the distance itself. |
 | Generation config gains `settlements` | new optional config     | `settlements: { count }`. Unset is `count: 2`, and a map with no roads publishes none.                                              |
@@ -545,6 +545,8 @@ interface SettlementEntity {
   position: Point;
   /** How far the settlement reaches from its centre, in world units. */
   radius: number;
+  /** The open ground at the middle of the place, which nothing is planted in or built on. */
+  clearing: PolygonGeometry;
   metadata: {
     /** The buildings inside the settlement, which may be none at all. */
     buildingIds: string[];
@@ -557,9 +559,16 @@ Three things follow from this shape, and a consumer that assumes otherwise will 
 **A settlement carries no collision.** `radius` says how far the place reaches; it is not a wall. A
 consumer wanting the ground a settlement covers tests `distance(position, point) <= radius` itself,
 the same way it tests a forest hull rather than treating one as movement blocking. There is no
-polygon here, because a settlement is a distance and not a shape: a circle of 260 units around a
+boundary polygon, because a settlement is a distance and not a shape: a circle of 260 units around a
 centre in a square world either overflows the map or leaves corners of the map unreachable from it,
 and neither is a thing a consumer should have to reconcile.
+
+**`clearing` is the one polygon, and it is open ground.** It is where nothing is planted and nothing
+is built, roughly 28 units of reach around `position`, and a consumer placing the middle of the place
+puts it at `position` rather than anywhere inside. It is not a collider either. Read the polygon
+rather than assuming the usual radius: a centre within 28 units of a map edge gets a smaller clearing,
+because a polygon outside the bounds is not a valid one and the settlement is worth more than the
+full-width green.
 
 **`kind` is derived, not configured.** It is read off the membership: under 4 buildings is a
 `hamlet`, under 9 a `village`, and 9 or more a `town`. There is no knob for it, because a settlement

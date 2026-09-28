@@ -1421,6 +1421,20 @@ Delivered in v0.5 so far:
   the generator actually reaches, which the settlement radius bounds: a settlement holds at most about
   a dozen buildings, so a `town` here is a large village, and a caller wanting a real town needs a
   knob on the radius first.
+- **A central square, as a `clearing` rather than a drawn plaza.** The item is on the list above, and
+  what a consumer can draw for itself is not the point: a consumer drawing a square over a wood still
+  gets a square over a wood. Each settlement publishes a `clearing`, 28 units of reach around its
+  centre, and the sites are chosen before the trees and the buildings so that nothing is planted or
+  built in it. A consumer places the middle of a place at `position`, which is inside the clearing and
+  on the road. It carries no collision, because the point is to make the ground open.
+- Every building belongs to exactly one settlement, the one whose centre is nearest. Reaches on centres
+  that are a radius apart do overlap, and a building claimed by two places has no meaning for a
+  consumer resolving a name.
+- A centre prefers a main road to a lane, `primary` before `secondary` before `path`, so a place
+  grows where the traffic is. A map whose network is all lanes still publishes its settlements, on
+  lanes.
+- Because a clearing is a keep-out, `settlements.count` now decides which trees and buildings exist:
+  the count fixes where the clearings are, and they are ground the placers must leave alone.
 
 Carried over from v0.4 and deferred here on purpose: plots and parcels, and choosing which categories
 get placed rather than drawing from a fixed weighted set. A shoreline is v0.5 work too, because v0.4

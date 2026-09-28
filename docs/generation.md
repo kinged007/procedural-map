@@ -185,11 +185,22 @@ settlements rather than here.
 
 ## Settlements
 
-Settlements come after the buildings, because a settlement is defined by the buildings it holds rather
-than the other way round. Every point along every road centreline is a candidate for a centre, the
-candidates are shuffled by a stream of their own so a seed scatters the centres over the network, and
-the first `settlements.count` of them that clear a 260-unit gap from each other become settlements. A
-centre then claims the buildings within 260 units of it.
+A settlement is chosen in two halves, and the split is what lets its clearing be a keep-out rather
+than a hole punched in a finished map.
+
+**Where the places are** is decided right after the roads and before anything is planted or built.
+Every point along every road centreline is a candidate for a centre, the candidates are shuffled by a
+stream of their own so a seed scatters the centres over the network, and the first `settlements.count`
+of them that clear a 260-unit gap from each other become sites. Each site carries the open ground at
+its middle, described below. Publishing the settlement itself still waits for the buildings, because a
+settlement is defined by the buildings it holds.
+
+**What a place is** is published once the buildings exist. A centre claims the buildings within 260
+units of it, and each building is claimed by exactly one settlement: the nearest. Centres are kept
+260 units apart, which is the same as the reach, so two reaches do overlap, and a building between
+them would be in both without that rule. A building in two places at once has no meaning for a
+consumer resolving a name, and assigning to the nearest is the only rule that makes membership a
+partition.
 
 The count is a parameter rather than something derived from the road network, because a caller asking
 for four settlements should get four whether the network has four pieces or two. The network supplies
@@ -197,12 +208,40 @@ the sites; the caller supplies the number. A centre with no buildings near it pu
 membership rather than being dropped, which is what makes a dead settlement reachable by mixing a high
 count against a low `buildings.density` instead of by a switch.
 
+A centre prefers a main road to a lane: the candidates are taken tier by tier, `primary` before
+`secondary` before `path`, so a place grows where the traffic is rather than at the end of a
+footpath. The preference is a preference and not a requirement, because a map whose network is all
+lanes still publishes its settlements, on lanes.
+
 The 260 units is both the reach and the separation, so the two cannot drift apart: a settlement's
 radius is exactly the distance within which it holds buildings and exactly the distance kept from the
 next centre. Both become configuration when a caller needs to tune them, which is not yet.
 
-A settlement's own stream means changing `settlements.count` does not rebuild the map under it: the
-buildings, the roads, and everything else are identical at every count for a given seed.
+### The clearing
+
+Each settlement opens a clearing at its centre: 28 units of reach, 56 across. Nothing is planted in
+it and nothing is built on it, and it is ground rather than a collider, so a consumer can put the
+middle of the place on `position`, which is inside the polygon and on the road running through it.
+
+The clearing reaches the tree and building placers as ground to keep clear, which is why the sites are
+decided first. A road already keeps trees 7 units off its centreline, so a clearing is a second
+keep-out rather than a wider version of the first, and a building centre stands `setback + depth / 2`
+off the centreline, which is 23 units at the smallest legal setback and inside 28. A generated
+building never stands in one and a tree never roots in one, so the middle of a place is open ground
+rather than a gap between obstacles.
+
+28 is set by those two numbers rather than by taste. It clears the trees that come to within 7 units
+of a road, and it fits between the nearest buildings; at 36 it starts displacing them, and at 20 it is
+barely wider than the road it sits on.
+
+A centre close to the edge of the map gets a smaller clearing rather than being dropped, because a
+polygon outside the map bounds is not a valid one and a village at the edge of the world is still a
+village. The shrink is what `clearing` measures: a consumer reading the polygon reads the clearing
+that was actually kept, rather than a radius the map did not honour.
+
+Because a clearing is a keep-out, asking for a different number of settlements changes where the
+clearings are and therefore which trees and buildings exist. The site stream is still its own, so the
+same count always picks the same sites.
 
 ## Tiles
 

@@ -16,7 +16,7 @@ Ordered by what unblocks the most, not by what is most fun to build.
 | --------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
 | S1 centre, membership, and a count knob | done       | `tests/settlement.test.mjs`, count, membership, empties                                                    |
 | S2 settlement boundaries                | not needed | a radius and a membership list already answer it, and a polygon would contradict the no-collision decision |
-| S3 central square                       | not needed | a consumer can draw one from `position` and `radius`; the gate I wrote for it was wrong                    |
+| S3 central square                       | done       | `clearing`, a keep-out the tree and building placers honour, decided before both                           |
 | S4 settlement kind from density         | done       | `kind` is read off the membership, and there is no knob for it                                             |
 | S5 which categories a settlement places |            | two settlements of different kind draw different categories                                                |
 | S6 shoreline settlement and a pier      |            | a pier stands in water, is attached to a settlement, and a building never does                             |
@@ -46,8 +46,15 @@ frontage is, and centres are kept a minimum distance apart so a caller asking fo
 distinct places rather than one place counted four times. Both distances are module constants for now;
 they become knobs when a caller needs to tune them, not before.
 
-**A dead settlement falls out of this.** Membership is by proximity, so a centre that ends up with no
-buildings in range is a settlement with an empty `buildingIds`. A high settlement count against a low
+**A centre wants a main road, not a lane.** Candidates are taken tier by tier, `primary` before
+`secondary` before `path`. Shuffling every centreline together meant a third of settlements landed on
+a 7-unit footpath, which is not where a village goes; taking the tiers in order puts four in five
+centres on a main road, measured over 852 centres, and the rest on a lane rather than a path. The
+preference is not a requirement, because a map whose network is all lanes still publishes its
+settlements, on lanes.
+
+**A dead settlement falls out of this.** Membership is by proximity to the nearest centre, so a centre
+that ends up with no buildings in range is a settlement with an empty `buildingIds`. A high settlement count against a low
 `buildings.density` produces them without any separate switch, which is what the PRD describes as
 mixing the parameters. Ruins are a different thing and are S7, because a ruin is a property of a
 building, not of the absence of one.
@@ -92,7 +99,7 @@ because the 260-unit radius is what bounds it: p50 is 5, p90 is 11, and the larg
 The `kind` thresholds are set to that range so all three values occur on a default map, and the limit
 is stated rather than hidden. Raising the radius is what a caller who wants a real town needs first.
 
-## S2 and S3 — not built, and why
+## S2 and S3 — one not needed, one built
 
 **S2 asked for a boundary, and the radius already is one.** Its gate was "a building is inside or
 outside, and the answer is stable", which the radius and `buildingIds` answer together, and they
@@ -100,12 +107,30 @@ answer it more cheaply than a polygon: a point-in-polygon test per building agai
 Publishing a boundary polygon would also have contradicted the decision already written into the
 schema, that a settlement is a distance and not a shape, so it would have had to be unpicked.
 
-**S3 asked for a central square, and its gate was wrong.** The gate said the square must not be on a
-road, which was an assumption rather than a finding: a square on the main street is an ordinary thing,
-and the settlement centre is already on one. With the gate corrected the item reduces to "a consumer
-draws a plaza at `position`, sized from `radius` and `kind`", which needs nothing from the generator.
-A plaza that blocks movement, or that reserves the ground around it, is a different item and is not
-planned.
+**S3 asked for a central square, and it is built as a `clearing`.** I first wrote S3 off as not
+needed, on the grounds that a consumer can draw a plaza at `position` whenever it likes. That was true
+of a plaza and wrong about the generator, because the reason to have one is not that a consumer can
+draw it: it is that the ground is occupied. A centre on a road had a tree 12 units away at the tenth
+percentile and a building 18 units away, so the middle of a place was whatever the placer left. A
+consumer drawing a square over that gets a square drawn over a wood.
+
+So the clearing is a keep-out, and the sites are decided before trees and buildings for that to be
+possible. `clearing` is 28 units of reach, published as a polygon, and nothing is planted or built in
+it. 28 comes from the two things it has to reconcile: trees come within 7 units of a road centreline,
+and a building centre stands 23 units off one, so 28 clears the wood and still fits between the
+nearest buildings, where 36 starts displacing them.
+
+It is published on the settlement and validated as a polygon, and it carries no collision: the point
+is to make the ground open, and a collider would make it closed. Over 852 settlements on 180 maps no
+tree canopy and no building overlaps a clearing, and the nearest blocker to a centre is never closer
+than 27 units. A centre near a map edge gets a smaller clearing, because a polygon outside the bounds
+is not a valid one and a settlement is worth more than a full-width green.
+
+Two things changed that the plan had not anticipated. Membership is now by nearest centre rather than
+by "within reach", because 260-unit reaches on centres 260 units apart overlap and six buildings were
+claimed by two settlements at once. And `settlements.count` now moves the trees and buildings, since
+a clearing is a keep-out and the count decides where the clearings are; the old claim that changing the
+count left the rest of the map identical no longer holds.
 
 ## S4 — settlement kind from density
 

@@ -257,6 +257,29 @@ and a high `settlements.count` against a low `buildings.density` produces them o
 assume every settlement is inhabited. And a map with no roads has no settlements at all, because a
 centre is placed on a road.
 
+Every building is in exactly one settlement, the one whose centre is nearest, so resolving a name
+never turns up in two places.
+
+### The clearing: ground to build the middle of a place on
+
+Each settlement opens a clearing at its centre, and it is the one piece of a settlement that tells you
+where to put something. No tree roots in it, no generated building stands in it, and it carries no
+collision, so it is walkable ground rather than a reservation.
+
+```js
+// The middle of the place, and the open ground around it.
+const centre = settlement.position; // on the road, inside the clearing
+const open = settlement.clearing; // a polygon, about 28 units of reach
+```
+
+Put a building, a well, or a plaza at `position`. It lands on the road with the clearing around it,
+and the walkability raster already reads the whole clearing as open, so a character spawned there has
+room. Measured over 852 settlements on 180 maps, no tree canopy and no building overlaps a clearing,
+and the nearest blocker to a centre is never closer than 27 units.
+
+Read the polygon rather than assuming 28: a centre within 28 units of a map edge gets a smaller
+clearing so the polygon stays inside the bounds.
+
 ## Walking on the map
 
 For a per-frame movement check, do not walk the geometry. Bake it once and read a byte.
@@ -377,11 +400,16 @@ const [home, ...rest] = spawnCandidates(raster, map, {
 home.settlementId; // 'settlement-1', or undefined on a map with no settlements
 ```
 
-A settlement centre stands on a road, so it is open ground. The raster blocks a cell that water or rock
-touches anywhere inside it, so a centre on a road running along a shore can fall in a cell the fill
-blocked for touching the water; the nearest open cell is used instead. Across 210 centres on 40 maps,
-94% were already open and none moved more than two cells. A settlement with no open ground at all is
-skipped rather than offered on blocked ground.
+A settlement centre stands on a road, so it is open ground, and its clearing widens that: the nearest
+blocker to a centre is never closer than 27 units, so the snap below almost never has to move. The
+raster blocks a cell that water or rock touches anywhere inside it, so a centre on a road running
+along a shore can still fall in a cell the fill blocked for touching the water; the nearest open cell
+is used instead. A cell size larger than the clearing radius also reports a centre as blocked, because
+conservative rasterization blocks a cell on a trunk just outside the green.
+
+Across 144 settlements at cell sizes from 8 to 32, 92 to 94% of centres already sat on an open cell
+and every settlement was offered, landing 2 to 14 units from its centre. A settlement with no open
+ground at all is skipped rather than offered on blocked ground.
 
 Connectivity is four-way, which is the conservative reading: the raster already blocks any cell a
 blocker touches, so a gap it leaves is at least a cell wide, and a character wider than a cell cannot

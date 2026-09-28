@@ -188,6 +188,12 @@ export interface SettlementEntity extends MapEntity {
    * covers tests this itself rather than being handed a polygon it would have to trust.
    */
   radius: number;
+  /**
+   * The open ground at the middle of the place: nothing is planted in it and nothing is built on it.
+   * A consumer placing the settlement's own building puts it on `position`, which is inside this
+   * polygon and on the road running through it.
+   */
+  clearing: PolygonGeometry;
   metadata: {
     /** The buildings inside the settlement, which may be none at all. */
     buildingIds: string[];

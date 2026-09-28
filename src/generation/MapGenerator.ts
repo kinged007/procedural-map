@@ -14,7 +14,7 @@ import { assertValidMap } from '../validation/MapValidator.js';
 import { generateBuildings } from './buildings.js';
 import { gridToEdgePolygons } from './contours.js';
 import { generateForests, markWalkableInside } from './forests.js';
-import { generateSettlements } from './settlements.js';
+import { generateSettlements, settlementSites, type SettlementSite } from './settlements.js';
 import { generateRoads } from './roads/RoadGenerator.js';
 import { generateRivers } from './rivers.js';
 import { generateTerrain } from './terrain/TerrainGenerator.js';
@@ -448,6 +448,8 @@ function generateTrees(
   impassable: TerrainRegion[],
   /** Road surfaces, whose verges are kept clear of trees. */
   roads: RoadEntity[],
+  /** Settlement clearings, which are kept clear of trees. */
+  clearings: SettlementSite[],
 ): VegetationEntity[] {
   if (config.vegetation.density === 0 || config.water.amount === 1) return [];
   const target = Math.min(
@@ -522,6 +524,16 @@ function generateTrees(
       )
     )
       continue;
+    // A settlement clearing is the open ground at the middle of a place, so nothing roots in it. A
+    // road already keeps trees 7 units off its centreline, which is narrower than a clearing, so this
+    // is a second keep-out rather than a wider version of the first.
+    if (
+      clearings.some(
+        ({ position: centre, radius: clearingRadius }) =>
+          Math.hypot(centre.x - position.x, centre.y - position.y) <= radius + clearingRadius,
+      )
+    )
+      continue;
     const gridX = Math.floor(position.x / cellSize);
     const gridY = Math.floor(position.y / cellSize);
     let crowded = false;
@@ -580,21 +592,33 @@ export function generateMap(config: GenerationConfig): GameMap {
   const random = new Random(placement ^ 0x51f15e);
   const roadRandom = new Random(placement ^ 0x2f1c93);
   const roads = generateRoads(resolved, fields, water, terrain, () => roadRandom.next());
-  const vegetation = generateTrees(resolved, fields, water, random, impassable, roads);
+  // Where the settlements are is decided now, before anything is planted or built, so that a
+  // settlement's clearing reaches the tree and building placers as ground to keep clear rather than
+  // as a hole punched out of a finished map. Publishing the settlements still waits for the
+  // buildings, because a settlement is defined by the buildings it holds.
+  const settlementRandom = new Random(placement ^ 0x2c9d47);
+  const sites = settlementSites(
+    roads,
+    resolved.settlements.count,
+    resolved.width,
+    resolved.height,
+    () => settlementRandom.next(),
+  );
+  const vegetation = generateTrees(resolved, fields, water, random, impassable, roads, sites);
   // Buildings come last, because a road is the only thing that offers them a site, and the roads, the
   // ground they must not stand on, and the trees they must not stand under all exist by now.
   const buildingRandom = new Random(placement ^ 0x6b8f21);
-  const structures = generateBuildings(resolved, roads, water, terrain, vegetation, () =>
-    buildingRandom.next(),
+  const structures = generateBuildings(
+    resolved,
+    roads,
+    water,
+    terrain,
+    vegetation,
+    sites.map((site) => site.clearing),
+    () => buildingRandom.next(),
   );
   const forests: ForestEntity[] = generateForests(vegetation);
-  // Settlements come after the buildings, because a settlement is defined by the buildings it holds
-  // rather than the other way round. Its own stream, so asking for a different number of settlements
-  // does not move the buildings.
-  const settlementRandom = new Random(placement ^ 0x2c9d47);
-  const settlements = generateSettlements(roads, structures, resolved.settlements.count, () =>
-    settlementRandom.next(),
-  );
+  const settlements = generateSettlements(sites, structures);
   // A tile at an origin needs to be distinguishable from the same tile at the origin, or assembling
   // a world puts duplicate entity ids in it. The single-tile id is left as it was.
   const placementTag =

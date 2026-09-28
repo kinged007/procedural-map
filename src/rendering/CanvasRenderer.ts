@@ -5,6 +5,7 @@ import type {
   Point,
   PolygonGeometry,
   RoadEntity,
+  SettlementEntity,
   WaterRegion,
 } from '../map/GameMap.js';
 import type { MapTheme } from '../themes/MapTheme.js';
@@ -391,6 +392,21 @@ function drawForests(context: CanvasRenderingContext2D, map: GameMap, scale: num
   }
 }
 
+function drawClearings(
+  context: CanvasRenderingContext2D,
+  settlements: SettlementEntity[],
+  scale: number,
+) {
+  for (const settlement of settlements) {
+    polygonPath(context, settlement.clearing);
+    context.fillStyle = '#e2e8c9';
+    context.fill();
+    context.strokeStyle = '#93a86a';
+    context.lineWidth = 1 / scale;
+    context.stroke();
+  }
+}
+
 function drawSettlements(context: CanvasRenderingContext2D, map: GameMap, scale: number) {
   for (const settlement of map.settlements) {
     // The reach, filled. A settlement is a distance and not a wall, so this is a region a consumer
@@ -404,6 +420,16 @@ function drawSettlements(context: CanvasRenderingContext2D, map: GameMap, scale:
     context.setLineDash([7 / scale, 5 / scale]);
     context.stroke();
     context.setLineDash([]);
+  }
+  // The clearing each settlement opens for itself, which is the ground a consumer builds the middle
+  // of the place on. Filled solid so it reads as open rather than as another boundary.
+  for (const settlement of map.settlements) {
+    polygonPath(context, settlement.clearing);
+    context.fillStyle = '#dfe6c4';
+    context.fill();
+    context.strokeStyle = '#7d9350';
+    context.lineWidth = 1.2 / scale;
+    context.stroke();
   }
   // The members, in the settlement's own footprint colour, so a settlement holding houses and a
   // settlement holding nothing are told apart at a glance rather than by counting.
@@ -583,6 +609,10 @@ export class CanvasRenderer {
       // here was a square of a deck in the wrong place, which is worse than no marker.
       if (styled && map.roads.length > 0) drawRoads(context, map.roads, theme);
       if (styled) drawMouths(context, map.water, theme);
+      // A settlement's clearing, over the road it sits on. It is open ground, so it is drawn as
+      // ground rather than as an object: a green at the middle of a place, with the road running
+      // through it.
+      if (styled && map.settlements.length > 0) drawClearings(context, map.settlements, scale);
 
       if (styled) {
         for (const tree of [...map.vegetation].sort((a, b) => a.position.y - b.position.y)) {

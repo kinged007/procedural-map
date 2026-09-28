@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateMap, rasterizeWalkability, spawnCandidates, validateMap } from '../dist/index.js';
+import {
+  generateMap,
+  pointInPolygon,
+  rasterizeWalkability,
+  spawnCandidates,
+  validateMap,
+} from '../dist/index.js';
 
 const MAP = { seed: 583921, width: 2048, height: 1536 };
 const settlements = (count) => generateMap({ ...MAP, settlements: { count } }).settlements;
@@ -181,6 +187,71 @@ test('spawn candidates are unchanged unless a settlement is asked for', () => {
   assert.deepEqual(once, twice, 'deterministic');
 });
 
+test('a settlement opens a clearing at its centre, and nothing stands in it', () => {
+  const map = generateMap({ ...MAP, settlements: { count: 6 } });
+  for (const settlement of map.settlements) {
+    // A consumer places the middle of the place on the centre, so the centre must be inside its own
+    // clearing and the clearing must be a real polygon.
+    assert.ok(settlement.clearing.points.length >= 8, 'the clearing is a ring, not a point');
+    assert.ok(
+      pointInPolygon(settlement.position, settlement.clearing),
+      'the centre is in the clearing',
+    );
+    // Walkable ground, not a wall: the same argument a settlement radius makes.
+    assert.equal(settlement.collision, undefined, 'a clearing is ground, not a collider');
+  }
+});
+
+test('no tree roots in a clearing and no building stands in one', () => {
+  for (const seed of [583921, 42, 99, 1234, 20250816, 31337, 5, 777])
+    for (const count of [2, 6, 12]) {
+      const map = generateMap({ seed, width: 2048, height: 1536, settlements: { count } });
+      for (const settlement of map.settlements) {
+        const inside = (geometry) =>
+          pointInPolygon({ x: geometry.x, y: geometry.y }, settlement.clearing);
+        for (const tree of map.vegetation) {
+          const gap = Math.hypot(
+            tree.position.x - settlement.position.x,
+            tree.position.y - settlement.position.y,
+          );
+          const clearingReach = Math.hypot(
+            settlement.clearing.points[0].x - settlement.position.x,
+            settlement.clearing.points[0].y - settlement.position.y,
+          );
+          assert.ok(
+            gap - tree.radius > clearingReach,
+            `a canopy does not reach into a clearing (seed ${seed}, ${settlement.id})`,
+          );
+        }
+        for (const building of map.structures)
+          assert.ok(
+            !inside(building.position),
+            `nothing is built in a clearing (seed ${seed}, ${settlement.id})`,
+          );
+      }
+    }
+});
+
+test('a clearing stays inside the map, shrinking rather than leaving the world', () => {
+  for (const seed of [583921, 42, 99, 1234, 20250816, 31337, 5, 777])
+    for (const [width, height] of [
+      [1024, 768],
+      [2048, 1536],
+      [4096, 4096],
+    ]) {
+      const map = generateMap({ seed, width, height, settlements: { count: 8 } });
+      for (const settlement of map.settlements)
+        for (const point of settlement.clearing.points) {
+          assert.ok(
+            point.x >= 0 && point.x <= width && point.y >= 0 && point.y <= height,
+            'a polygon outside the bounds is not a valid one',
+          );
+        }
+      // A settlement at the edge keeps a smaller green rather than being dropped.
+      assert.equal(validateMap(map).valid, true, 'the map is valid at every size');
+    }
+});
+
 test('a membership naming a building that is not on the map is rejected', () => {
   // A consumer resolves buildingIds without a guard, so a name that resolves to nothing would be a
   // membership it cannot act on.
@@ -198,17 +269,26 @@ test('a membership naming a building that is not on the map is rejected', () => 
   );
 });
 
-test('the same seed gives the same settlements, and the count does not move the buildings', () => {
+test('the same seed gives the same settlements, and a count moves the buildings on purpose', () => {
   const once = settlements(5);
   const twice = settlements(5);
   assert.deepEqual(once, twice, 'generation is deterministic');
-  // The settlement stream is its own, so asking for more settlements must not rebuild the map under
-  // them.
+
+  // A clearing is ground no building may stand on, so asking for a different number of settlements
+  // changes where those clearings are and therefore which buildings can exist. The trees move with
+  // them for the same reason. What must not happen is the same count rolling differently.
   const few = generateMap({ ...MAP, settlements: { count: 1 } });
   const many = generateMap({ ...MAP, settlements: { count: 9 } });
-  assert.deepEqual(
+  assert.notDeepEqual(
     few.structures,
     many.structures,
-    'buildings do not depend on the settlement count',
+    'a clearing is a keep-out, so the count is allowed to move the buildings',
+  );
+  assert.notDeepEqual(few.vegetation, many.vegetation, 'and the trees, which cannot root in one');
+  // At a fixed count the same clearings come out, so the site stream is still its own.
+  assert.deepEqual(
+    generateMap({ ...MAP, settlements: { count: 9 } }).settlements,
+    many.settlements,
+    'the same count always picks the same sites',
   );
 });

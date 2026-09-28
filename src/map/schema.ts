@@ -153,11 +153,13 @@ export const gameMapSchema = {
         { $ref: '#/$defs/entity' },
         {
           type: 'object',
-          required: ['type', 'kind', 'position', 'radius', 'metadata'],
+          required: ['type', 'kind', 'position', 'radius', 'clearing', 'metadata'],
           properties: {
             type: { const: 'settlement' },
             kind: { enum: ['hamlet', 'village', 'town'] },
             radius: { type: 'number', exclusiveMinimum: 0 },
+            // The open ground at the middle of the place, on which a consumer may build.
+            clearing: { $ref: '#/$defs/polygon' },
             metadata: {
               type: 'object',
               required: ['buildingIds'],

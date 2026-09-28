@@ -55,6 +55,8 @@ export function generateBuildings(
   water: WaterRegion[],
   terrain: TerrainRegion[],
   vegetation: VegetationEntity[],
+  /** Settlement clearings, kept clear so a place has open ground at its middle. */
+  clearings: PolygonGeometry[],
   random: () => number,
 ): BuildingEntity[] {
   const { density, spacing, setback } = config.buildings;
@@ -72,6 +74,10 @@ export function generateBuildings(
       .map((region) => region.collision as { type: 'polygon' } & PolygonGeometry),
     ...terrain.filter((region) => region.kind === 'beach').map((region) => region.geometry),
     ...roads.map((road) => road.collision),
+    // A settlement clearing is the open ground a consumer builds the middle of the place on, so
+    // nothing generated stands in it. A building centre sits `setback + depth / 2` off the road,
+    // which is 23 units at the smallest legal setback and inside a 28-unit clearing.
+    ...clearings,
   ];
   const buildings: BuildingEntity[] = [];
 

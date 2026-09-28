@@ -24,12 +24,15 @@ test('generation is byte-stable for the same config', () => {
   // rejoined into one reach that runs to the water rather than one leg of it, and again when
   // buildings were published into `structures` and the format moved to 1.3, again when
   // settlements were published into `settlements` and the format moved to 1.4, and again when a
-  // settlement gained the `kind` read off its membership; 1.4 was never published, so the shape
-  // moved under the same version rather than starting a 1.5 that no consumer had ever seen;
-  // `tests/tiling.test.mjs` holds the matching value for the map with those two fields removed.
+  // settlement gained the `kind` read off its membership, and again when a settlement opened a
+  // `clearing`; 1.4 was never published, so the shape moved under the same version rather than
+  // starting a 1.5 that no consumer had ever seen. The clearing moved this value for more than a new
+  // field: it is a keep-out, so it took trees out of the wood and refused building sites, and
+  // deleting the field afterwards does not put them back;
+  // `tests/tiling.test.mjs` holds the matching value for the map with the placement fields removed.
   assert.equal(
     stableHash(first),
-    '3ce51653d93abc73c7a9c1282ad0476e8232146b36d768edbd2d71d84773aa06',
+    '26d00f9da42b39dfaa2d0c8788aeac42c80048ed925ad90bd2a6be6ccb670e71',
   );
 });
 
