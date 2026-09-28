@@ -28,11 +28,14 @@ test('generation is byte-stable for the same config', () => {
   // `clearing`; 1.4 was never published, so the shape moved under the same version rather than
   // starting a 1.5 that no consumer had ever seen. The clearing moved this value for more than a new
   // field: it is a keep-out, so it took trees out of the wood and refused building sites, and
-  // deleting the field afterwards does not put them back;
+  // deleting the field afterwards does not put them back. The last move, when a building gained the
+  // `state` that says whether it stands or has fallen down, is additive: deleting `state` and the
+  // resolved `buildings.ruin` reproduces the previous map exactly, which is what drawing the ruin
+  // from a stream of its own bought;
   // `tests/tiling.test.mjs` holds the matching value for the map with the placement fields removed.
   assert.equal(
     stableHash(first),
-    '26d00f9da42b39dfaa2d0c8788aeac42c80048ed925ad90bd2a6be6ccb670e71',
+    '35ce57e20aeddc9ccbf987d4d874683df7132f169532e1f5f9d27375b1289dad',
   );
 });
 

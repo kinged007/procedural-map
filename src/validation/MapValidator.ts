@@ -441,14 +441,24 @@ export function validateMap(data: unknown): ValidationResult {
             collection === 'structures' &&
             (entity.type !== 'building' ||
               !['house', 'farm'].includes(entity.category as string) ||
+              !['standing', 'ruined'].includes(entity.state as string) ||
               !validator.finite(entity.width, `${collection}[${index}].width`) ||
               (entity.width as number) <= 0 ||
               !validator.finite(entity.depth, `${collection}[${index}].depth`) ||
               (entity.depth as number) <= 0 ||
               !validator.polygon(entity.geometry, `${collection}[${index}].geometry`, bounds!) ||
-              !isRecord(entity.collision) ||
-              entity.collision.type !== 'polygon' ||
-              !validator.polygon(entity.collision, `${collection}[${index}].collision`, bounds!) ||
+              // A standing building is a wall and a ruin is rubble you walk over, so a ruin is
+              // refused the collision rather than merely allowed to omit it. Accepting a ruin that
+              // carries one would put a wall around a shell.
+              (entity.state === 'ruined' && entity.collision !== undefined) ||
+              (entity.state === 'standing' &&
+                (!isRecord(entity.collision) ||
+                  entity.collision.type !== 'polygon' ||
+                  !validator.polygon(
+                    entity.collision,
+                    `${collection}[${index}].collision`,
+                    bounds!,
+                  ))) ||
               !isRecord(entity.metadata) ||
               // `setback` is how far the front wall stands off the road, so a consumer cannot place
               // a doorstep without it. `roadId` is optional: a building can stand off the network.
@@ -461,7 +471,7 @@ export function validateMap(data: unknown): ValidationResult {
           )
             validator.error(
               `${collection}[${index}]`,
-              'must be a building with a category, a footprint, and polygon collision',
+              'must be a building with a category, a state, a footprint, and collision unless it is a ruin',
             );
           if (
             collection === 'settlements' &&

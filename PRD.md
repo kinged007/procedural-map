@@ -1435,17 +1435,20 @@ Delivered in v0.5 so far:
   lanes.
 - Because a clearing is a keep-out, `settlements.count` now decides which trees and buildings exist:
   the count fixes where the clearings are, and they are ground the placers must leave alone.
+- **The second half of a dead settlement: ruins.** `buildings.ruin` is the share of buildings that have
+  fallen down. A ruin keeps its footprint and drops its `collision`, so a character walks over the
+  rubble, and `state` says which it is on every building. A ruin does not make a place bigger:
+  `kind` counts what stands, so a village of shells is a hamlet. The two halves are reached by
+  mixing parameters rather than by switches, so a dead settlement is either nobody built there or
+  everything there fell down.
 
-Carried over from v0.4 and deferred here on purpose: plots and parcels, and choosing which categories
-get placed rather than drawing from a fixed weighted set. A shoreline is v0.5 work too, because v0.4
-keeps the whole beach band clear of buildings, which is what leaves a port or a pier somewhere to
-stand.
-
-Ruins, the second half of the settlement note, are not started. A ruin is a property of a building
-rather than of a settlement's emptiness, so it changes what a building is: a ruined building has to
-stop being a collider or it is a wall around rubble, and it has to stop counting or a ruined settlement
-still reads as a `town`, which is a label contradicting the ground. It is tracked in
-`plans/settlement-plan.md` as S7.
+Carried over from v0.4 and deferred here on purpose: plots and parcels. Choosing which categories get
+placed rather than drawing from a fixed weighted set is also held, and not only for want of content: a
+building's category would have to be chosen from the settlement's `kind`, and `kind` is read off the
+membership that the buildings themselves make, so a building cannot pick from a kind that does not exist
+yet. It needs a two-pass placer, or a `kind` that is an input rather than derived. A shoreline is v0.5
+work too, because v0.4 keeps the whole beach band clear of buildings, which is what leaves a port or a
+pier somewhere to stand.
 
 Measured and deliberately not built, so the reasons are on the record rather than implied:
 

@@ -22,6 +22,7 @@ one at a time against a road and nothing said which of them belonged together.
 | `settlements` membership is by id     | new                     | `metadata.buildingIds` names the buildings, and may be empty: a settlement nobody built in is still one.                            |
 | A settlement carries no collision     | new                     | Its `radius` says how far the place reaches. It is not a wall, so a consumer testing the ground it covers uses the distance itself. |
 | Generation config gains `settlements` | new optional config     | `settlements: { count }`. Unset is `count: 2`, and a map with no roads publishes none.                                              |
+| A building says whether it stands     | new required field      | `state` is `standing` or `ruined`. A ruin carries no `collision`, so rubble is walkable.                                            |
 
 A 1.3 map still validates as 1.3, and a 1.4 map does not validate as 1.3: the validator accepts
 `"1.4"` only, `settlements` is required, and it is checked for the settlement shape. A 1.3 map read by a
@@ -33,11 +34,11 @@ A 1.3 map still validates as 1.3, and a 1.4 map does not validate as 1.3: the va
 the only change: a consumer written against 1.2 keeps working, and one that iterates `structures` to
 find out what kind of world it has just been handed.
 
-| Change                              | Kind                             | What a consumer does                                                                                                  |
-| ----------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `structures` holds buildings        | was always `[]`                  | Iterate it. Every entry is a building, so `category` and `rotation` are always present.                               |
-| `structures` item shape is fixed    | narrower than the generic entity | `type` is `building`, and `category`, `width`, `depth`, `geometry`, `collision`, `asset` and `metadata` are required. |
-| Generation config gains `buildings` | new optional config              | `buildings: { density, spacing, setback }`. Unset is `density: 0.5, spacing: 34, setback: 16`.                        |
+| Change                              | Kind                             | What a consumer does                                                                                                                                                                                                         |
+| ----------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `structures` holds buildings        | was always `[]`                  | Iterate it. Every entry is a building, so `category` and `rotation` are always present.                                                                                                                                      |
+| `structures` item shape is fixed    | narrower than the generic entity | `type` is `building`, and `category`, `state`, `width`, `depth`, `geometry`, `collision`, `asset` and `metadata` are required, except that `collision` is required of a `standing` building and forbidden on a `ruined` one. |
+| Generation config gains `buildings` | new optional config              | `buildings: { density, spacing, setback, ruin }`. Unset is `density: 0.5, spacing: 34, setback: 16, ruin: 0`.                                                                                                                |
 
 A 1.2 map still validates as 1.2, and a 1.3 map does not validate as 1.2: the validator accepts
 `"1.3"` only, and `structures` is checked for the building shape rather than as a generic entity. A
@@ -494,6 +495,8 @@ interface BuildingEntity {
   type: 'building';
   /** What it is, which fixes its footprint and how far back it stands. */
   category: 'house' | 'farm';
+  /** Whether it stands or has fallen down. */
+  state: 'standing' | 'ruined';
   position: Point;
   /** Radians: the compass direction the front of the building looks. */
   rotation: number;
@@ -501,9 +504,10 @@ interface BuildingEntity {
   width: number;
   /** Depth away from the road. */
   depth: number;
-  /** The footprint. The same polygon as `collision`. */
+  /** The footprint. The same polygon as `collision` on a standing building. */
   geometry: PolygonGeometry;
-  collision: { type: 'polygon' } & PolygonGeometry;
+  /** Present on a standing building, absent on a ruin. */
+  collision?: { type: 'polygon' } & PolygonGeometry;
   asset: AssetReference;
   metadata: {
     /** The road it was placed against, or absent if it stands off the network. */

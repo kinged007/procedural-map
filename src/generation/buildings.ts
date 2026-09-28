@@ -58,8 +58,10 @@ export function generateBuildings(
   /** Settlement clearings, kept clear so a place has open ground at its middle. */
   clearings: PolygonGeometry[],
   random: () => number,
+  /** A stream of its own for the ruin draw, so setting the share moves no building's placement. */
+  ruinRandom: () => number,
 ): BuildingEntity[] {
-  const { density, spacing, setback } = config.buildings;
+  const { density, spacing, setback, ruin } = config.buildings;
   if (density <= 0 || roads.length === 0) return [];
 
   // Everything a building may not stand on, as one list, because the test is the same for all of it.
@@ -103,17 +105,27 @@ export function generateBuildings(
         !vegetation.some((tree) => circleIntersectsPolygon(tree.position, tree.radius, geometry))
       ) {
         if (buildings.some((built) => distance(built.position, position) < spacing)) continue;
+        // Whether a building has fallen down is drawn after it is placed, and from a stream of its
+        // own, so the share does not change which sites are built on or how any of them stands:
+        // turning every building into a ruin should leave the same map, not a different set of
+        // houses. A ruin keeps its footprint and loses its collision, because rubble is ground a
+        // character walks over.
+        const state = ruinRandom() < ruin ? 'ruined' : 'standing';
         buildings.push({
           id: `building-${buildings.length + 1}`,
           type: 'building',
           category,
+          state,
           position,
           rotation: Math.atan2(facing.y, facing.x),
           width: spec.width,
           depth: spec.depth,
           geometry,
-          collision: { type: 'polygon', ...geometry },
-          asset: { category: `structure.${category}`, variant: `${category}-1` },
+          ...(state === 'standing' ? { collision: { type: 'polygon' as const, ...geometry } } : {}),
+          asset: {
+            category: state === 'standing' ? `structure.${category}` : 'structure.ruin',
+            variant: `${category}-${state === 'standing' ? '1' : 'ruin'}`,
+          },
           metadata: { roadId: road.id, setback: front },
         });
       }

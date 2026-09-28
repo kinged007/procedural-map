@@ -152,9 +152,19 @@ export interface BuildingEntity extends MapEntity {
   width: number;
   /** Depth away from the road, in world units. */
   depth: number;
+  /**
+   * Whether the building stands or has fallen down. A ruin keeps its footprint and loses its
+   * `collision`, because rubble is ground a character walks over rather than a wall around a shell.
+   */
+  state: 'standing' | 'ruined';
   /** The footprint. The same polygon as `collision`, as with water and roads. */
   geometry: PolygonGeometry;
-  collision: { type: 'polygon' } & PolygonGeometry;
+  /**
+   * The solid footprint, and the wall a character cannot walk through. Present on a standing
+   * building and absent on a ruin, which the validator enforces: a map cannot be read as a field of
+   * walkable ruins by omitting it, and a ruin cannot be walled in by carrying one.
+   */
+  collision?: { type: 'polygon' } & PolygonGeometry;
   asset: AssetReference;
   metadata: {
     /** The road this building was placed against, absent for one placed off the network. */

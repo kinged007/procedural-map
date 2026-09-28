@@ -20,5 +20,11 @@ export const defaultTheme: MapTheme = {
     trunk: '#796f50',
     shadow: '#596d4830',
   },
-  structures: { wall: '#e8dcc4', roof: '#b46a4c', roofFarm: '#8d7f66', outline: '#5d4a3a' },
+  structures: {
+    wall: '#e8dcc4',
+    roof: '#b46a4c',
+    roofFarm: '#8d7f66',
+    ruin: '#a89c86',
+    outline: '#5d4a3a',
+  },
 };

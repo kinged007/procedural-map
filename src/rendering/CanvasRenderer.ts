@@ -162,6 +162,36 @@ function drawBuildings(
   for (const building of buildings) {
     const points = building.geometry.points;
     if (points.length !== 4) continue;
+    // A ruin is drawn as the footprint with a broken diagonal over it and no ridge, so it reads as
+    // fallen at the same zoom a standing building reads as standing. It is not drawn as a smaller
+    // house: a ruin is the same walls, collapsed, which is why the ground is the same size.
+    if (building.state === 'ruined') {
+      context.beginPath();
+      context.moveTo(points[0].x, points[0].y);
+      for (const point of points.slice(1)) context.lineTo(point.x, point.y);
+      context.closePath();
+      context.fillStyle = palette.ruin;
+      context.fill();
+      context.strokeStyle = palette.outline;
+      context.lineWidth = 0.8;
+      context.stroke();
+      // Two walls left standing at the corners, which is what makes it read as a shell rather than
+      // as a footprint: the ends of the building that have not come down.
+      context.strokeStyle = palette.wall;
+      context.lineWidth = 2.4;
+      context.globalAlpha = 0.75;
+      for (const index of [0, 2]) {
+        context.beginPath();
+        context.moveTo(points[index].x, points[index].y);
+        context.lineTo(
+          points[index].x + (points[(index + 1) % 4].x - points[index].x) * 0.34,
+          points[index].y + (points[(index + 1) % 4].y - points[index].y) * 0.34,
+        );
+        context.stroke();
+      }
+      context.globalAlpha = 1;
+      continue;
+    }
     // The ridge runs along the building's depth: it joins the middle of the front wall to the middle
     // of the back, and the two roof planes are the halves either side of it. Both are worked out from
     // `position`, `rotation` and the published size rather than from the order of the ring, so a

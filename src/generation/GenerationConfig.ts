@@ -35,8 +35,14 @@ export interface GenerationConfig {
    * measured centre to centre across the whole map, so it decides how tightly a road is built up. The
    * `setback` is overwritten by a category that sets its own, which is how a farm ends up further
    * back from the road than a house.
+   *
+   * `ruin` is the share of buildings that have fallen down. A ruin keeps its footprint and stops
+   * being a collider, so a character walks over the rubble. It is a share of buildings rather than a
+   * flag on a settlement, so the other half of a dead settlement is reachable by mixing it with
+   * `settlements.count`: at `1` every building is a ruin, and a settlement whose buildings are all
+   * ruins is a dead one.
    */
-  buildings?: { density?: number; spacing?: number; setback?: number };
+  buildings?: { density?: number; spacing?: number; setback?: number; ruin?: number };
   /**
    * The settlements on the map, each a centre with the buildings around it.
    *
@@ -60,7 +66,7 @@ export interface ResolvedGenerationConfig {
   vegetation: { density: number; clustering: number };
   roads: { density: number };
   rivers: { density: number; width: number };
-  buildings: { density: number; spacing: number; setback: number };
+  buildings: { density: number; spacing: number; setback: number; ruin: number };
   settlements: { count: number };
 }
 
@@ -75,6 +81,6 @@ export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
   vegetation: { density: 0.65, clustering: 0.8 },
   roads: { density: 0.5 },
   rivers: { density: 1, width: 12 },
-  buildings: { density: 0.5, spacing: 34, setback: 16 },
+  buildings: { density: 0.5, spacing: 34, setback: 16, ruin: 0 },
   settlements: { count: 2 },
 };

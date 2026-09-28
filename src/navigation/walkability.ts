@@ -91,9 +91,11 @@ function blockersOf(map: GameMap): PolygonGeometry[] {
   return [
     ...map.water.map((lake) => lake.collision),
     ...map.terrain.flatMap((region) => (region.collision ? [region.collision] : [])),
-    // A building is a wall. Its footprint is already the full wall face, so nothing extra is needed
-    // beyond putting the polygon in the blocker list with the water and the rock.
-    ...map.structures.map((building) => building.collision),
+    // A standing building is a wall. Its footprint is already the full wall face, so nothing extra
+    // is needed beyond putting the polygon in the blocker list with the water and the rock. A ruin
+    // carries no collision, so dropping the absent one is what makes rubble ground a character can
+    // walk over rather than a shell they are walled out of.
+    ...map.structures.flatMap((building) => (building.collision ? [building.collision] : [])),
   ];
 }
 

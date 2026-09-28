@@ -22,6 +22,8 @@ export interface MapTheme {
     wall: string;
     roof: string;
     roofFarm: string;
+    /** The ground of a building that has fallen down, which is not a roof. */
+    ruin: string;
     outline: string;
   };
 }

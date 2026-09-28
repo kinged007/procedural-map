@@ -181,18 +181,19 @@ export const gameMapSchema = {
           required: [
             'type',
             'category',
+            'state',
             'position',
             'rotation',
             'width',
             'depth',
             'geometry',
-            'collision',
             'asset',
             'metadata',
           ],
           properties: {
             type: { const: 'building' },
             category: { enum: ['house', 'farm'] },
+            state: { enum: ['standing', 'ruined'] },
             width: { type: 'number', exclusiveMinimum: 0 },
             depth: { type: 'number', exclusiveMinimum: 0 },
             geometry: { $ref: '#/$defs/polygon' },
@@ -212,6 +213,16 @@ export const gameMapSchema = {
               additionalProperties: { $ref: '#/$defs/jsonValue' },
             },
           },
+          // A standing building is a wall and a ruin is rubble you walk over, so collision is
+          // required of the first and forbidden of the second. Making it conditional rather than
+          // optional is what stops a map that omits it from reading as a field of walkable ruins.
+          allOf: [
+            {
+              if: { properties: { state: { const: 'standing' } }, required: ['state'] },
+              then: { required: ['collision'] },
+              else: { not: { required: ['collision'] } },
+            },
+          ],
         },
       ],
     },

@@ -38,6 +38,7 @@ const ranges = [
   'rivers',
   'buildings',
   'spacing',
+  'ruin',
   'settlements',
 ] as const;
 // The ranges that are a count in world units rather than a percentage, so they read as a number.
@@ -161,6 +162,7 @@ function configFromControls(): GenerationConfig {
       density: element<HTMLInputElement>('buildings').valueAsNumber / 100,
       spacing: element<HTMLInputElement>('spacing').valueAsNumber,
       setback: element<HTMLInputElement>('setback').valueAsNumber,
+      ruin: element<HTMLInputElement>('ruin').valueAsNumber / 100,
     },
     settlements: { count: element<HTMLInputElement>('settlements').valueAsNumber },
   };
@@ -183,6 +185,7 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('buildings').value = String(config.buildings.density * 100);
   element<HTMLInputElement>('spacing').value = String(config.buildings.spacing);
   element<HTMLInputElement>('setback').value = String(config.buildings.setback);
+  element<HTMLInputElement>('ruin').value = String(config.buildings.ruin * 100);
   element<HTMLInputElement>('settlements').value = String(config.settlements.count);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);

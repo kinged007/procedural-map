@@ -271,6 +271,14 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         6,
         120,
       ),
+      // A share, so `0` is a map of standing buildings and `1` is a map of ruins.
+      ruin: resolveNumber(
+        config.buildings?.ruin,
+        DEFAULT_CONFIG.buildings.ruin,
+        'buildings.ruin',
+        0,
+        1,
+      ),
     },
     settlements: {
       // A count, not a density: a caller asking for four settlements wants four, and a map with no
@@ -608,6 +616,10 @@ export function generateMap(config: GenerationConfig): GameMap {
   // Buildings come last, because a road is the only thing that offers them a site, and the roads, the
   // ground they must not stand on, and the trees they must not stand under all exist by now.
   const buildingRandom = new Random(placement ^ 0x6b8f21);
+  // Whether a building has fallen down is drawn from a stream of its own, so `buildings.ruin` moves
+  // no building's placement and no other building's facing. Setting it to 1 asks what the map would
+  // look like abandoned, not for a different map.
+  const ruinRandom = new Random(placement ^ 0x8c4d6a);
   const structures = generateBuildings(
     resolved,
     roads,
@@ -616,6 +628,7 @@ export function generateMap(config: GenerationConfig): GameMap {
     vegetation,
     sites.map((site) => site.clearing),
     () => buildingRandom.next(),
+    () => ruinRandom.next(),
   );
   const forests: ForestEntity[] = generateForests(vegetation);
   const settlements = generateSettlements(sites, structures);

@@ -162,6 +162,19 @@ Two categories, and a category earns its place by changing the placement rather 
 a `house` is 15 by 11 units and uses the configured setback, and a `farm` is 28 by 20 and stands 48
 units back, which is what a farmyard is. A farm is drawn in for one site in nine.
 
+`buildings.ruin` is the share of buildings that have fallen down, drawn once a building is placed and
+so leaving the sites exactly where they were. A ruin keeps its footprint and drops its collision,
+because rubble is ground a character walks over rather than a wall around a shell, and the
+walkability raster picks that up on its own. It is drawn from a stream of its own for the same reason
+the settlement sites are: setting the share to `1` asks what the map would look like abandoned, and the
+answer is the same map with the same buildings in the same places, which is checked rather than
+assumed.
+
+A ruin does not make a settlement bigger. `kind` counts what stands, so a village of twelve shells is a
+hamlet, and the membership is unchanged: ruins are part of the place, just not part of its size. That
+is what makes the second half of a dead settlement reachable, next to the first half, which is a
+settlement nobody built in at all.
+
 `spacing` is re-checked as a global centre-to-centre minimum rather than only along one road, so
 buildings on two roads that run close together do not end up inside each other. It is also what makes
 `setback` behave oddly at the low end, which is worth knowing before reaching for it: pulling both

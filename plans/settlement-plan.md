@@ -20,7 +20,7 @@ Ordered by what unblocks the most, not by what is most fun to build.
 | S4 settlement kind from density         | done       | `kind` is read off the membership, and there is no knob for it                                             |
 | S5 which categories a settlement places |            | two settlements of different kind draw different categories                                                |
 | S6 shoreline settlement and a pier      |            | a pier stands in water, is attached to a settlement, and a building never does                             |
-| S7 ruins, from the PRD settlement note  |            | a ruined building is a building that a building never was, and ruins do not collide                        |
+| S7 ruins, from the PRD settlement note  | done       | `state` on a building, no collision on a ruin, and `kind` counts only what stands                          |
 | S8 a settlement as a player base        | done       | `spawnCandidates({ preferSettlements: true })` offers every settlement, on open ground                     |
 
 ## S1 — centre, membership, and a count knob
@@ -159,12 +159,34 @@ on 40 maps at a cell size of 16, 94% were already open and the rest moved at mos
 nearest open cell is used. A settlement with no open ground at all is skipped rather than offered on
 blocked ground, and the snap is capped at four cells.
 
+## S7 — ruins
+
+A ruin is a building that has fallen down, and the two things that make it one are that it stops
+colliding and that it stops counting. Without the first it is a wall around rubble; without the second
+a village of twelve shells calls itself a `town`, which is a label contradicting the ground. Those were
+the two problems the item was written to solve, and they are the whole of it.
+
+`buildings.ruin` is the share of buildings that are ruins, `0` to `1`. It is a share of buildings and
+not a flag on a settlement, so both halves of a dead settlement are reachable by mixing two parameters:
+raise `settlements.count` to get a place nobody built in, or set `ruin: 1` to get one whose buildings
+all fell down. No new `kind` value is needed for the second, because `kind` already counts standing
+buildings and a settlement of ruins lands at the bottom of the scale it already has.
+
+The footprint stays and the collision goes. Keeping the geometry is what makes a ruin the same building,
+fallen, rather than a smaller house: a consumer drawing rubble fits it to the same rectangle, and the
+walkability raster leaves the ground open without being told to.
+
+The share is drawn from a stream of its own. Drawn from the placement stream it would have moved every
+building placed after the first ruin, so setting `ruin: 1` would have answered a different question
+from the one asked. With its own stream the previous map is reproduced exactly by deleting the new
+field, which is what shows the change was additive and nothing else moved.
+
 ## Still open
 
-- Ruins change what a building is: a ruined building should stop colliding, or it is a wall around
-  rubble, but it also changes the density a caller asked for. S7 has to decide whether a ruin is a
-  building that no longer counts, because the count is what a settlement's kind and a dead settlement
-  are both read from. A ruin that still counts makes a ruined settlement a `town`, which is a label
-  contradicting the ground.
-- S5 needs a category weight per kind, and S6 needs a shoreline site. Both are content decisions
-  rather than mechanics, and both are held until there is a settlement worth putting them in.
+- S5 needs a category weight per kind, and it is circular as written: `kind` is read off the
+  membership, and the membership is built from the buildings, so a building cannot choose its category
+  from a kind that does not exist yet. It needs either a two-pass placer or a `kind` that is an input
+  rather than derived, and the second would contradict S4. Content decision, held until someone wants
+  a hamlet and a town to look different.
+- S6 needs a shoreline site for a pier to stand on. The beach band is already kept clear of buildings,
+  which is what leaves that ground free. Mechanics, not content, but nothing asks for a harbour yet.

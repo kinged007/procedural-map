@@ -173,6 +173,12 @@ export function generateSettlements(
 ): SettlementEntity[] {
   const members = new Map<string, string[]>();
   for (const site of sites) members.set(siteKey(site), []);
+  // A ruin is rubble, not housing, so it does not make a place bigger. Counting them would let a
+  // settlement of twelve shells call itself a town, which is a label the ground contradicts, and it
+  // is the same reasoning that puts a dead settlement at the bottom of the scale. Ruins still join
+  // the membership: they are part of the place, just not part of its size.
+  const standing = new Map<string, number>();
+  for (const site of sites) standing.set(siteKey(site), 0);
   for (const building of buildings) {
     let nearest: SettlementSite | undefined;
     let nearestDistance = RADIUS;
@@ -184,19 +190,23 @@ export function generateSettlements(
       }
     }
     // Nothing within reach, or every site is farther than the radius: the building is in no place.
-    if (nearest) members.get(siteKey(nearest))!.push(building.id);
+    if (nearest) {
+      const key = siteKey(nearest);
+      members.get(key)!.push(building.id);
+      if (building.state === 'standing') standing.set(key, standing.get(key)! + 1);
+    }
   }
 
   return sites.map((site, index) => {
-    const buildingIds = members.get(siteKey(site))!;
+    const key = siteKey(site);
     return {
       id: `settlement-${index + 1}`,
       type: 'settlement',
-      kind: kindFor(buildingIds.length),
+      kind: kindFor(standing.get(key)!),
       position: site.position,
       radius: RADIUS,
       clearing: site.clearing,
-      metadata: { buildingIds },
+      metadata: { buildingIds: members.get(key)! },
     };
   });
 }

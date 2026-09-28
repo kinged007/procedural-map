@@ -207,18 +207,25 @@ not marked, to the water or off the edge of the map. Iterate `river.metadata?.mo
 is a solid rectangle, so it is a footprint to fit an asset into and a wall to walk into:
 
 - `position` is the centre at ground level, `width` the frontage and `depth` the depth.
-- `geometry` is the footprint ring, and `collision` is the same polygon, as with water and roads.
+- `geometry` is the footprint ring, and `collision` is the same polygon on a standing building.
 - `rotation` is in radians and points **from the building towards its road**, so a building placed on
   a road looks back down it. To find a building's front wall, take `position` and step `depth / 2`
   along the direction `rotation` points.
-- `asset.category` is `structure.house` or `structure.farm`, and `category` says which.
+- `asset.category` is `structure.house` or `structure.farm`, and `category` says which. A ruin is
+  `structure.ruin`, whatever it used to be.
 - `metadata.roadId` is the road it was placed against, and `metadata.setback` is how far its front wall
   stands from that road's centreline.
 
-**A building blocks the walkability raster.** It is in the same list as the water and the rock, so a
-character cannot walk through a wall without you making those cells walkable. If you want doorways, you
-find them yourself: nothing in the format says where a door is, and `metadata` has no room for one
-until the format grows a field for it.
+**A standing building blocks the walkability raster.** It is in the same list as the water and the
+rock, so a character cannot walk through a wall without you making those cells walkable. If you want
+doorways, you find them yourself: nothing in the format says where a door is, and `metadata` has no room
+for one until the format grows a field for it.
+
+**A ruin does not block anything.** `state` is `standing` or `ruined`, and a ruin carries no
+`collision`, so `rasterizeWalkability` leaves the ground it stood on open and a character walks over the
+rubble. The footprint stays, so a ruin is the same building, fallen, and not a smaller one. The
+validator enforces both halves: a standing building without collision and a ruin carrying one are both
+rejected, because a map that simply omits the field would otherwise read as a field of walkable ruins.
 
 Nothing about a building is a parcel. There is no plot, no boundary, and no ownership: a building is a
 rectangle standing on the ground, and the ground around it is ordinary terrain. A farm is a building
