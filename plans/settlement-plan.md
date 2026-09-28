@@ -19,7 +19,7 @@ Ordered by what unblocks the most, not by what is most fun to build.
 | S3 central square                       | done       | `clearing`, a keep-out the tree and building placers honour, decided before both                           |
 | S4 settlement kind from density         | done       | `kind` is read off the membership, and there is no knob for it                                             |
 | S5 which categories a settlement places |            | two settlements of different kind draw different categories                                                |
-| S6 shoreline settlement and a pier      |            | a pier stands in water, is attached to a settlement, and a building never does                             |
+| S6 shoreline settlement and a pier      | building   | a pier stands in water, is attached to a settlement, and a building never does                             |
 | S7 ruins, from the PRD settlement note  | done       | `state` on a building, no collision on a ruin, and `kind` counts only what stands                          |
 | S8 a settlement as a player base        | done       | `spawnCandidates({ preferSettlements: true })` offers every settlement, on open ground                     |
 
@@ -207,8 +207,26 @@ catalogue the caller could extend; that is a different field and it is not this 
   the caller supplying the weights, which answers the PRD item, has no cycle, and is also what makes a
   hamlet and a town look different without either one being told what it is. The set of categories stays
   as content, so the weights only rebalance what already exists until someone wants more of them.
-- **S6 needs a shoreline site for a pier to stand on.** The beach band is already kept clear of
-  buildings, which is what leaves that ground free, so this is mechanics rather than content. The open
-  question is what a pier is: a building that stands in water breaks the rule that a building is placed
-  against a road on land, so it is either a new entity type or a category with its own placement, and
-  the answer decides the schema.
+- **S6 is a new entity, not a building.** A pier stands in water, is walkable, and is attached to a
+  settlement. A building does the opposite of all three: it stands on land, it is a wall, and it is
+  placed against a road. Making a pier a building category would put an exception in the one
+  placement path that is currently uniform, and a ruin of a pier is not a thing, so the field S7 added
+  would have to be forbidden on one branch of the category union.
+
+  So a dock is its own entity in a new `docks` collection. That keeps `structures` about buildings and
+  leaves every building invariant intact, and it gives a dock the fields it actually has: where it is
+  anchored on land, the deck it covers, the settlement it serves, and how wide it is.
+
+  The one mechanical part that is genuinely new: **a pier is walkable, and the ground under it is water
+  that blocks.** The raster fills water as blocked, so a deck has to be carved back out afterwards.
+  That is a paving pass over the filled cells rather than a change to what counts as a blocker, which
+  keeps the rule the raster already states intact and makes the carve auditable: a cell a pier opens
+  was blocked by water and is now a deck.
+
+**What the measurements say about where a dock goes.** Across six maps at 2048 by 1536, a settlement
+centre comes within 13 to 53 units of water at its closest and its median gap is 65 to 143, so a place
+is usually near a shore without being on it. Roads are the better anchor: a road comes within 2 to 8
+units of water at its closest point and 62 to 74% of all road points sit within 120 units of it. A dock
+is therefore placed on a road point near a shore, reaches from the land across the water, and names the
+nearest settlement as the place it serves. Rivers already record `metadata.mouths`, which is a free
+jetty site on any map with a river reaching standing water, and a lake shore is the other.
