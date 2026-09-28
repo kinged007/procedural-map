@@ -1537,15 +1537,17 @@ Delivered so far:
   rock face, open water, a wood — and the caller decides what that is worth.
 - **A mine is cut into a rock face and faces out of it.** The face is walked at 8-unit steps and the
   outward normal taken, which is the direction that leaves the rock, so it is the direction out. Where
-  a concave section leaves both perpendiculars outside the polygon, the one with the clearer approach
-  wins; a notch, where the rock wraps around three sides, is not a face anyone can dig into. The marker
-  sits 4 units inside the boundary, which is the overlap made checkable: a consumer can run
-  `pointInPolygon` against the rock it names and get an answer that means something. The entrance
-  requires open ground within 16 units, which costs about one face in seventy — 98.6% of faces clear
-  it — and drops the cliff-inside-a-cliff samples an arrow would otherwise point at solid rock. Only
-  rock and water are tested for that: a tree near a mouth is a wood and a character walks around one,
-  so refusing a face over a single trunk would take whole hillsides out of the pool for something that
-  is not in the way.
+  a concave section leaves both perpendiculars outside the polygon, both are offered and the caller
+  takes whichever clears; a notch, where the rock wraps around three sides, is not a face anyone can
+  dig into. The marker sits 4 units inside the boundary, which is the overlap made checkable: a
+  consumer can run `pointInPolygon` against the rock it names and get an answer that means something.
+  The face is sampled at the middle of each stretch of outline and never at a vertex, because at a
+  sharp corner the two normals belong to the two edges meeting there and stepping back along one leaves
+  the polygon rather than entering it. The entrance requires 16 units of clear ground along the arrow,
+  and every rock is tested for it rather than only the named one, so a mine in a seam between two
+  outcrops is refused for having rock on both sides. Only rock, water and other forests are tested for
+  that: a tree near a mouth is a wood and a character walks around one, so refusing a face over a
+  single trunk would take whole hillsides out of the pool for something that is not in the way.
 - **A fishing spot is in the water and says how far out it is.** `distanceToShore` is measured to the
   nearest shore of its own body, islands included, and `access` is derived from it: `land` within 32
   units, `water` beyond. Both are published, because the verdict and the measurement answer different
@@ -1557,13 +1559,21 @@ Delivered so far:
   body is 5.5k square units, a puddle, and the distribution jumps rather than tapers, so any floor lands
   in the same gap. At 20,000 there are 4.5 bodies per map with inradii of 36 to 187 units, and the
   largest reaches 180 units from shore.
-- **A huntable wood is measured before it is offered.** A site names a grove of 20 trees or more with
-  `walkableInside` set, and sits at the middle of its hull, which is inside it because a hull is
-  convex. The 20 is a floor because `densityPct` cannot tell a copse from a wood: it reads 100 on
-  every hull on a default map, because a hull is drawn tight around its own canopies, so coverage is
-  full by construction and the field carries no information. `walkableInside` is the field that earns
-  its place, and it is why the sites are placed after the map is built — asked earlier, every grove
-  would look unenterable and no hunting at all would be published.
+- **A hunting site is at the edge of a wood and faces out of it.** A stand in the middle of a grove
+  is a stand nobody can walk to — the trunks are the obstacle — so the site sits on the hull's own
+  outline with the arrow pointing out, and the ground it points at has to be clear. "Clear" excludes
+  the neighbouring grove specifically, and that is the rule's whole reason for existing: two groves of
+  one wood are separate hulls because their trees are more than the link distance apart, but their
+  hulls can be a stride of each other, and an edge facing a neighbour is an edge facing more wood.
+  Rock and water are in the same test, because a stand against a cliff is the same problem. The
+  approach has to be clear for the whole 16 units rather than for its first step: a first-clear-step
+  test accepts an edge with four units of daylight and then the neighbouring wood, which is precisely
+  what this rule is meant to stop, and requiring all of it cost no groves at all — over fifteen maps
+  every grove that passed the size test still had one fully clear edge. A grove needs 20 trees or more
+  and `walkableInside`, the latter because `densityPct` cannot tell a copse from a wood: it reads 100
+  on every hull on a default map, since a hull is drawn tight around its own canopies, so coverage is
+  full by construction and the field carries no information. `rotation` is now required on a `hunting`
+  site as well as on a `mine`, and still forbidden on a `fishing` spot.
 - **The three counts are separate and all default to `0`.** A default map says nothing about where
   anything is gathered, which is the honest answer. They are three numbers because the ground offers
   them wildly unevenly: 4.7 rock regions and about 4,000 units of face, but 4.5 fishable bodies and 16
@@ -1572,11 +1582,16 @@ Delivered so far:
 - **Sites carry no collision**, the third surface in this format with none of it, after a forest hull
   and a deck. A site is a mark on the ground, not a thing standing in it.
 
-Still open on this milestone: fields, orchards, fences and trails. Farms, clearings and isolated
-buildings are already delivered — a farm is a building category since v0.5, a clearing is a settlement's
-own since v0.5, and an isolated building is what a dead settlement is. Fences and trails are the two
-that are a genuinely new question rather than more of this: a fence has to decide whether it blocks,
-which is a navigation call and not a placement one.
+- **The sites are placed after the map is built.** A mine's approach and a wood's enterability are both
+  questions about finished ground, and `walkableInside` in particular is measured on the raster once
+  every other collection exists. Asked earlier, every grove would look unenterable and no hunting at
+  all would be published.
+
+Still open on this milestone: fields, orchards and trails. Farms, clearings and isolated buildings are
+already delivered — a farm is a building category since v0.5, a clearing is a settlement's own since
+v0.5, and an isolated building is what a dead settlement is. Fences are held back deliberately rather
+than left out: a fence has to decide whether it blocks, which is a navigation call and not a placement
+one, and it is the one question here that has an answer waiting on a decision rather than a measurement.
 
 ---
 

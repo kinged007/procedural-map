@@ -283,19 +283,24 @@ export const gameMapSchema = {
           },
           allOf: [
             {
-              // A mine is a mouth in a rock face, so it names the rock and carries the direction the
-              // entrance faces. `rotation` is absent on the other two kinds, which have no facing:
-              // there is nothing to point out of a wood, and a fishing spot is in the water rather
-              // than on a wall.
-              if: { properties: { kind: { const: 'mine' } }, required: ['kind'] },
+              // A mine is a mouth in a rock face and a hunting site is a stand at the edge of a
+              // wood, so each names the ground it is set into and carries the direction that leads
+              // out of it. `rotation` is absent on a fishing spot, which has no facing: it is in the
+              // water rather than cut into something, and there is no out of it.
+              if: {
+                anyOf: [
+                  { properties: { kind: { const: 'mine' } }, required: ['kind'] },
+                  { properties: { kind: { const: 'hunting' } }, required: ['kind'] },
+                ],
+              },
               then: { required: ['rotation'] },
+              else: { properties: { not: { required: ['rotation'] } } },
             },
             {
               if: { properties: { kind: { const: 'mine' } }, required: ['kind'] },
               then: {
                 properties: { metadata: { required: ['rockId'] } },
               },
-              else: { properties: { not: { required: ['rotation'] } } },
             },
             {
               // A fishing spot is in water and says how far out it is, which is the number a

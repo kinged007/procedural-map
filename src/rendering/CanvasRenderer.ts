@@ -94,13 +94,14 @@ function drawDocks(context: CanvasRenderingContext2D, docks: DockEntity[], theme
 }
 
 /**
- * Resource sites, drawn as the three marks they are.
+ * Resource sites, drawn as the two marks they are.
  *
- * A mine gets an arrow rather than a dot, because the arrow is the information: it is the direction
- * the entrance faces, so a reader can see at a glance which way is out of the rock. A fishing spot
- * gets a ring, and a huntable wood a cross, so the three are told apart at a zoom where a dot is a
- * few pixels across. None of it is a scale drawing: a consumer drawing its own mine replaces all of
- * it, and the geometry it needs is the position, the facing and the name in `metadata`.
+ * A mine and a hunting site both sit at an edge and face out of it, so both are drawn as an arrow:
+ * the arrow is the information, being the direction a character reaches them from, and a reader can
+ * see at a glance which way is out of the rock or out of the wood. A fishing spot gets a ring with a
+ * stroke through it, so the three are told apart at a zoom where a dot is a few pixels across. None
+ * of it is a scale drawing: a consumer drawing its own mine replaces all of it, and the geometry it
+ * needs is the position, the facing and the name in `metadata`.
  */
 function drawResourceSites(
   context: CanvasRenderingContext2D,
@@ -120,31 +121,25 @@ function drawResourceSites(
           : palette.hunting;
     context.lineWidth = 1.2 / scale;
     context.beginPath();
-    if (site.kind === 'mine') {
+    if (site.kind === 'fishing') {
+      context.arc(x, y, size * 0.8, 0, Math.PI * 2);
+      context.moveTo(x - size * 0.4, y);
+      context.lineTo(x + size * 0.4, y);
+    } else {
+      // A shaft driven in from the edge, with the head of the arrow where the ground opens up. It
+      // reads as a direction rather than as a spike, which is the whole of what an edge marker is for.
       const heading = site.rotation ?? 0;
       const forward = { x: Math.cos(heading), y: Math.sin(heading) };
-      // A shaft driven into the face, with the head of the arrow where the ground opens up. It reads
-      // as a direction rather than as a spike, which is the whole of what a mine marker is for.
       context.moveTo(x - forward.x * size, y - forward.y * size);
       context.lineTo(x + forward.x * size, y + forward.y * size);
-      const barb = 0.45;
       for (const side of [1, -1]) {
-        const angle = heading + side * barb * Math.PI;
+        const angle = heading + side * 0.45 * Math.PI;
         context.moveTo(x + forward.x * size, y + forward.y * size);
         context.lineTo(
           x + forward.x * size * 0.5 + Math.cos(angle) * size * 0.5,
           y + forward.y * size * 0.5 + Math.sin(angle) * size * 0.5,
         );
       }
-    } else if (site.kind === 'fishing') {
-      context.arc(x, y, size * 0.8, 0, Math.PI * 2);
-      context.moveTo(x - size * 0.4, y);
-      context.lineTo(x + size * 0.4, y);
-    } else {
-      context.moveTo(x - size * 0.7, y - size * 0.7);
-      context.lineTo(x + size * 0.7, y + size * 0.7);
-      context.moveTo(x + size * 0.7, y - size * 0.7);
-      context.lineTo(x - size * 0.7, y + size * 0.7);
     }
     context.stroke();
   }

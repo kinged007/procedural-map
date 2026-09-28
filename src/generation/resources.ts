@@ -1,7 +1,7 @@
 import type {
-  ForestEntity,
   GameMap,
   Point,
+  PolygonGeometry,
   ResourceSiteEntity,
   TerrainRegion,
   WaterRegion,
@@ -10,28 +10,32 @@ import { boundsOf, pointInPolygon, polygonArea } from '../map/geometry.js';
 import { distance } from './ribbon.js';
 
 /**
- * How far inside the rock a mine marker sits, in world units.
+ * How far inside the boundary a marker sits, in world units.
  *
- * The user asked for a mine on the rock's edge with some overlap, and a small inward bite is what
- * makes that overlap checkable rather than a matter of taste: the marker ends up strictly inside the
- * polygon it names, so a consumer can test `pointInPolygon(site.position, rock.geometry)` and get an
- * answer that means something, and a marker sitting on the boundary is ambiguous to a point-in-polygon
- * test that the game will run on a raster it chose itself.
+ * A site is asked for at the edge of a rock face or a wood and given a facing out of it, and this is
+ * the overlap that makes that edge checkable rather than a matter of taste: the marker ends up
+ * strictly inside the polygon it names, so a consumer can test `pointInPolygon(site.position,
+ * forest.geometry)` or against a rock and get an answer that means something, where a marker sitting
+ * exactly on the boundary is ambiguous to the point-in-polygon test the game will run on a raster it
+ * chose itself. It is also why the face is sampled at the middle of each stretch of outline and never
+ * at a vertex: at a sharp corner the two normals belong to the two edges meeting there, and stepping
+ * back along one of them leaves the polygon instead of entering it.
  */
-const ENTRANCE_BITE = 4;
+const INSIDE_BITE = 4;
 
 /**
- * How far clear of the rock a mine's entrance has to be, in world units.
+ * How far clear of the edge a site's approach has to be, in world units.
  *
- * The arrow points out of the rock, so what matters is that it points somewhere a character can go.
- * Measured over six maps at 2048 by 1536, 98.6% of rock-face samples have open ground within 16 units
- * along the outward arrow and 99.1% within 24, so 16 costs about one face in seventy and takes the
- * cliff-inside-a-cliff samples that the arrow would otherwise point at solid rock.
+ * The arrow points out of the rock or out of the wood, so what matters is that it points somewhere a
+ * character can go, for the whole of its length rather than for its first step. That distinction is
+ * the whole reason a hunting site is refused an edge facing a neighbouring grove: an edge with four
+ * units of daylight and then more wood is an edge facing more wood, and a first-clear-step test
+ * accepts it. Requiring all 16 cost no groves at all — over fifteen maps every wood that passed the
+ * size test still had one fully clear edge.
  *
- * Only rock and water are tested. A tree near a mine mouth is a wood, and a character walks around
- * one; a second rock face opposite the first is a wall. Trees are deliberately not in this test
- * because refusing a face for one trunk would take whole hillsides out of the candidate pool over a
- * thing that is not in the way.
+ * Only rock, water and other forests are tested. A single tree trunk near a mine mouth or a hunting
+ * stand is a wood, and a character walks around one; refusing a face over one trunk would take whole
+ * hillsides and whole groves out of the candidate pool for something that is not in the way.
  */
 const ENTRANCE_REACH = 16;
 
@@ -67,12 +71,17 @@ const SHORE_REACH = 32;
  * where a grove stops being a few trees and starts being somewhere with something in it.
  */
 const MIN_WOOD_TREES = 20;
-
 /** How close one site may come to another, centre to centre, in world units. */
 const SPACING = 24;
 
 /** How often a rock face is sampled along its outline, in world units. */
 const SAMPLE_STEP = 8;
+
+/** A point on a polygon's outline, and a direction that leads out of it. */
+interface Face {
+  at: Point;
+  outward: Point;
+}
 
 /** How often open water is sampled, in world units. Finer than `SPACING`, so a body is not skipped. */
 const WATER_STEP = 16;
@@ -116,32 +125,26 @@ export function generateResourceSites(
  * Mines on the rock faces that have open ground in front of them.
  *
  * A mine is cut into a face, so the site is on the outline of a rock region and the arrow is the
- * outward normal there: the direction that leaves the rock, which is the direction out. At a concave
- * section both perpendiculars lead out of the polygon and the normal is not unique, so the one with
- * the clearer approach wins, which is also the one a character would dig towards.
+ * outward normal there: the direction that leaves the rock, which is the direction out. Every rock is
+ * tested for the approach, not only the one the face belongs to: a mine driven into a seam between two
+ * outcrops has rock on both sides and an entrance in a wall.
  */
 function mines(map: GameMap, count: number, random: () => number): ResourceSiteEntity[] {
   if (count <= 0) return [];
   const rocks = map.terrain.filter((region) => region.kind === 'rock');
   if (rocks.length === 0) return [];
   const water = map.water;
+  // Every rock, not only the one the face belongs to. A mine driven into a seam between two
+  // outcrops has rock on both sides and an entrance in a wall, and testing only the named region
+  // would have called that a face.
+  const blocked = (at: Point) =>
+    rocks.some((rock) => pointInPolygon(at, rock.geometry)) || inWater(at, water);
 
-  // Shuffled so a fixed seed does not take every face from the first rock, and so the same faces are
-  // offered for the same seed at every count.
+  // Shuffled so a fixed seed does not fill the first rock, and so the same faces are offered for the
+  // same seed at every count.
   const faces: { rock: TerrainRegion; at: Point; outward: Point }[] = [];
   for (const rock of rocks)
-    for (const { at, tangent } of walkOutline(rock, SAMPLE_STEP)) {
-      const left = { x: -tangent.y, y: tangent.x };
-      const right = { x: tangent.y, y: -tangent.x };
-      // The outward normal is the perpendicular that leaves the rock. A notch, where the rock wraps
-      // around three sides, has no such side and is not a face anyone can dig into.
-      const options = [left, right].filter((n) => !pointInPolygon(offset(at, n, 3), rock.geometry));
-      if (options.length === 0) continue;
-      const outward = options.reduce((best, n) =>
-        approach(rock, at, n, water) > approach(rock, at, best, water) ? n : best,
-      );
-      faces.push({ rock, at, outward });
-    }
+    for (const face of outwardFaces(rock.geometry, SAMPLE_STEP)) faces.push({ rock, ...face });
   for (let index = faces.length - 1; index > 0; index -= 1) {
     const swap = Math.floor(random() * (index + 1));
     [faces[index], faces[swap]] = [faces[swap], faces[index]];
@@ -150,8 +153,8 @@ function mines(map: GameMap, count: number, random: () => number): ResourceSiteE
   const sites: ResourceSiteEntity[] = [];
   for (const face of faces) {
     if (sites.length >= count) break;
-    if (approach(face.rock, face.at, face.outward, water) > ENTRANCE_REACH) continue;
-    const position = offset(face.at, face.outward, -ENTRANCE_BITE);
+    if (clearRun(face.at, face.outward, blocked, ENTRANCE_REACH) !== ENTRANCE_REACH) continue;
+    const position = offset(face.at, face.outward, -INSIDE_BITE);
     if (sites.some((site) => distance(site.position, position) < SPACING)) continue;
     sites.push({
       id: '',
@@ -164,20 +167,6 @@ function mines(map: GameMap, count: number, random: () => number): ResourceSiteE
     });
   }
   return sites;
-}
-
-/**
- * How far out along `normal` a face has to reach before it is out in the open, capped at a long way.
- *
- * Returns a distance beyond `ENTRANCE_REACH` for a face that never gets there, so one number answers
- * both "is this face usable" and "which of these two normals is the better one".
- */
-function approach(rock: TerrainRegion, at: Point, normal: Point, water: WaterRegion[]): number {
-  for (let step = 4; step <= ENTRANCE_REACH * 2; step += 4) {
-    const reached = offset(at, normal, step);
-    if (!pointInPolygon(reached, rock.geometry) && !inWater(reached, water)) return step;
-  }
-  return ENTRANCE_REACH * 2 + 1;
 }
 
 /**
@@ -231,31 +220,61 @@ function fishing(map: GameMap, count: number, random: () => number): ResourceSit
 }
 
 /**
- * Huntable woods, at the middle of the grove.
+ * Huntable woods, on the edge of the wood and facing out of it.
  *
- * `walkableInside` is the field that earns its place here: it is the measured answer to whether a
- * character can get into a grove and back out, which is what separates a wood from a thicket, and
- * forest hulls are measured after the map is built for exactly this sort of question. A site at the
- * middle of a hull is inside it by construction, because a hull is convex.
+ * A hunting ground is somewhere a character walks to and then has room to hunt, so the site cannot
+ * be in the middle of a grove: the trunks are the obstacle, and a stand in the middle of a wood is a
+ * stand nobody can reach. It sits on the hull's own outline with the arrow pointing out, and the
+ * ground it points at has to be clear.
+ *
+ * "Clear" excludes the neighbouring grove specifically, and that is the case this rule exists for. Two
+ * groves of one wood are separate hulls because their trees are more than the link distance apart, but
+ * their hulls can be within a stride of each other, and an edge facing a neighbour is an edge that
+ * faces more wood. Rock and water are in the same test because a stand against a cliff is the same
+ * problem.
+ *
+ * One site per grove, taking the first edge on the outline that faces somewhere open. There is no
+ * shuffle, because there is nothing to choose between: every grove gets exactly one stand, so which
+ * of its several open edges it gets is a matter of no consequence, and not drawing a stream keeps
+ * the count from reshuffling the mining and the fishing.
  */
 function hunting(map: GameMap, count: number): ResourceSiteEntity[] {
   if (count <= 0) return [];
-  const woods = map.forests.filter(
-    (forest) => forest.metadata.treeCount >= MIN_WOOD_TREES && forest.metadata.walkableInside,
-  );
-  return woods.slice(0, count).map((forest) => siteInWood(forest));
+  const rocks = map.terrain.filter((region) => region.kind === 'rock');
+  const blocked = (at: Point) =>
+    map.forests.some((forest) => pointInPolygon(at, forest.geometry)) ||
+    rocks.some((rock) => pointInPolygon(at, rock.geometry)) ||
+    inWater(at, map.water);
+
+  const sites: ResourceSiteEntity[] = [];
+  for (const forest of map.forests) {
+    if (sites.length >= count) break;
+    if (forest.metadata.treeCount < MIN_WOOD_TREES || !forest.metadata.walkableInside) continue;
+    const face = firstClearFace(forest.geometry, blocked);
+    if (!face) continue;
+    const position = offset(face.at, face.outward, -INSIDE_BITE);
+    if (sites.some((site) => distance(site.position, position) < SPACING)) continue;
+    sites.push({
+      id: '',
+      type: 'resource-site',
+      kind: 'hunting',
+      position,
+      rotation: Math.atan2(face.outward.y, face.outward.x),
+      asset: { category: 'vegetation.hunt', variant: 'stand-1' },
+      metadata: { forestId: forest.id },
+    });
+  }
+  return sites;
 }
 
-function siteInWood(forest: ForestEntity): ResourceSiteEntity {
-  const box = boundsOf(forest.geometry.points);
-  return {
-    id: '',
-    type: 'resource-site',
-    kind: 'hunting',
-    position: { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 },
-    asset: { category: 'vegetation.hunt', variant: 'ground-1' },
-    metadata: { forestId: forest.id },
-  };
+/** The first edge on a hull's outline that faces clear ground, or nothing if the wood is hemmed in. */
+function firstClearFace(
+  geometry: PolygonGeometry,
+  blocked: (at: Point) => boolean,
+): { at: Point; outward: Point } | undefined {
+  for (const face of outwardFaces(geometry, SAMPLE_STEP))
+    if (clearRun(face.at, face.outward, blocked, ENTRANCE_REACH) === ENTRANCE_REACH) return face;
+  return undefined;
 }
 
 /** How far `point` is from the nearest shoreline of `body`, in world units, its islands included. */
@@ -287,28 +306,59 @@ function offset(point: Point, direction: Point, by: number): Point {
 }
 
 /**
- * Points along a region's outline and the tangent at each, spaced `step` apart.
+ * How far out along `normal` the ground stays clear of `blocked`, capped at `reach`.
  *
- * A region's own vertices are too coarse to aim a mine at: a contour vertex can be a hundred units
- * from its neighbours, and the face between two of them is the face a character would dig into.
+ * This is the length of the clear run, not the first clear step, and the difference is the whole
+ * point. A first-clear-step test accepts a face with four units of daylight and then a wall, so the
+ * arrow points out of a grove and into the wood next door, which is the case this was written to
+ * stop. A caller that needs the full reach asks for it by comparing the result with `reach`.
  */
-function* walkOutline(
-  region: TerrainRegion,
-  step: number,
-): Generator<{ at: Point; tangent: Point }> {
-  for (const ring of [region.geometry.points, ...(region.geometry.holes ?? [])])
+function clearRun(
+  at: Point,
+  normal: Point,
+  blocked: (at: Point) => boolean,
+  reach: number,
+): number {
+  let clear = 0;
+  for (let step = 4; step <= reach; step += 4)
+    if (blocked(offset(at, normal, step))) break;
+    else clear = step;
+  return clear;
+}
+
+/**
+ * Points along a polygon's outline, each with a direction that leads out of it.
+ *
+ * The direction out is a perpendicular to the outline there, which is the normal. A polygon's own
+ * vertices are too coarse to aim at: a contour vertex can be a hundred units from its neighbours, and
+ * the stretch between two of them is the edge a character would stand at.
+ *
+ * A sample yields one face where only one perpendicular leaves the polygon, which is every sample of a
+ * convex hull, and two where the outline is concave enough that both do. Both are real directions out
+ * and the caller takes whichever clears, so neither is guessed at. A notch, where the polygon wraps
+ * round three sides and neither perpendicular leads anywhere, yields nothing.
+ */
+function* outwardFaces(geometry: PolygonGeometry, step: number): Generator<Face> {
+  for (const ring of [geometry.points, ...(geometry.holes ?? [])])
     for (let index = 0; index < ring.length; index += 1) {
       const a = ring[index];
       const b = ring[index + 1 === ring.length ? 0 : index + 1];
       const span = Math.hypot(b.x - a.x, b.y - a.y);
       if (span < step) continue;
       const count = Math.floor(span / step);
+      const tangent = { x: (b.x - a.x) / span, y: (b.y - a.y) / span };
       for (let n = 0; n < count; n += 1) {
-        const t = n / count;
-        yield {
-          at: { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t },
-          tangent: { x: (b.x - a.x) / span, y: (b.y - a.y) / span },
-        };
+        // The middle of the sub-segment, never its start. A sample on a vertex is not on an edge in
+        // any useful sense: the two normals there belong to the two edges meeting at it, and stepping
+        // back along one of them at a sharp angle leaves the polygon instead of entering it, which
+        // put a mark outside the very hull it named.
+        const t = (n + 0.5) / count;
+        const at = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        for (const outward of [
+          { x: -tangent.y, y: tangent.x },
+          { x: tangent.y, y: -tangent.x },
+        ])
+          if (!pointInPolygon(offset(at, outward, 3), geometry)) yield { at, outward };
       }
     }
 }

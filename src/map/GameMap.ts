@@ -231,21 +231,26 @@ export interface DockEntity extends MapEntity {
  * reason a forest hull and a dock carry none: a site is a mark on the ground, not an obstacle.
  *
  * The three kinds are the three affordances the terrain offers, and they are not interchangeable: a
- * mine is on a rock, a fishing spot is in water, a huntable wood is in trees.
+ * mine is on a rock, a fishing spot is in water, a hunting site is at the edge of trees. Two of the
+ * three are set at an edge and face out of it, and a consumer that ignores `rotation` on those two
+ * will not know which side of the rock or the wood a character can stand on.
  */
 export interface ResourceSiteEntity extends MapEntity {
   type: 'resource-site';
   kind: 'mine' | 'fishing' | 'hunting';
   /**
    * The site itself. A mine is just inside the rock face it is cut into, a fishing spot is in the
-   * water, and a huntable wood is at the middle of its grove.
+   * water, and a hunting site is just inside the edge of its grove, where a character can reach it.
    */
   position: Point;
   /**
-   * Radians, and only meaningful for a `mine`: the direction the entrance faces, which points away
-   * from the rock and so out into open ground. A mine without it would be a mark on a cliff with no
-   * way in, and the validator refuses one. A fishing spot and a huntable wood have no facing and
-   * publish none, the same way a building has a facing and a road does not.
+   * Radians. Meaningful for a `mine` and a `hunting` site, and required on both: each is set at the
+   * edge of something and has to say which way is out. A mine without it is a dot on a cliff with no
+   * way in, and a hunting site without it is a stand in the trees nobody can walk to. The direction is
+   * the outward normal at the edge, so it points at open ground by construction.
+   *
+   * A `fishing` spot has no facing and publishes none, the same way a building has a facing and a road
+   * does not: it is in the water rather than cut into something, and there is no out of it.
    */
   rotation?: number;
   asset: AssetReference;
@@ -254,7 +259,7 @@ export interface ResourceSiteEntity extends MapEntity {
     rockId?: string;
     /** The body of water a fishing spot lies in. */
     waterId?: string;
-    /** The grove a hunting site stands in. */
+    /** The grove a hunting site stands at the edge of. */
     forestId?: string;
     /**
      * How far a fishing spot is from the nearest shoreline of its own body, in world units. Measured,

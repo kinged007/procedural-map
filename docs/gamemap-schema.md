@@ -27,7 +27,7 @@ worth gathering on.
 | `docks` holds decks                   | new required collection | Iterate it. Each entry is a deck standing in water, with the place it serves and the water it stands in.                            |
 | A dock carries no collision           | new                     | A deck is ground to walk on, and the walkability raster carves the water it covers back open.                                       |
 | `resourceSites` holds sites           | new required collection | Iterate it. Each entry is a `mine`, a `fishing` spot or a `hunting` site, named for the ground it sits on.                          |
-| A mine faces out of its rock          | new                     | `rotation` is the entrance direction, and it is required on a mine and forbidden on the other two kinds.                            |
+| A mine faces out of its rock          | new                     | `rotation` is the entrance direction. It is required on a `mine` and a `hunting` site, and forbidden on a `fishing` spot.           |
 | A site carries no collision           | new                     | A site is a mark on the ground, not a thing in it.                                                                                  |
 | Generation config gains `resources`   | new optional config     | `resources: { mine, fishing, hunting }`. All three unset is `0`: the generator has no geology and says nothing by default.          |
 | A building says whether it stands     | new required field      | `state` is `standing` or `ruined`. A ruin carries no `collision`, so rubble is walkable.                                            |
@@ -703,13 +703,15 @@ interface ResourceSiteEntity {
   type: 'resource-site';
   kind: 'mine' | 'fishing' | 'hunting';
   /**
-   * A mine is just inside the rock face it is cut into, a fishing spot is in the water, and a
-   * hunting site is at the middle of its grove.
+   * A mine is just inside the rock face it is cut into, a fishing spot is in the water, and a hunting
+   * site is just inside the edge of its grove, where a character can walk to it.
    */
   position: Point;
   /**
-   * Radians, and a `mine` only: the direction the entrance faces, pointing away from the rock and so
-   * out into open ground. Required on a mine and forbidden on the other two kinds.
+   * Radians. A `mine` and a `hunting` site only, and required on both: each is set at the edge of
+   * something and has to say which way is out. A mine without it is a dot on a cliff with no way in,
+   * and a hunting site without it is a stand in the trees nobody can walk to. It is the outward normal
+   * at the edge, so it points at open ground by construction.
    */
   rotation?: number;
   asset: AssetReference;
@@ -734,7 +736,8 @@ Four things follow from this shape, and a consumer that assumes otherwise will b
 rejects a `mine` with no `rockId`, a `fishing` spot with no `waterId`, and a `hunting` site with no
 `forestId`, and rejects any of them naming something not published. A `rockId` has to resolve to a
 region whose `kind` is `rock` and not to terrain at large, because a mine is cut into a face and a
-mine cut into a meadow is a hole in a field.
+mine cut into a meadow is a hole in a field. `rotation` is required on a `mine` and a `hunting` site
+and forbidden on a `fishing` spot.
 
 **A mine is inside the rock and its arrow points out of it.** `position` is the boundary pushed 4
 units in, which is the overlap that makes it checkable: a consumer can run `pointInPolygon` against
@@ -751,11 +754,15 @@ would rather its spots were 50 units out reads the number and ignores the verdic
 walking to reach a `water` spot, which is the whole point of it, so a spot is not refused for being
 unreachable from land.
 
-**A hunting site is in a wood that was measured to be enterable.** It names a grove with at least 20
-trees and `metadata.walkableInside` set, and sits inside its hull. The 20 is a floor because
-`densityPct` cannot tell a copse from a wood: it reads 100 on every hull on a default map, since a
-hull is drawn tight around its own canopies, so canopy coverage is full by construction.
-`walkableInside` is the field that answers whether a character can get in and back out.
+**A hunting site is at the edge of a wood that faces open ground.** It names a grove with at least 20
+trees and `metadata.walkableInside` set, and sits just inside that grove's hull with `rotation` pointing
+out of it. It is not in the middle of the wood: the trunks are the obstacle, and a stand in the middle
+of a grove is a stand nobody can walk to. The ground it faces has to be clear of every **other** grove,
+and of rock and water. The neighbouring-grove test is the one that matters, because two groves of one
+wood are separate hulls — their trees are more than the link distance apart — yet their hulls can be a
+stride of each other, so an edge facing a neighbour is an edge facing more wood. The 20-tree floor is
+needed because `densityPct` cannot tell a copse from a wood: it reads 100 on every hull on a default
+map, since a hull is drawn tight around its own canopies, so canopy coverage is full by construction.
 
 **All three counts are upper bounds, and all three default to `0`.** `resources: { mine, fishing,
 hunting }` is unset at zero across the board, which is a map that says nothing about where anything is

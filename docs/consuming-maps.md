@@ -396,9 +396,26 @@ const boatSpots = map.resourceSites.filter(
 );
 ```
 
-**A hunting site is in a wood you can get into.** It names a grove with 20 trees or more and open
-ground inside its hull, measured on the same raster you would bake. It is a marker for an area, so
-place your hunt anywhere inside `metadata.forestId`'s hull rather than only at the site.
+**A hunting site is at the edge of its wood, facing out of it.** It names a grove of 20 trees or more
+with open ground inside it, and stands just inside the grove's own edge with `rotation` pointing out.
+It is not in the middle of the wood: the trunks are the obstacle, so a stand in the middle of a grove
+is a stand nobody can walk to. The ground it faces is clear for 16 units — of every _other_ grove, of
+rock and of water — so you can put a camp at the far end of the arrow and walk to it.
+
+```js
+// Somewhere a hunter can stand, with open ground behind them.
+for (const stand of map.resourceSites.filter((s) => s.kind === 'hunting')) {
+  const camp = {
+    x: stand.position.x + Math.cos(stand.rotation) * 8,
+    y: stand.position.y + Math.sin(stand.rotation) * 8,
+  };
+}
+```
+
+Two groves of one wood are separate hulls — their trees are more than the link distance apart — yet
+their hulls can be a stride of each other, which is why a stand is never published facing a
+neighbouring wood. The stand marks a wood rather than a spot, so you can put your camp anywhere inside
+`metadata.forestId`'s hull.
 
 Three things to plan around. A site carries no collision and blocks nothing — a site is a mark on the
 ground, not a thing standing in it, so put your own building there and it is yours to collide. The

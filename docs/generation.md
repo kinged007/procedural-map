@@ -363,14 +363,16 @@ notch, where the rock wraps around three sides, has no such side and is not a fa
 
 The marker sits 4 units _inside_ the boundary. That is the overlap that makes it checkable rather than a
 matter of taste: a consumer can run `pointInPolygon` against the rock it names and get an answer that
-means something, where a marker sitting exactly on the boundary is ambiguous to the same test. The
-entrance is then required to have open ground within 16 units along the arrow. Measured over six maps at
-2048 by 1536, 98.6% of rock-face samples clear that and 99.1% clear 24, so 16 costs about one face in
-seventy and drops the cliff-inside-a-cliff samples an arrow would otherwise point at solid rock.
+means something, where a marker sitting exactly on the boundary is ambiguous to the same test. The face
+is sampled at the middle of each stretch of outline and never at a vertex, because at a sharp corner
+the two normals belong to the two edges meeting there and stepping back along one leaves the polygon
+rather than entering it.
 
-Only rock and water are tested for that approach. A tree near a mine mouth is a wood, and a character
-walks around one; a second rock face opposite the first is a wall. Trees are deliberately not in this
-test, because refusing a face over a single trunk would take whole hillsides out of the candidate pool
+The entrance is then required to have 16 units of clear ground along the arrow, and every rock is
+tested for it rather than only the named one, so a mine in a seam between two outcrops is refused for
+having rock on both sides. Only rock, water and other forests are tested for that approach. A tree near
+a mine mouth is a wood, and a character walks around one; trees are deliberately not in this test,
+because refusing a face over a single trunk would take whole hillsides out of the candidate pool
 for something that is not in the way.
 
 **Fishing spots are in the water, and say how far out they are.** The distance is measured to the
@@ -388,13 +390,27 @@ distribution jumps rather than tapers, so any floor at all lands in the same gap
 4.5 bodies per map, with inradii of 36 to 187 units — enough open water to put a spot genuinely out of
 reach of a bank, which the largest reaches by 180 units.
 
-**Hunting sites are in woods that were measured to be enterable.** A site names a grove with at least 20
-trees and `walkableInside` set, and sits at the middle of its hull, which is inside it because a hull
-is convex. The 20 is a floor because `densityPct` cannot tell a copse from a wood: it reads 100 on
-every hull on a default map, since a hull is drawn tight around its own canopies, so canopy coverage is
-full by construction and the field carries no information. `walkableInside` is the field that earns its
-place — it is the measured answer to whether a character can get into a grove and back out, which is
-what separates a wood from a thicket.
+**Hunting sites are at the edge of a wood, facing out of it.** A stand in the middle of a grove is a
+stand nobody can walk to — the trunks are the obstacle — so the site sits on the hull's own outline
+with the arrow pointing out, and the ground it points at has to be clear. "Clear" excludes the
+neighbouring grove specifically, and that is the rule's whole reason for existing: two groves of one
+wood are separate hulls because their trees are more than the link distance apart, but their hulls can
+be a stride of each other, and an edge facing a neighbour is an edge that faces more wood. Rock and
+water are in the same test, because a stand against a cliff is the same problem. One site per grove,
+taking the first edge on the outline that faces somewhere open.
+
+The approach has to be clear for the whole 16 units, not merely for its first step. A first-clear-step
+test accepts an edge with four units of daylight and then the neighbouring wood, which is precisely
+what this rule is meant to stop. Requiring all of it cost nothing: over fifteen maps every grove that
+passed the size test still had at least one fully clear edge, so the pool is unchanged at nineteen to
+twenty-three woods per default map.
+
+A grove needs at least 20 trees and `walkableInside` before it is offered at all. The 20 is a floor
+because `densityPct` cannot tell a copse from a wood: it reads 100 on every hull on a default map,
+since a hull is drawn tight around its own canopies, so canopy coverage is full by construction and
+the field carries no information. `walkableInside` is the field that earns its place — it is the
+measured answer to whether a character can get into a grove and back out, which is what separates a
+wood from a thicket.
 
 This is also why the sites are placed after the map is built. A mine's approach and a wood's
 enterability are both questions about finished ground, and `walkableInside` in particular is measured on

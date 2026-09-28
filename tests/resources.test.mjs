@@ -133,9 +133,15 @@ test('a fishing spot far enough out to need a boat actually exists, and one near
   assert.ok(water > 0, 'no fishing spot needs a boat, so `access` says only one thing');
 });
 
-test('a hunting site stands in a wood big enough to hold game, and enterable', () => {
+test('a hunting site is at the edge of a wood, facing out of it, and never facing more wood', () => {
+  // A stand in the middle of a grove is a stand nobody can walk to: the trunks are the obstacle. So
+  // the site sits on the hull's own edge with the arrow pointing out, and the ground it points at has
+  // to be open. "Open" excludes the neighbouring grove specifically, because two groves of one wood
+  // are separate hulls that can be a stride apart, and an edge facing a neighbour is an edge facing
+  // more wood. Rock and water are in the same test: a stand against a cliff is the same problem.
   for (const seed of SEEDS) {
     const map = generateMap({ seed, width: 2048, height: 1536, resources: PLENTY });
+    const rocks = map.terrain.filter((region) => region.kind === 'rock');
     for (const site of of(map, 'hunting')) {
       const forest = map.forests.find((grove) => grove.id === site.metadata.forestId);
       assert.ok(
@@ -151,6 +157,26 @@ test('a hunting site stands in a wood big enough to hold game, and enterable', (
       assert.ok(
         pointInPolygon(site.position, forest.geometry),
         `${site.id} is not inside the hull it names`,
+      );
+      // The facing, and the whole 16 units it promises. Testing only the first clear step would pass a
+      // stand with four units of daylight and then the neighbouring wood, which is the case this
+      // rule exists for.
+      assert.ok(Number.isFinite(site.rotation), `${site.id} has no direction to come in from`);
+      const ahead = {
+        x: site.position.x + Math.cos(site.rotation) * 16,
+        y: site.position.y + Math.sin(site.rotation) * 16,
+      };
+      const others = map.forests
+        .filter((grove) => grove.id !== forest.id && pointInPolygon(ahead, grove.geometry))
+        .map((grove) => grove.id);
+      assert.deepEqual(others, [], `${site.id} faces ${others.join(', ')}`);
+      assert.ok(
+        !rocks.some((rock) => pointInPolygon(ahead, rock.geometry)),
+        `${site.id} faces a rock face`,
+      );
+      assert.ok(
+        !map.water.some((body) => pointInPolygon(ahead, body.geometry)),
+        `${site.id} faces the water`,
       );
     }
   }
@@ -275,18 +301,18 @@ test('a site is refused the things that would make it a different thing', () => 
   };
   assert.ok(!validateMap(walled).valid, 'a site carrying a collision was accepted');
 
-  // A mine with no facing is a dot on a cliff with no way in.
-  const blind = structuredClone(base);
-  delete blind.resourceSites[firstOf('mine')].rotation;
-  assert.ok(!validateMap(blind).valid, 'a mine with no entrance direction was accepted');
-
-  // The other two kinds have no facing to publish, and an arrow on a fishing spot in open water
-  // points at nothing.
-  for (const kind of ['fishing', 'hunting']) {
-    const facing = structuredClone(base);
-    facing.resourceSites[firstOf(kind)].rotation = 1;
-    assert.ok(!validateMap(facing).valid, `a ${kind} site with a facing was accepted`);
+  // A mine with no facing is a dot on a cliff with no way in, and a hunting site with no facing is a
+  // stand in trees nobody can walk to. Both are refused.
+  for (const kind of ['mine', 'hunting']) {
+    const blind = structuredClone(base);
+    delete blind.resourceSites[firstOf(kind)].rotation;
+    assert.ok(!validateMap(blind).valid, `a ${kind} with no direction was accepted`);
   }
+
+  // A fishing spot has nothing to come in from, so an arrow on it points at nothing.
+  const facing = structuredClone(base);
+  facing.resourceSites[firstOf('fishing')].rotation = 1;
+  assert.ok(!validateMap(facing).valid, 'a fishing spot with a facing was accepted');
 
   // A fishing spot without the number is a spot whose access cannot be checked.
   const mute = structuredClone(base);

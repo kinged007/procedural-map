@@ -581,21 +581,20 @@ export function validateMap(data: unknown): ValidationResult {
                       : 'must name a forest published in forests',
                 );
             }
-            // The entrance is what makes a mine a mine rather than a dot on a cliff, and the other
-            // two kinds have no facing to publish, so both directions are refused rather than
-            // allowed to go unchecked.
-            if (
-              entity.kind === 'mine' &&
-              !validator.finite(entity.rotation, `${collection}[${index}].rotation`)
-            )
+            // The direction out is what makes an edge site a site rather than a dot: without it a
+            // mine is a mark on a cliff with no way in and a hunting site is a stand in trees nobody
+            // can walk to. The third kind has no facing to publish, and an arrow on a fishing spot in
+            // open water points at nothing, so both directions are refused rather than left unchecked.
+            const edged = entity.kind === 'mine' || entity.kind === 'hunting';
+            if (edged && !validator.finite(entity.rotation, `${collection}[${index}].rotation`))
               validator.error(
                 `${collection}[${index}].rotation`,
-                'a mine must face out of its rock',
+                `a ${entity.kind} site must face out of what it stands on`,
               );
-            if (entity.kind !== 'mine' && entity.rotation !== undefined)
+            if (!edged && entity.rotation !== undefined)
               validator.error(
                 `${collection}[${index}].rotation`,
-                'only a mine has a facing, since only a mine is cut into something',
+                'only a mine or a hunting site has a facing, since only those are set into something',
               );
             // `distanceToShore` is published so a consumer that would rather its spots were further
             // out can read the number instead of taking `access` on trust, so it has to be there.
