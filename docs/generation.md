@@ -136,6 +136,12 @@ Tree canopy radii are 10-18 world units. Collision circles are 3.5-5.5, so a tru
 
 Trees are not planted on a road, nor where a canopy would overhang one, so a road is cut through the wood and leaves a clearing along its verges. Vegetation is generated after roads for that reason.
 
+**A tree does not root in the beach band either.** A beach is walkable, so nothing refused a tree there, and the band is the lake's own ring offset outward with the lake punched out as a hole — it lies entirely on the landward side of the water, where the water test never looks. A tree standing on the sand was therefore standing on open ground that happened to be drawn yellow. The keep-out is on the canopy, the same rule as water, so the wood keeps its distance from the sand rather than standing on the edge of it. Over twelve 2048 by 1536 maps this removed every one of the 87 trunks and 410 canopies that were on a beach, and the nearest canopy to the sand across them is between 1 and 43 units: the wood still comes right up to the shore.
+
+Rock is in the same keep-out list, because the test is identical and the two are the same question asked of different ground: ground a tree does not root in. There are about eight beach polygons on a default map, so the list is tested directly with no index.
+
+The determinism pins are taken on a 640x480 map, which has no beach band at all, so none of this is covered by them and they do not move. The tests in `tests/generation.test.mjs` are the ones that hold it.
+
 ## Roads
 
 Roads are grown in three tiers, widest and longest first: `primary` at width 22, `secondary` at 14, and `path` at 7. Primary and secondary roads start at the map edge and cross the map; paths branch off roads already placed, which is what makes the network connected rather than a set of parallel lines. A default map produces 12 to 16 roads.

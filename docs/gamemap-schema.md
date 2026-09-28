@@ -241,6 +241,12 @@ around the shore.
 `metadata.source` names the lake the band was built from. A lake whose band would fold through itself or
 leave the map gets no beach at all, so a map can have fewer beaches than lakes.
 
+A beach is a keep-out, not a collider. It carries no `collision`, so it is walkable, and it is kept
+clear of both trees and buildings: nothing is planted in the sand and nothing is built on it, which
+leaves a consumer free to put its own harbour on any shoreline it likes. Because the band is the
+lake's ring offset **outward**, it lies entirely on the landward side of the water, so a consumer
+testing "is this point in a beach" gets the sand and never a duplicate of the lake.
+
 ## water
 
 There are two water kinds. `lake` is a body of standing water contoured from the elevation field, and `river` is the channel of a course walked down the drainage of the same field, `rivers.width` world units wide, 12 by default. Collision is required on both and is the same polygon as the visible geometry, so a consumer never has to reconcile the two.

@@ -270,6 +270,11 @@ have built, and because a shoreline is where a port, a pier, or a boat shed goes
 wants a harbour is building into ground the generator has deliberately left empty, and can pick its own
 shoreline site the same way it picks a river mouth.
 
+Trees are kept off it too, and the band is the reason that is not automatic: a beach is the lake's own
+ring offset outward with the lake punched out as a hole, so it sits entirely on the landward side where
+a water test never looks. Both trees and buildings keep out by canopy and footprint respectively, so
+the strip of sand along every shore is clear ground.
+
 ### 5. Settlements
 
 `map.settlements` holds the places. Each one is a centre standing on a road, a `radius` saying how far

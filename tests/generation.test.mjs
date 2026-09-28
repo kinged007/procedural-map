@@ -366,6 +366,55 @@ test('trees do not grow on impassable terrain', () => {
   }
 });
 
+test('trees do not grow on a beach', () => {
+  // A beach is walkable, so nothing refused a tree there until this: the band is the lake's own ring
+  // offset outward with the lake as a hole, so it sits entirely on the landward side where the water
+  // test never looks, and a tree standing on the sand was standing on open ground that happened to
+  // be drawn yellow. The test is the canopy rather than the trunk, the same rule as the water, so the
+  // wood keeps its distance from the sand instead of standing on the edge of it.
+  //
+  // The maps are large on purpose: a 640x480 map has no beach band at all, which is why the pinned
+  // maps do not cover this and the determinism pin does not move.
+  for (const seed of [583921, 42, 777, 7, 1, 99999, 31415]) {
+    const map = generateMap({ seed, width: 2048, height: 1536 });
+    const beaches = map.terrain.filter((region) => region.kind === 'beach');
+    assert.ok(beaches.length > 0, `seed ${seed}: a map of this size has a shore to clear`);
+    for (const tree of map.vegetation)
+      for (const beach of beaches)
+        assert.ok(
+          !circleIntersectsPolygon(tree.position, tree.radius, beach.geometry),
+          `seed ${seed}: tree ${tree.id} stands on beach ${beach.id}`,
+        );
+  }
+});
+
+test('a tree stands clear of the sand, and the wood still reaches the shore', () => {
+  // Clearing the beach has to leave a wood that comes right up to the water, or the shore reads as a
+  // clear-cut margin rather than as a beach with trees behind it. So this checks both directions: no
+  // canopy on the sand, and a canopy close to it somewhere on the shore.
+  let closest = Infinity;
+  for (const seed of [583921, 42, 777, 1, 99999]) {
+    const map = generateMap({ seed, width: 2048, height: 1536 });
+    const beaches = map.terrain.filter((region) => region.kind === 'beach');
+    for (const beach of beaches)
+      for (const edge of beach.geometry.points) {
+        let best = Infinity;
+        for (const tree of map.vegetation)
+          best = Math.min(
+            best,
+            Math.hypot(tree.position.x - edge.x, tree.position.y - edge.y) - tree.radius,
+          );
+        closest = Math.min(closest, best);
+      }
+  }
+  // Close to the sand rather than cleared back from it, and never touching it.
+  assert.ok(closest > 0, 'no canopy reaches the sand');
+  assert.ok(
+    closest < 25,
+    `the wood still comes up to the shore (closest was ${closest.toFixed(1)})`,
+  );
+});
+
 test('the collision view has geometry for every blocking feature', () => {
   // The renderer draws the collision view from per-entity collision, so every impassable feature
   // has to carry it or it is silently walkable.

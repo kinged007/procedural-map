@@ -5,7 +5,6 @@ import type {
   PolygonGeometry,
   RoadEntity,
   SpatialFields,
-  TerrainRegion,
   VegetationEntity,
   WaterRegion,
 } from '../map/GameMap.js';
@@ -493,8 +492,11 @@ function generateTrees(
   fields: SpatialFields,
   water: WaterRegion[],
   random: Random,
-  /** Terrain that cannot be walked on, and so cannot hold a tree. */
-  impassable: TerrainRegion[],
+  /**
+   * Ground a tree does not root in: rock, which cannot be walked on, and the beach band, which can
+   * be walked on and is still sand.
+   */
+  keepOut: PolygonGeometry[],
   /** Road surfaces, whose verges are kept clear of trees. */
   roads: RoadEntity[],
   /** Settlement clearings, which are kept clear of trees. */
@@ -554,11 +556,11 @@ function generateTrees(
       continue;
     if (water.some((lake) => circleIntersectsPolygon(position, radius + 1, lake.geometry)))
       continue;
-    // Trees cannot root in impassable ground. Rock is the only such terrain today, and terrain is
-    // generated before vegetation, so the same test that keeps trees out of lakes keeps them off
-    // rock.
-    if (impassable.some((region) => circleIntersectsPolygon(position, radius + 1, region.geometry)))
-      continue;
+    // A tree does not root in rock, which cannot be walked on, or in the beach band, which can be
+    // walked on and is still sand. The band is the lake's own ring offset outward with the lake as a
+    // hole, so it lies entirely on the landward side of the water and the lake test above cannot see
+    // it: a tree standing on the sand is standing on open ground that happens to be drawn yellow.
+    if (keepOut.some((region) => circleIntersectsPolygon(position, radius + 1, region))) continue;
     // A road is cut through the wood, so the trees it would pass through are not placed at all. The
     // corridor includes the clearance, so the canopy stays off the verge instead of overhanging it.
     const reach = radius + ROAD_CLEARANCE;
@@ -626,7 +628,14 @@ export function generateMap(config: GenerationConfig): GameMap {
   const level = waterLevel(reference, resolved.water.amount);
   const lakes = generateWater(resolved, fields, level);
   const terrain = generateTerrain(resolved, fields, lakes, reference);
-  const impassable = terrain.filter((region) => region.collision !== undefined);
+  // Ground a tree does not root in. Rock is here because it cannot be walked on, and the beach band
+  // because it can be walked on and is still sand: a tree on a beach is a tree on open ground that
+  // happens to be drawn yellow. Both are one list because the test is the same for both, and a
+  // beach is the lake's own ring offset outward, so it lies on the landward side where the water
+  // test never looks.
+  const noTrees = terrain
+    .filter((region) => region.collision !== undefined || region.kind === 'beach')
+    .map((region) => region.geometry);
   // Rivers are traced after the terrain is classified, so a river cuts a channel through ground that
   // is already drawn rather than being given a beach band of its own. Both are published as water.
   // The lakes go in with them so a course can be cut where it reaches standing water.
@@ -653,7 +662,7 @@ export function generateMap(config: GenerationConfig): GameMap {
     resolved.height,
     () => settlementRandom.next(),
   );
-  const vegetation = generateTrees(resolved, fields, water, random, impassable, roads, sites);
+  const vegetation = generateTrees(resolved, fields, water, random, noTrees, roads, sites);
   // Buildings come last, because a road is the only thing that offers them a site, and the roads, the
   // ground they must not stand on, and the trees they must not stand under all exist by now.
   const buildingRandom = new Random(placement ^ 0x6b8f21);
