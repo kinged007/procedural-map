@@ -457,12 +457,12 @@ Plot sizes were halved once for the same reason. A plot excludes a circle of its
 half honoured. At 44 to 96 by 32 to 64 a field is a median 3,200 square units — about 57 by 57, which
 reads at fit zoom and is a walk of a few seconds from the settlement's edge.
 
-### A field is a keep-out, and that is decided before the trees
+### A field is a keep-out to the trees, and that is decided before they are planted
 
 The plot sites are chosen before anything is planted, for the same reason the settlement clearings are: a
-field is ground that stays open, so it has to reach the tree placer and the building placer as a keep-out
-rather than as a hole punched into a finished map. Only a field is kept clear. An orchard's rectangle is
-already full of the trees it asked for, and refusing more inside it would leave bare gaps down every row.
+field is ground that stays open, so it has to reach the tree placer as a keep-out rather than as a hole
+punched into a finished map. Only a field is kept clear. An orchard's rectangle is already full of the
+trees it asked for, and refusing more inside it would leave bare gaps down every row.
 
 ### An orchard's rows are real trees
 
@@ -488,6 +488,34 @@ the authoritative link.
 An orchard whose grid has been eaten by the river or the cliff is published as a field instead of dropped.
 It is not an orchard any more, and a caller who asked for eight orchards would rather have five orchards
 and three fields than five orchards and nothing.
+
+### A farm works a field
+
+A field is worked ground and the building that works it is a `farm`, so a farm is placed inside a field
+rather than along a road. The site the road offered is only the reason the farm was drawn at all: the
+farm takes the nearest field with no farm on it, stands at one end of it on the field's own heading, and
+names it in `metadata.plotId`. One field holds one farm, a house is never in a plot, and a farm is
+never in an orchard.
+
+That is what puts a farm on the outskirts of a settlement, because a field is already out on the
+settlement's ring. A farm that finds every field taken is not put in one, and with no fields at all it
+stands off the road as it always did, which is what keeps a map with `plots` unset exactly the map it
+was before fields existed.
+
+A field is a keep-out to the tree placer and a farm's home to the building placer, so the two are kept
+apart rather than merged: the field reaches the building placer as ground a farm is offered before it is
+refused to a house, which is the only way a rule can depend on which category is being placed.
+
+### Buildings stand clear of the whole footprint, not its centre
+
+A building is refused a site by testing a circle centred on it. The circle is the half-diagonal, the
+smallest one containing the whole footprint, and the shallower choice was the bug: `depth / 2` fits
+inside a rectangle but does not contain it, so a 28-wide farm overhung its own 10-unit circle by 4 units
+on each side, and a corner that landed on a road collision, in a lake, on rock, or on the sand passed
+every check. Measured over eight 2048 by 1536 maps, 7 of 418 buildings overlapped something; with the
+half-diagonal, 0 of 452. It refuses more sites, which cost 15 houses over the same eight maps, and that
+is the right direction: the walkability raster closes a cell for a blocker that touches any part of it,
+and a building that only half fitted inside its own test could not be drawn honestly afterwards.
 
 ## Tiles
 

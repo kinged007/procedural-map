@@ -1627,6 +1627,36 @@ Delivered so far:
 - **Plots carry no collision.** A field is ground a character walks across, and an orchard's blockers
   are its trees, not its rectangle. The forest hull and the dock deck make the same argument; this is the
   fourth surface in the format to.
+- **A farm works a field, so a farm is in one.** Fields were a keep-out to every building, which left
+  a farm with nowhere to go but a road: farms came out strung along the village roads, and some of them
+  on the road itself. A field is worked ground and a farm is what works it, so the farm takes the
+  nearest field with no farm on it, stands at one end of it on the field's own heading, and names it in
+  `metadata.plotId`. That puts it on the outskirts, because the field already is, which is the second
+  half of what a farm should be. One field holds one farm, a house is never in a plot, and a farm is
+  never in an orchard. With no fields at all a farm stands off the road as before, so a map with `plots`
+  unset is unchanged — verified, and the reason both determinism pins held.
+- **The field keep-out and the building keep-out are kept apart.** A field used to be folded into the
+  building placer's keep-out list, which cannot work: a farm has to be placed in the field it is being
+  refused. The two lists are separate so the field can be offered to a farm and refused to a house,
+  which is the only way a rule can depend on the category being placed.
+- **A building's clearance is the half-diagonal, not half its depth.** This was the bug behind farms
+  appearing on roads, and it was not specific to farms or to roads. `depth / 2` is the circle that fits
+  *inside* a rectangle, not the one that contains it: a 28-wide farm overhung its own 10-unit circle by
+  4 units on each side, and a corner landing on a road collision, in a lake, on rock, or on the sand
+  passed every check. Over eight maps, 7 of 418 buildings overlapped something — 2 on roads, 3 in
+  water, 1 on rock, 1 on the beach. With the half-diagonal, 0 of 452. It refuses more sites, which cost
+  15 houses over the same eight maps, and that is the correct direction: the walkability raster closes
+  a cell for a blocker touching any part of it, so a building that only half fitted inside its own test
+  could not be drawn or navigated honestly afterwards.
+- **A farm claims a field only once it is standing in it.** The first version took the field before the
+  placement was confirmed, so a farm then refused for a neighbour left a field nothing would ever work
+  and pushed the next farm back onto a road. Claiming on success took farms off roads from 65-of-73 to
+  55-of-55: all of them in fields, none of them on a road.
+- **Most unworked fields are the weight, not a placement failing.** 85 fields across eight maps got 55
+  farms. Of the 30 fields that got none, 15 would have taken a farm at either end and so were simply
+  never drawn for, which is `categories.farm` deciding how many fields get worked; 2 were refused at one
+  end only; and 13 are hemmed in by road, water or rock at both ends. Trying the far end before giving
+  up would recover 2 of 85, which is not worth the loop.
 
 - **The sites are placed after the map is built.** A mine's approach and a wood's enterability are both
   questions about finished ground, and `walkableInside` in particular is measured on the raster once

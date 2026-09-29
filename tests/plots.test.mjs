@@ -170,11 +170,13 @@ test('two plots never overlap, and no building is built in one', () => {
           ),
           `${map.plots[i].id} and ${map.plots[j].id} overlap`,
         );
-    // A house in the middle of a wheat field is a house in the middle of a wheat field.
+    // A house in the middle of a wheat field is a house in the middle of a wheat field. A farm is the
+    // one exception, and it is the exception for the only reason that makes sense: a farm works the
+    // field it stands in, so the test below is for houses and this one is for everything else.
     for (const building of map.structures)
       for (const plot of map.plots)
         assert.ok(
-          !pointInPolygon(building.position, plot.geometry),
+          building.category === 'farm' || !pointInPolygon(building.position, plot.geometry),
           `${building.id} stands in ${plot.id}`,
         );
   }
@@ -396,4 +398,85 @@ test('the same seed gives the same plots, and they survive a round trip', () => 
         returned.vegetation.some((tree) => tree.id === id),
         `${plot.id} names ${id}, which did not survive the round trip`,
       );
+});
+
+test('a farm works a field, so it stands in one rather than along a road', () => {
+  // The complaint that produced this: farms were strung along the roads in the middle of a place, some
+  // of them on the road itself. A farm is the building that works a field, so it belongs in one, and
+  // the field is already out on the outskirts of the settlement that owns it.
+  let inField = 0;
+  for (const seed of SEEDS) {
+    const map = mapFor({ seed, plots: PLENTY });
+    const fields = new Set(of(map, 'field').map((plot) => plot.id));
+    const claimed = new Set();
+    for (const building of map.structures.filter((entry) => entry.category === 'farm')) {
+      if (!building.metadata.plotId) continue;
+      inField += 1;
+      const plot = map.plots.find((entry) => entry.id === building.metadata.plotId);
+      assert.ok(plot, `${building.id} names ${building.metadata.plotId}, which is not a plot`);
+      assert.equal(plot.kind, 'field', `${building.id} works an ${plot.kind}`);
+      assert.ok(
+        pointInPolygon(building.position, plot.geometry),
+        `${building.id} names ${plot.id} but does not stand in it`,
+      );
+      // The whole footprint, not just the centre: a farmstead hanging off the edge of its own field
+      // is on the road the caller was complaining about, just further out.
+      for (const point of building.geometry.points)
+        assert.ok(pointInPolygon(point, plot.geometry), `${building.id} overhangs ${plot.id}`);
+      // One farmstead per field. Two on one field is a yard, not a farm.
+      assert.ok(!claimed.has(plot.id), `${plot.id} has two farms on it`);
+      claimed.add(plot.id);
+      // And it claims no road, because it is on none. `setback` is a distance from a road.
+      assert.equal(
+        building.metadata.roadId,
+        undefined,
+        `${building.id} claims a road it is not on`,
+      );
+      assert.equal(building.metadata.setback, 0, `${building.id} reports a road setback`);
+    }
+    assert.ok(
+      claimed.size <= fields.size,
+      `seed ${seed} put ${claimed.size} farms on ${fields.size} fields`,
+    );
+    // A farm is on the outskirts because its field is, so the farm reaches at least as far from the
+    // place as the field it works does.
+    for (const building of map.structures.filter((entry) => entry.category === 'farm')) {
+      const plot = map.plots.find((entry) => entry.id === building.metadata.plotId);
+      if (!plot) continue;
+      const place = map.settlements.find((entry) => entry.id === plot.metadata.settlementId);
+      assert.ok(
+        gap(building.position, place.position) >= 46,
+        `${building.id} is ${Math.round(gap(building.position, place.position))} from its place`,
+      );
+    }
+  }
+  assert.ok(inField > 0, 'no farm anywhere stood in a field');
+});
+
+test('a building stands clear of what is around it, footprint and not centre', () => {
+  // The clearance test is the half-diagonal, the smallest circle containing the whole footprint. It
+  // used to be half the depth, which fits inside a rectangle but does not contain it: a 28-wide farm
+  // overhung its own 10-unit circle by 4 units on each side, and a corner landing on a road, in a
+  // lake, on rock or on the sand passed every check. This samples the footprint's own outline, so it
+  // is the thing a consumer can see rather than the thing the placer believed.
+  for (const seed of SEEDS) {
+    const map = mapFor({ seed, plots: PLENTY });
+    const rock = map.terrain.filter((region) => region.kind === 'rock').map((r) => r.geometry);
+    const beach = map.terrain.filter((region) => region.kind === 'beach').map((r) => r.geometry);
+    for (const building of map.structures) {
+      const outline = [...building.geometry.points, building.position];
+      for (let i = 0; i < building.geometry.points.length; i += 1) {
+        const a = building.geometry.points[i];
+        const b = building.geometry.points[(i + 1) % building.geometry.points.length];
+        outline.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+      }
+      const inside = (polygon) => outline.some((point) => pointInPolygon(point, polygon));
+      for (const road of map.roads)
+        assert.ok(!inside(road.collision), `${building.id} is on ${road.id}`);
+      for (const body of map.water)
+        assert.ok(!inside(body.geometry), `${building.id} is in ${body.id}`);
+      for (const region of rock) assert.ok(!inside(region), `${building.id} is on rock`);
+      for (const region of beach) assert.ok(!inside(region), `${building.id} is on the sand`);
+    }
+  }
 });

@@ -46,11 +46,17 @@ test('generation is byte-stable for the same config', () => {
   // keys from this build reproduces the previous hash exactly, which is the evidence that the terrain
   // did not move and only the two new keys did. The default of zero across both kinds is a map of no
   // worked ground, for the same reason there is no ore: a field is a square of dirt until a game says
-  // what grows in it.
+  // what grows in it. Buildings are the last change, and they are the only thing on a default map
+  // that moved: a building is now tested against the half-diagonal rather than half its depth, so a
+  // corner that used to overhang its own test is now refused, and two buildings on this map went
+  // with it. `settlements` moved for the same reason and no other — its membership is the buildings
+  // around it, so buildings moving moves it. The terrain, the water, the trees, the roads, the plots
+  // and the resolved config are all untouched, which is the point of the field grid the two halves of
+  // this library do not share.
   // `tests/tiling.test.mjs` holds the matching value for the map with the placement fields removed.
   assert.equal(
     stableHash(first),
-    'af93b0c32d113285a770e217e44ef881206a688cb77e23c6af1c4b1c5293403d',
+    '345b46e164c48863c4302c1fa6802dabf1eb60a865186e1377deb317237db850',
   );
 });
 

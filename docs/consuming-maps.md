@@ -214,7 +214,19 @@ is a solid rectangle, so it is a footprint to fit an asset into and a wall to wa
 - `asset.category` is `structure.house` or `structure.farm`, and `category` says which. A ruin is
   `structure.ruin`, whatever it used to be.
 - `metadata.roadId` is the road it was placed against, and `metadata.setback` is how far its front wall
-  stands from that road's centreline.
+  stands from that road's centreline. A farm working a field has neither: it carries `metadata.plotId`
+  naming the field instead, and its `setback` is `0`, because there is no road to stand back from.
+- No part of a footprint touches a road, a beach, water or rock. The generator tests the whole
+  rectangle, not its centre, so you can draw a building asset and trust it to be on clear ground.
+
+**A farm stands in a field, not along a road.** A farm is the building that works a field, so it is
+placed inside one it names in `plotId`: at one end of it, on the field's own heading, with the worked
+ground running away behind it. That puts it on the outskirts of the settlement that owns the field,
+which is where a farm belongs, and it means a farm never appears strung along a road in the middle of
+a place. One field holds one farm. A `house` is never in a plot, and a farm is never in an orchard.
+Because a farm's site is a field, `buildings.categories.farm` is a ceiling set by how many fields the
+map has: asking for 8:1 on a map with twelve fields publishes about six farms and leaves six fields
+unworked, which is the weight deciding how many fields get worked rather than a placement failing.
 
 **Which buildings a map has is your call.** `buildings.categories` is a set of relative weights over the
 categories, so a village of houses is `{ house: 1, farm: 0 }` and a farming valley is `{ house: 2,

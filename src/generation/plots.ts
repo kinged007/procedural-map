@@ -92,6 +92,8 @@ const ATTEMPTS = 20;
 
 /** A plot chosen on the ground, before the trees and buildings that keep off it exist. */
 export interface PlotSite {
+  /** The id the plot is published under, known here so a farm can name the field it stands in. */
+  id: string;
   kind: PlotKind;
   position: Point;
   /** Radians, the heading of the long axis. The rows run across it. */
@@ -217,6 +219,7 @@ export function plotSites(
       // that a validator would then rightly refuse.
       const planted = trees.length >= MIN_ORCHARD_TREES ? trees : [];
       chosen.push({
+        id: `plot-${index + 1}`,
         kind: planted.length > 0 ? 'orchard' : 'field',
         position,
         rotation,
@@ -246,13 +249,13 @@ export function generatePlots(
   settlements: SettlementEntity[],
 ): GroundPlotEntity[] {
   const entities: GroundPlotEntity[] = [];
-  for (const [index, plot] of plots.entries()) {
+  for (const plot of plots) {
     const owner = settlements.find((place) => distance(place.position, plot.settlement) < 0.001);
     // A plot with no place is not a plot: it is a rectangle standing in a field somewhere, and a
     // consumer following `settlementId` would be sent nowhere.
     if (!owner) continue;
     entities.push({
-      id: `plot-${index + 1}`,
+      id: plot.id,
       type: 'ground-plot',
       kind: plot.kind,
       position: plot.position,

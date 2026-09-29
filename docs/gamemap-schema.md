@@ -537,6 +537,8 @@ interface BuildingEntity {
     roadId?: string;
     /** How far the front wall stands from that road's centreline. */
     setback: number;
+    /** The field a farm works, or absent for a building that is not in one. */
+    plotId?: string;
   };
 }
 ```
@@ -551,6 +553,20 @@ wrote the ring the other way round.
 
 The footprint is a ring of exactly four points and is a solid rectangle, which is what a consumer
 places its own asset into.
+
+A building's whole footprint is clear of the water, the rock, the roads, the beaches, and every plot
+except one it is standing in. The test is the half-diagonal — the smallest circle that contains the
+rectangle — rather than half the depth, which fits inside a rectangle but does not contain it. A
+consumer can rely on no part of a footprint touching a road, because the generator does not place one
+that does.
+
+A `farm` is the one building placed in worked ground. It stands inside a `field` it names in
+`plotId`, at one end of it and on the field's own heading, so the worked ground runs away behind the
+farmstead rather than being split down the middle by it. It therefore carries no `roadId`, and its
+`setback` is `0`, because `setback` is a distance from a road and there is no road. One field holds
+one farm, and a farm standing in a field is on the outskirts of the settlement that owns it. A
+`house` is never in a plot, and a farm is never in an orchard. `plotId` must name a plot published in
+`plots`, and validation rejects a farm naming a field that is not on the map.
 
 `barriers` is a `MapEntity[]` and is empty on a generated map. It is where a wall, a gate, or anything
 else the generator did not produce belongs, and it is validated as a generic entity rather than as a

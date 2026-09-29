@@ -764,9 +764,11 @@ export function generateMap(config: GenerationConfig): GameMap {
     water,
     terrain,
     vegetation,
-    // A field is worked ground, so a house is not built in the middle of it. It is one more polygon
-    // of ground to keep clear, which is the whole of what "not in a field" means.
-    [...sites.map((site) => site.clearing), ...plots.map((plot) => plot.geometry)],
+    // The clearings only. A field is worked ground, so a house is not built in the middle of it, but
+    // that is decided where the category is known rather than folded in here as one more keep-out: a
+    // farm is put in a field, and a farm could not be if the field it works were on this list.
+    sites.map((site) => site.clearing),
+    plots,
     () => buildingRandom.next(),
     () => ruinRandom.next(),
     () => categoryRandom.next(),

@@ -65,8 +65,10 @@ no grid, because the canonical format should not pin a consumer to one tile size
 
 `generation/plots.ts` is split in two, and the split is the design. `plotSites` runs immediately after
 the roads, at the same point the settlement clearings are chosen, and returns candidate rectangles
-around each settlement. The fields among them join the tree placer's and the building placer's
-keep-out lists, which is the only way a field stays clear rather than being punched into a finished map.
+around each settlement. The fields among them join the tree placer's keep-out list, which is the only
+way a field stays clear rather than being punched into a finished map, and they are handed to the
+building placer separately rather than folded into its keep-out list: a field is refused to a house but
+is the one place a farm is put, so the test has to happen where the category is known.
 Only fields are kept clear; an orchard's rectangle is already full of the trees it asked for, and
 refusing more inside it would leave bare gaps down every row.
 

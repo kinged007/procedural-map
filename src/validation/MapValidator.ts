@@ -443,6 +443,10 @@ export function validateMap(data: unknown): ValidationResult {
       for (const settlement of data.settlements)
         if (isRecord(settlement) && typeof settlement.id === 'string')
           settlementIds.add(settlement.id);
+    const plotIds = new Set<string>();
+    if (Array.isArray(data.plots))
+      for (const plot of data.plots)
+        if (isRecord(plot) && typeof plot.id === 'string') plotIds.add(plot.id);
     const waterIds = new Set<string>();
     if (Array.isArray(data.water))
       for (const body of data.water)
@@ -494,18 +498,32 @@ export function validateMap(data: unknown): ValidationResult {
                   ))) ||
               !isRecord(entity.metadata) ||
               // `setback` is how far the front wall stands off the road, so a consumer cannot place
-              // a doorstep without it. `roadId` is optional: a building can stand off the network.
+              // a doorstep without it. `roadId` is optional: a building can stand off the network, and
+              // a farm working a field is off it. `plotId` says which field a farm works, so a farm
+              // naming a field that is not on the map would be a farmstead a consumer cannot find.
               !validator.finite(
                 entity.metadata.setback,
                 `${collection}[${index}].metadata.setback`,
               ) ||
               (entity.metadata.setback as number) < 0 ||
-              (entity.metadata.roadId !== undefined && typeof entity.metadata.roadId !== 'string'))
+              (entity.metadata.roadId !== undefined &&
+                typeof entity.metadata.roadId !== 'string') ||
+              (entity.metadata.plotId !== undefined && typeof entity.metadata.plotId !== 'string'))
           )
             validator.error(
               `${collection}[${index}]`,
               'must be a building with a category, a state, a footprint, and collision unless it is a ruin',
             );
+          // A farm working a field names it, so a farm naming a field that is not on the map is a
+          // farmstead a consumer cannot find and a plot nothing accounts for standing in.
+          if (collection === 'structures' && isRecord(entity.metadata)) {
+            const plot = entity.metadata.plotId;
+            if (typeof plot === 'string' && !plotIds.has(plot))
+              validator.error(
+                `${collection}[${index}].metadata.plotId`,
+                'must name a plot published in plots',
+              );
+          }
           // A dock names the place it is the waterfront of and the water it stands in, so a name
           // that resolves to nothing is a harbour a consumer cannot place. `roadId` is optional, as
           // it is on a building: a deck can be reached over open ground.

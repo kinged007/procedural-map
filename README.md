@@ -193,6 +193,14 @@ ceilings rather than promises: plots need ground the settlements actually reach,
 twelve fields and eight orchards on a default map gets about ten and five, and an orchard the river has
 eaten through is published as a field rather than dropped.
 
+A `farm` building is placed in a field rather than along a road, because a farm is the building that
+works a field. It stands at one end of the field, on the field's heading, and names it in
+`metadata.plotId` — which puts it on the outskirts, where the field already is — and it carries no
+`roadId` and a `setback` of `0`, because there is no road to stand back from. One field holds one farm,
+a house is never in a plot, and a farm is never in an orchard. Since a farm's site is a field,
+`buildings.categories.farm` is effectively a ceiling set by how many fields exist: 8:1 on twelve fields
+publishes about six farms and leaves six fields unworked.
+
 For a per-frame movement check, bake the walkability grid once and read a byte per cell:
 
 ```js

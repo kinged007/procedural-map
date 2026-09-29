@@ -10,6 +10,7 @@ import type {
 } from '../map/GameMap.js';
 import { circleIntersectsPolygon } from '../map/geometry.js';
 import type { ResolvedGenerationConfig } from './GenerationConfig.js';
+import type { PlotSite } from './plots.js';
 import { distance, roadRibbon, stations } from './ribbon.js';
 
 /**
@@ -17,7 +18,10 @@ import { distance, roadRibbon, stations } from './ribbon.js';
  *
  * A `farm` is the reason `setback` is per category rather than one number for the map: a farmyard is
  * both bigger and set further back than the house beside it, and it is that difference, not its name,
- * that earns the category. `setback: 0` means "use the configured setback".
+ * that earns the category. `setback: 0` means "use the configured setback". A farm is also the one
+ * category placed in worked ground: a farm works a field, so it stands in one rather than along a
+ * road. That is decided in the placement loop rather than in this table, because it needs the fields
+ * the map actually has.
  *
  * How often a category is drawn is not here: the weights are the caller's, in
  * `buildings.categories`, because which buildings a map has is the caller's decision and this table
@@ -58,6 +62,11 @@ export function generateBuildings(
   vegetation: VegetationEntity[],
   /** Settlement clearings, kept clear so a place has open ground at its middle. */
   clearings: PolygonGeometry[],
+  /**
+   * The worked ground, so a farm can be put in a field. A field is what a farm works, which makes this
+   * the one building the generator allows inside one.
+   */
+  plots: PlotSite[],
   random: () => number,
   /**
    * A stream of its own for the ruin draw, so setting the share moves no building's placement.
@@ -97,26 +106,68 @@ export function generateBuildings(
     .map((category) => ({ category, weight: config.buildings.categories[category] }))
     .filter((entry) => entry.weight > 0);
   const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+  // The fields a farm has already taken. One farm per field: a field with two farmsteads on it is not
+  // a field with a farm on it.
+  const worked = new Set<PlotSite>();
 
   for (const road of roads) {
     for (const station of stations(road.path, spacing)) {
       if (random() > density) continue;
       const category = drawCategory(categoryRandom(), weighted, totalWeight);
       const spec = CATEGORIES[category];
-      const front = spec.setback > 0 ? spec.setback : setback;
-      const { dx, dy } = heading(road.path, station.index);
-      // One normal to the road; the side decides which bank the building stands on, and the facing
-      // is the same vector back towards the road, so a building always looks at the way it is on.
-      const side = random() < 0.5 ? 1 : -1;
-      const offset = front + spec.depth / 2;
-      const nx = -dy * side * offset;
-      const ny = dx * side * offset;
-      const position = { x: station.point.x + nx, y: station.point.y + ny };
-      const facing = { x: -nx, y: -ny };
+      // The half-diagonal, which is the radius of the smallest circle holding the whole footprint.
+      const reach = Math.hypot(spec.width, spec.depth) / 2;
+
+      // A farm works a field, so a farm is put in one. The site the road offered is only a reason the
+      // farm was drawn at all; the field is where it stands. A farm is offered the field nearest the
+      // station that drew it, so the two stay associated without the farm being dragged across the
+      // map, and one field holds one farm. A map with no fields has no farm standing in a field, and
+      // such a farm stands off the road as it always did, which is what keeps a default map — one
+      // with no plots at all — exactly the map it was before fields existed.
+      const field = category === 'farm' ? nearestField(plots, station.point, worked) : undefined;
+      let position: Point;
+      let facing: Point;
+      let roadId: string | undefined;
+      let front: number;
+      if (field) {
+        // At one end of its field, so the worked ground runs away behind the farmstead rather than
+        // being split down the middle by it, and on the field's own heading, so the farm lies with
+        // the field rather than across it. The field is claimed further down, once the farm is
+        // actually standing in it: a farm refused here for a neighbour or a tree leaves its field
+        // free for the next one, rather than taking a field with nothing on it.
+        const along = { x: Math.cos(field.rotation), y: Math.sin(field.rotation) };
+        const end = (random() < 0.5 ? -1 : 1) * (field.depth / 2 - spec.depth / 2 - EDGE_MARGIN);
+        position = { x: field.position.x + along.x * end, y: field.position.y + along.y * end };
+        facing = { x: along.x, y: along.y };
+        front = 0;
+      } else {
+        front = spec.setback > 0 ? spec.setback : setback;
+        const { dx, dy } = heading(road.path, station.index);
+        // One normal to the road; the side decides which bank the building stands on, and the facing
+        // is the same vector back towards the road, so a building always looks at the way it is on.
+        const side = random() < 0.5 ? 1 : -1;
+        const offset = front + spec.depth / 2;
+        const nx = -dy * side * offset;
+        const ny = dx * side * offset;
+        position = { x: station.point.x + nx, y: station.point.y + ny };
+        facing = { x: -nx, y: -ny };
+        roadId = road.id;
+      }
       const geometry = footprint(position, facing, spec.width, spec.depth);
       if (!geometry) continue;
+      // A field is worked ground, so nothing is built in one — except the farm that works it, which
+      // is exempt from its own field and from nothing else. Orchards are in the same list and are
+      // exempt from nothing: a farm is not planted into rows.
+      const refused = field ? plots.filter((plot) => plot !== field) : plots;
       if (
-        isClear(geometry, position, spec.depth / 2, config, blocked) &&
+        isClear(
+          geometry,
+          position,
+          reach,
+          config,
+          blocked,
+          refused.map((plot) => plot.geometry),
+        ) &&
         !vegetation.some((tree) => circleIntersectsPolygon(tree.position, tree.radius, geometry))
       ) {
         if (buildings.some((built) => distance(built.position, position) < spacing)) continue;
@@ -126,6 +177,7 @@ export function generateBuildings(
         // houses. A ruin keeps its footprint and loses its collision, because rubble is ground a
         // character walks over.
         const state = ruinRandom() < ruin ? 'ruined' : 'standing';
+        if (field) worked.add(field);
         buildings.push({
           id: `building-${buildings.length + 1}`,
           type: 'building',
@@ -141,7 +193,14 @@ export function generateBuildings(
             category: state === 'standing' ? `structure.${category}` : 'structure.ruin',
             variant: `${category}-${state === 'standing' ? '1' : 'ruin'}`,
           },
-          metadata: { roadId: road.id, setback: front },
+          // A farm in a field names the field and claims no road, because it is on neither. `setback`
+          // is a distance from a road, and there is no road, so it is zero rather than a number that
+          // would look like a measurement of something.
+          metadata: {
+            ...(roadId ? { roadId } : {}),
+            setback: front,
+            ...(field ? { plotId: field.id } : {}),
+          },
         });
       }
     }
@@ -149,8 +208,32 @@ export function generateBuildings(
   return buildings;
 }
 
-/** Unit heading of the segment `index` runs along. */
-function heading(path: Point[], index: number): { dx: number; dy: number } {
+/**
+ * The field a farm should work: the one nearest `from` that no other farm has taken.
+ *
+ * Nearest rather than next, because the site that drew the farm is on a road and the field is out in
+ * the worked ground, and taking whichever field happened to be published first would scatter farms
+ * across the map with no relation to where they were offered. An orchard is not offered: a farm is
+ * not planted into rows.
+ */
+function nearestField(plots: PlotSite[], from: Point, taken: Set<PlotSite>): PlotSite | undefined {
+  let best: PlotSite | undefined;
+  let bestDistance = Infinity;
+  for (const plot of plots) {
+    if (plot.kind !== 'field' || taken.has(plot)) continue;
+    const reach = distance(plot.position, from);
+    if (reach < bestDistance) {
+      best = plot;
+      bestDistance = reach;
+    }
+  }
+  return best;
+}
+
+/** Unit heading of the segment `index` runs along. */ function heading(
+  path: Point[],
+  index: number,
+): { dx: number; dy: number } {
   const a = path[index];
   const b = path[index + 1];
   const length = distance(a, b) || 1;
@@ -206,10 +289,17 @@ function footprint(
  * `blocked`.
  *
  * The tile test walks the footprint's own corners, because a large setback pushes a building bodily
- * towards the edge and a test on the centre alone lets a corner hang outside the map. The rest is a
- * circle of the building's depth centred on it, which is the circle that fits inside the footprint:
- * a building whose front wall grazes a shoreline is accepted while one standing in the river is not,
- * without testing four corners against every polygon on the map.
+ * towards the edge and a test on the centre alone lets a corner hang outside the map. The rest is the
+ * half-diagonal, the smallest circle that contains the whole footprint. A shallower circle is the
+ * cheaper mistake to make and the expensive one to find: `depth / 2` fits inside a rectangle but does
+ * not contain it, so the 4 units a 28-wide farm overhangs its own 10-unit circle went untested, and a
+ * farm corner that landed on a road collision, in a lake, on rock, or on the sand passed every check.
+ * The point of the test is that a building stands clear of what is around it, so it has to be the
+ * circle that reaches its furthest corner. A front wall is now held a half-diagonal off a shoreline
+ * rather than being allowed to graze it, which refuses more sites and is the same conservative
+ * direction as every other rule in the library: the walkability raster closes a cell for a blocker
+ * that touches any part of it, and a building that only half fitted inside its own test could not be
+ * drawn honestly afterwards.
  */
 function isClear(
   geometry: PolygonGeometry,
@@ -217,6 +307,8 @@ function isClear(
   reach: number,
   config: ResolvedGenerationConfig,
   blocked: PolygonGeometry[],
+  /** The worked ground, which is cleared for everything but the farm working its own field. */
+  avoid: PolygonGeometry[],
 ): boolean {
   for (const point of geometry.points)
     if (
@@ -226,5 +318,5 @@ function isClear(
       point.y > config.height - EDGE_MARGIN
     )
       return false;
-  return !blocked.some((polygon) => circleIntersectsPolygon(centre, reach, polygon));
+  return ![...blocked, ...avoid].some((polygon) => circleIntersectsPolygon(centre, reach, polygon));
 }

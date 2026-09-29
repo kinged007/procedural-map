@@ -35,12 +35,15 @@ test('a tile with no origin and no world is the map it always was', () => {
   // and again published nothing at the default of zero. Plots moved it once more still, and this
   // time in two keys: the `plots` collection and `metadataLayers.generation.plots`, the resolved
   // knob. Deleting both from a build with plots off reproduces the previous hash exactly, which is
-  // what says the terrain did not move and only the new keys did. This still guards against
-  // `origin`/`world` leaking into the terrain.
+  // what says the terrain did not move and only the new keys did. Buildings then moved it once more,
+  // on their own: the clearance test is the half-diagonal rather than half the depth, so corners that
+  // overhung their own test are refused, and `settlements` moved with them because a settlement's
+  // membership is the buildings around it. This still guards against `origin`/`world` leaking into
+  // the terrain.
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    'c51dc34650f4290b1f4296ef474761cb30b9988ff5baa69cba536b85e6a6f78b',
+    '399c572174c955609559ffeecf61d2ceca19230e4b6cc614adf2c46fef0eac4d',
   );
 });
 
