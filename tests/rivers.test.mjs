@@ -215,11 +215,14 @@ test('rivers and roads are curves, not staircases', () => {
 });
 
 test('a river is cut at the shore, and says where it meets the water', () => {
-  // A river drawn across a lake reads as a river floating on the sea, so a channel stops at the water
-  // it reaches rather than running on. A mouth is the one place the two overlap, and only by the
-  // channel's own half-width: a channel ending on the shore closes the join between the two bodies of
-  // water, so a river never ends in the field a step short of a lake.
+  // A river drawn the whole way across a lake reads as a river floating on the sea, so a channel stops
+  // at the water it reaches rather than running on. A mouth is the one place the two overlap, and the
+  // channel is carried two widths in: a channel that ends on the bank's edge leaves the join a gap a
+  // cart could be pulled across, and the water either side of the mouth is not visibly one body. Two
+  // widths is enough to close the join and short enough that the channel is not a raft on the lake.
   const CHANNEL = 12;
+  const REACH = 2;
+  const DEEPEST = REACH * CHANNEL + CHANNEL / 2;
   let mouths = 0;
   for (const [width, height] of [
     [2048, 1536],
@@ -232,14 +235,14 @@ test('a river is cut at the shore, and says where it meets the water', () => {
       for (const river of riversOf(map)) {
         for (const point of river.geometry.points)
           for (const lake of lakes) {
-            // Outside, or within half a channel of the lake it reaches. Anything deeper is a channel
-            // running across standing water rather than into it.
+            // Outside, or within the reach of its own mouth. Anything deeper is a channel running
+            // across standing water rather than into it.
             const inside = pointInPolygon(point, lake.geometry);
             const depth = inside
               ? -distanceToRing(point, lake.geometry)
               : distanceToRing(point, lake.geometry);
             assert.ok(
-              depth > -CHANNEL / 2,
+              depth > -DEEPEST,
               `seed ${seed}: ${river.id} is drawn ${Math.abs(depth).toFixed(1)}u over ${lake.id}`,
             );
           }
@@ -248,12 +251,17 @@ test('a river is cut at the shore, and says where it meets the water', () => {
           const lake = map.water.find((region) => region.id === mouth.waterId);
           assert.ok(lake, `seed ${seed}: ${mouth.waterId} is not on the map`);
           assert.equal(lake.kind, 'lake', 'a river does not flow into a river');
-          // The site is where the channel meets the water, so it sits on the lake's own edge, and the
-          // marker is as wide as the channel the river was generated with.
-          const closest = distanceToRing(mouth.point, lake.geometry);
+          // The site is the far end of the channel, so it is in the standing water rather than on its
+          // edge, and no further in than the reach it was drawn with. The marker is as wide as the
+          // channel the river was generated with.
           assert.ok(
-            closest < 1.5,
-            `seed ${seed}: ${mouth.waterId} mouth is ${closest} from the shore`,
+            pointInPolygon(mouth.point, lake.geometry),
+            `seed ${seed}: the mouth of ${river.id} is not in ${lake.id}`,
+          );
+          const reached = distanceToRing(mouth.point, lake.geometry);
+          assert.ok(
+            reached <= REACH * CHANNEL + 0.5,
+            `seed ${seed}: ${mouth.waterId} mouth is ${reached.toFixed(1)} into the water, past the reach`,
           );
           const patch = mouth.polygon.points;
           const across = Math.hypot(patch[0].x - patch[1].x, patch[0].y - patch[1].y);
@@ -268,10 +276,15 @@ test('a river is cut at the shore, and says where it meets the water', () => {
   assert.ok(mouths > 0, 'no river in the sample reached standing water');
 });
 
-test('every river ends at water, the map edge, or another river', () => {
+test('every river ends at water, the map edge, or a rock', () => {
   // A river that stops in the middle of a hillside is a stripe, not a river. Water is where a course
-  // runs out of ground to fall: a lake it reaches, the edge of the world, or a river already there
-  // that it joins. Nothing else ends a river, so nothing else may be published.
+  // runs out of ground to fall: a lake it reaches. Its head is where the water comes from, which is the
+  // edge of the mapped country or a rock face, so the channel is cut by the map border or comes out of
+  // the ground. Nothing else ends a river, so nothing else may be published.
+  //
+  // The head is the two corners the ribbon closes on, `points[0]` and the last point. Testing whether
+  // *any* point is near the edge would pass for a river whose tail merely clips a corner, which is the
+  // case that let heads standing in a field through.
   for (const [width, height] of [
     [2048, 1536],
     [1024, 768],
@@ -279,20 +292,21 @@ test('every river ends at water, the map edge, or another river', () => {
     for (const seed of SEEDS) {
       const map = generateMap({ seed, width, height });
       const rivers = riversOf(map);
+      const rock = map.terrain.filter((region) => region.kind === 'rock' && region.collision);
       for (const river of rivers) {
         const reachesWater = (river.metadata?.mouths?.length ?? 0) > 0;
-        const reachesEdge = river.geometry.points.some(
-          (point) =>
-            Math.min(point.x, point.y, map.bounds.width - point.x, map.bounds.height - point.y) <=
-            12,
-        );
-        const joins = rivers.some(
-          (other) =>
-            other.id !== river.id &&
-            river.geometry.points.some((point) => pointInPolygon(point, other.geometry)),
+        const corners = [
+          river.geometry.points[0],
+          river.geometry.points[river.geometry.points.length - 1],
+        ];
+        const edgeOf = (point) =>
+          Math.min(point.x, point.y, map.bounds.width - point.x, map.bounds.height - point.y);
+        const reachesEdge = corners.some((point) => edgeOf(point) <= 12);
+        const reachesRock = corners.some((point) =>
+          rock.some((face) => pointInPolygon(point, face.geometry)),
         );
         assert.ok(
-          reachesWater || reachesEdge || joins,
+          reachesWater || reachesEdge || reachesRock,
           `seed ${seed}: ${river.id} ends in the middle of the land`,
         );
         // A river runs somewhere: a reach narrower than a few channels is a fold, not a river.

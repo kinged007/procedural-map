@@ -78,32 +78,62 @@ where a channel belongs: a cell holds the whole catchment above it, so the most 
 its main channel.
 
 A course is the main channel of a catchment rather than the shortest way off a hill. From a source it
-climbs the child with the most flow in it, to where the ground divides, and then follows parents down
-to the water. Climbing the largest tributary is what makes a river long: the shortest path to the
-border is direct and a few hundred units at most, which on a large map is a stub no road ever reaches.
-Sources are ranked by flow and spread across the ranking, and there are more candidates than rivers
-wanted, because most of them turn out to be a reach of a longer one. Courses are taken longest first,
-and a course that would lie on a river already published is cut back to the junction and published as
-the tributary it is, so the map has a river network rather than several rivers drawn over each other.
-One river is drawn per 260 units of the map's shorter side, up to eight.
+climbs the child with the most flow in it, and then follows parents down to the water. Climbing the
+largest tributary is what makes a river long: the shortest path to the border is direct and a few
+hundred units at most, which on a large map is a stub no road ever reaches. Sources are ranked by flow
+and spread across the ranking, and there are more candidates than rivers wanted, because most of them
+turn out to be a reach of a longer one. Courses are taken longest first, and a course that would lie on
+a river already published is cut back to the junction and published as the tributary it is, so the map
+has a river network rather than several rivers drawn over each other. One river is drawn per 260 units
+of the map's shorter side, up to eight.
 
-Every river runs to water. A course is one reach, from the divide above its source all the way down to
-the lake it reaches or off the edge of the world, and the head and the tail are joined into that one
-reach rather than published as the longer of the two: a river that stops part-way down a catchment is
-a stripe, not a river. The one exception is a course that reaches a river already published, which is
-cut back to the junction and published as the tributary it is, because below the junction the water
-belongs to the river that is already there.
+**A river begins at the edge of the mapped country or at a rock face, and nowhere else.** A course is
+traced down from a source, and a source is a divide: the top of a catchment, not the top of the map. On
+its own a head lands wherever the high ground stops collecting water, which is a field in the middle of
+the map with the channel simply ceasing. A divide is a real place for water to start, but it is not a
+place a consumer can use, so the head is carried on. The water of a region arrives over its edge and
+leaves by another, and the whole course is inside this map's world coordinates, so a channel cut by
+the border is one that carries on in the next tile rather than one that stops. Sources are therefore
+taken from a band 90 units inside the border rather than from anywhere on the map, and the head is
+walked uphill from there until it reaches the border ring. Rock is the other place a river can begin, a
+spring at the foot of a cliff, and the walk stops there too.
+
+Two things stop that from publishing a head that looks wrong. The field grid is a fixed 64 cells on a
+side whatever the map's size, so a cell is over 30 units across on a 2048 unit map and a head that
+stops when the ground stops rising is a third of a channel short of the border; the head is pulled the
+rest of the way onto the edge, so the ribbon drawn from it is cut off by the border. A spring is a
+narrower case, because a channel is a ribbon half a width to either side of its head: a head stopped on
+the rock face hangs off it by that much and reads as water starting in the grass beside it, so the head
+is carried on into the rock until the whole channel is inside, marching towards the middle of the rock
+because there is no higher ground inside a cliff to climb to. A head that reaches neither is dropped
+rather than published. Straight lines would satisfy the rule and look wrong, and none are needed: the
+candidate list is several times longer than the number of rivers wanted, so a source that cannot reach
+the edge costs nothing. Over sixteen maps every head is one or the other, and they split about evenly.
+
+Every river runs to water. A course is one reach, from its head all the way down to the lake it reaches
+or off the edge of the world, and the head and the tail are joined into that one reach rather than
+published as the longer of the two: a river that stops part-way down a catchment is a stripe, not a
+river. The one exception is a course that reaches a river already published, which is cut back to the
+junction and published as the tributary it is, because below the junction the water belongs to the river
+that is already there.
 
 A course is cut where it first reaches standing water, and the site is published as a mouth:
-`metadata.mouths` on the river names the water body, the point on the shore where the channel met it,
-and a small square one channel wide there. A mouth is where a delta, a silt bank or an estuary asset
-goes, and it is the one place a consumer is told that a river met something. The cut is where the
-_channel_ reaches the water rather than where its centreline does, because a course running along a
-shore arrives there half a channel before its centreline does, and the end is then slid onto the shore
-itself, because an end left where the channel's edge merely touches leaves up to a whole step of
-course between the two bodies of water, which reads as a river stopping in the field short of a lake.
-The two overlap by half a channel at the join, which is what a mouth is: the channel widens where it
-meets standing water.
+`metadata.mouths` on the river names the water body, the point in the water where the channel ends, and
+a small square one channel wide there. A mouth is where a delta, a silt bank or an estuary asset goes,
+and it is the one place a consumer is told that a river met something. The cut is where the _channel_
+reaches the water rather than where its centreline does, because a course running along a shore arrives
+there half a channel before its centreline does.
+
+The channel is then carried on two widths past that cut, and the mouth is the far end of it, out in the
+water rather than on the bank's edge. A channel that ends on the shore leaves the join a gap a cart
+could be pulled across, and the water either side of the mouth is not visibly one body, which is the one
+place in the picture where the river is not yet in the river. Two widths is enough to close the join and
+short enough that the channel is not a raft on the lake, and the reach is in channel widths because that
+is the scale the mouth is published at. The step has to land in the water and not merely near it: the
+cut above tests a reach, because a ribbon touches a lake before its centreline does, but a course
+arriving along a shore keeps going along it past the bank, and a reach test would walk that tangent out
+onto the grass and publish the mouth there. A shore too shallow for even one step gets a mouth a quarter
+width in from the bank, which is inside the water and still at its edge.
 
 Both a traced course and a walked road are staircases: one point per grid cell or per step, each joined
 to the next by a straight line, so the surface offset from either reads as a chain of flat facets
@@ -334,13 +364,31 @@ points on land are the two root corners where the deck meets the bank, the tip c
 every time, and the median share of a deck's area over land is 0%.
 
 How far it runs is what the water allows rather than a fixed number. The reach is measured along the
-deck's own heading and clamped to the last point still inside the named body, and it is measured
-across the deck's whole width rather than its centreline, so a deck whose centreline is over water and
-whose corners are on the sand is not published. A pier in a narrow inlet is therefore a short pier and a
-pier off a broad shore is a full-length one, and neither ever lands on the far bank. Depths run between
-12 and 40: the narrowest dimension of a lake the generator draws that takes a road is 61 units, a
-tenth of them are under 82, and the median is 211, so 40 fits inside the smallest of them. A candidate
-whose water does not open up for 12 units is refused rather than published as a plank on the bank.
+deck's own heading and clamped to the last point still inside the named body, and it is measured across
+the deck's whole width rather than its centreline, so a deck whose centreline is over water and whose
+corners are on the sand is not published. A candidate whose water does not open up for 12 units is refused
+rather than published as a plank on the bank. Depths run from 12 to 40.
+
+**A shore is only offered where the water is deeper than a whole deck.** A deck runs out from the bank
+as far as the water allows, and where the water is shallower than the deck is long the deck reaches the
+far bank: a plank laid across a puddle, with land visible past both ends of it. So the test is not how
+much water the body holds but how far you can get from the shore, and it is asked of the water at the
+point the deck is rooted at rather than somewhere else in the body, because a lake is a harbour on one
+shore and a puddle on the point where it narrows, and it is the point the deck is built on that has to
+hold it. The test is a circle of 40 units centred a deck's length out along the deck's own heading,
+which is the question a builder asks before laying a pier out from a bank: the water has to be deeper
+than the pier is long. Measured as the largest circle that fits inside a body, over ten maps of 2048
+by 1536, the ponds run from 4 to 38 and the harbours from 40 up with nothing in between, so 40 separates
+them outright.
+
+That floor was a floor on the body's area before, which refused a long narrow inlet that would have
+made a fine harbour and passed a wide shallow bay that would not. What it costs is that a map with no
+bay on a road gets no pier at all, which is a count that is an upper bound being honest about the shore
+rather than a placement that failed. What it buys is that every deck has open water past the end of it:
+over twelve maps and sixty-one decks, the tightest is 31 units of clear water between the far end of
+the deck and the far bank, and the median is 40. No deck reaches the far bank, and none is a plank
+across a pond. A consequence worth stating plainly is that decks no longer come in two lengths — every
+one is a full landing stage — because a shore that would have cut a short deck is not offered at all.
 
 The bounds test is on the deck's own corners rather than the centreline, because at a map edge a deck
 has a tip comfortably inside it and both far corners outside. A deck is also kept 30 from any other deck
@@ -497,23 +545,25 @@ quarters of the ring packed. Widening the ring past the settlement's own reach w
 a further twelve percent, which is not worth a field that belongs to somewhere else. The counts are
 ceilings, and a default map asked for twelve fields and eight orchards publishes about ten and five.
 
-### A road is refused edge to edge, and the other ground is not
+### A road and a river are refused edge to edge, and the other ground is not
 
 A plot's centre and its four corners are tested against water, rock, the beach and the settlement's own
-green. A road is different, and is tested against the whole rectangle.
+green. A road and a river are different, and are tested against the whole rectangle.
 
-The difference is what the surfaces are. Water and rock are broad, and a field that clips the edge of a
+The difference is what the surfaces are. Lakes and rock are broad, and a field that clips the edge of a
 lake is a field beside a lake, which is ordinary — a five-point sample is enough to keep a plot out of
 the lake itself. A road is a ribbon, and a rectangle that clips one is a field ploughed across it. A
-sample misses a road that crosses between two of its points, and it did: over twelve 2048 by 1536 maps,
-**48 of 187 plots were on a road, 32 fields and 16 orchards**, every one of them through an edge that the
-four corners and the middle all missed.
+river is the same shape and one more thing to trip over: a channel is 12 units wide and crosses a plot
+that is 96 units across without the centre or any corner landing in it. A sample misses both, and it
+did. Over twelve 2048 by 1536 maps, **48 of 187 plots were on a road, 32 fields and 16 orchards**, and
+**6 of 150 had a river running through them**, every one of them through an edge that the four corners
+and the middle all missed.
 
-The test is two-sided — points along the plot's own boundary inside the road, and the road's own vertices
-inside the plot — because a road cutting clean across the middle of a rectangle lands in neither ring's
-sample otherwise. That costs a few hundred point-in-polygon calls per plot offered, against a dozen
-before, and roads are few on a map. The number of plots fell by nine over those maps, which is the
-road-crossing ones going.
+The test is two-sided — points along the plot's own boundary inside the other surface, and the surface's
+own vertices inside the plot — because a ribbon cutting clean across the middle of a rectangle lands in
+neither ring's sample otherwise. That costs a few hundred point-in-polygon calls per plot offered,
+against a dozen before, and roads and rivers are few on a map. The number of plots fell by nine over
+those maps, which is the road-crossing ones going, and no plot is left straddling a channel.
 
 Plot sizes were halved once for the same reason. A plot excludes a circle of its own half-diagonal, so at
 64 to 128 by 44 to 88 twenty of them needed more ground than a settlement has and the count was routinely

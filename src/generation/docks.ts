@@ -49,6 +49,26 @@ const REACH_OUT = 40;
 const MIN_DECK = 12;
 
 /**
+ * How much open water a deck needs at its shore point, in world units.
+ *
+ * A deck runs out from the bank as far as the water allows, up to 40, and the point it is rooted at
+ * makes a pier on a pond whenever the water there is shallower than the deck is long: the deck reaches
+ * the far bank and is a plank laid across a puddle. This used to be a floor on the area of the body,
+ * which refused a long narrow inlet that would have made a fine harbour and passed a wide shallow bay
+ * that would not.
+ *
+ * Clearance is the question either way, and it is asked of the water rather than of the land. Measured
+ * as the largest circle that fits inside a body, over ten maps of 2048 by 1536, the ponds run from 4 to
+ * 38 and the harbours from 40 up with nothing in between, so 40 separates them outright. It is also
+ * the depth of the longest deck, which makes the rule the one a builder would use: the water has to be
+ * deeper than the pier is long. Asking it at the shore point rather than somewhere else in the body
+ * matters, because a lake is a harbour on one shore and a puddle on the point where it narrows, and it
+ * is the point the deck is built on that has to hold it. A road station beside a pond falls through to
+ * whatever else the water offers instead of being spent on the pond.
+ */
+const HARBOUR_CLEARANCE = 40;
+
+/**
  * How close one deck may come to another, centre to centre, in world units.
  *
  * Two decks within 20 of each other share their shore and read as one wide pier with a gap in it.
@@ -235,10 +255,46 @@ function nearestShore(point: Point, water: WaterRegion[]): Shore | undefined {
     const gap = distanceToBox(point, box);
     if (gap > REACH || (best && gap > best.gap)) continue;
     const edge = closestPointOnRing(point, body.collision);
-    if (!edge) continue;
+    if (!edge || edge.gap === 0) continue;
+    // The heading the deck will be drawn along: away from the station, which is on the land, so the
+    // same line the road approaches by, continued past the bank.
+    const heading = {
+      x: (edge.point.x - point.x) / edge.gap,
+      y: (edge.point.y - point.y) / edge.gap,
+    };
+    if (!hasClearance(edge.point, heading, body.collision, HARBOUR_CLEARANCE)) continue;
     if (!best || edge.gap < best.gap) best = { body, point: edge.point, gap: edge.gap };
   }
   return best;
+}
+
+/**
+ * Whether a body of water is deep enough to take a deck of `radius` drawn from `point` along `heading`.
+ *
+ * The circle is centred a deck's length out along the heading rather than on the bank, because a
+ * circle centred on the shore can never lie in the water: half of it is on the land the deck starts
+ * from. What has to hold is that the water at the deck's own far end is as deep as the deck is long,
+ * which is the question a builder asks before laying a pier out from a bank, and the question that
+ * separates a bay from a pond. The rim is sampled rather than solved for, since the ring is a contour
+ * and the exact answer wants the medial axis; twelve points is enough, a pond fails all of them and a
+ * bay fails none.
+ */
+function hasClearance(
+  point: Point,
+  heading: Point,
+  geometry: PolygonGeometry,
+  radius: number,
+): boolean {
+  const centre = { x: point.x + heading.x * radius, y: point.y + heading.y * radius };
+  for (let step = 0; step < 12; step += 1) {
+    const angle = (step / 12) * Math.PI * 2;
+    const onRim = {
+      x: centre.x + Math.cos(angle) * radius,
+      y: centre.y + Math.sin(angle) * radius,
+    };
+    if (!pointInPolygon(onRim, geometry)) return false;
+  }
+  return true;
 }
 
 /** Distance from a point to a box, which is zero inside it. */

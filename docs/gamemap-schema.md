@@ -319,12 +319,20 @@ interface RiverMouth {
 }
 ```
 
-`point` is where the channel met the water's edge, and `polygon` is a small square one channel wide at
-that point, so an asset can be placed without re-deriving the direction. The channel and the water body
-overlap by half a channel at a mouth, which is what a mouth is: the channel widens where it meets
-standing water. There is one mouth per course that reaches standing water, and a mouth is the only
-place a map says a river met something: a delta, a silt bank or an estuary goes here. Every river ends
-at a mouth, at the edge of the world, or on a river already published, and never in open ground.
+`point` is in the water, not on its edge: the channel is carried two channel widths past the shoreline
+and the mouth is the far end of it, out where the river is already in the river. `polygon` is a small
+square one channel wide at that point, so an asset can be placed without re-deriving the direction.
+There is one mouth per course that reaches standing water, and a mouth is the only place a map says a
+river met something: a delta, a silt bank or an estuary goes here.
+
+**Every river ends somewhere a consumer can use.** The tail ends at a mouth, at the edge of the world,
+or on a river already published. The head ends on the edge of the mapped country or inside a rock face,
+and never in open ground: a course is traced down from a source, and a source is a divide, so on its own
+a head stops wherever the high ground stops collecting water, which is a field in the middle of the map
+with the channel ceasing. `geometry.points[0]` and the last point are the two corners the head closes on,
+so a consumer asking where a river comes from reads those two rather than searching the ring. Neither
+is guaranteed to be inside anything in particular: a head on the map edge is on the boundary and a head
+at a rock is a channel drawn from inside the rock, which is how a spring looks.
 
 ## vegetation
 
@@ -717,11 +725,20 @@ walk the length of the deck and step off the end of it. See
 [walking on the map](consuming-maps.md#walking-on-the-map).
 
 **`depth` is measured, not a constant.** It is the distance from the root to the last point still
-inside `waterId`, measured across the deck's whole width rather than its centreline, so a pier in a
-narrow inlet is a short one and a pier off a broad shore is a full-length one, and neither ever lands
-on the far bank. It is between 12 and 40 units, and both ends are numbers a consumer can rely on: a
-deck shorter than 12 would not read as a deck, and a longer one is a jetty rather than a landing
-stage.
+inside `waterId`, measured across the deck's whole width rather than its centreline, so a deck whose
+centreline is over water and whose corners are on the sand is not published. It is between 12 and 40
+units, and both ends are numbers a consumer can rely on: a deck shorter than 12 would not read as a
+deck, and a longer one is a jetty rather than a landing stage.
+
+**A deck always has open water past the end of it, and that is a guarantee rather than a tendency.**
+A shore is only offered where a circle 40 units across, centred a deck's length out along the deck's
+heading, lies wholly in the water: the water has to be deeper than the pier is long, or the deck would
+reach the far bank and be a plank across a pond. Over twelve maps and sixty-one decks the tightest was
+31 units of clear water between the far end of a deck and the far bank, and the median was 40. A
+consequence is that decks no longer come in two lengths — every one is a full landing stage — because a
+shore that would have cut a short deck is not offered at all. It also means a map can have no deck even
+when a settlement stands near water: a place whose nearest reachable shore is a pond has no waterfront,
+which is the count being an upper bound limited by the shore.
 
 **`settlementId` is required, and it is required at the deck's own root.** A deck is a place's
 waterfront, so the place is required, validation rejects a deck naming a settlement that is not on the

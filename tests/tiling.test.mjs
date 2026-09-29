@@ -42,10 +42,15 @@ test('a tile with no origin and no world is the map it always was', () => {
   // share of the hull outline that lies under a canopy, and that moved this value too. Deleting it
   // from this map as well reproduces the previous hash exactly, so the placement fields still are not
   // what carries the terrain. This still guards against `origin`/`world` leaking into the terrain.
+  // The river channels moved it last. Heads used to cease in a field and now run to the map edge or
+  // a rock face, and a mouth is carried two channel widths into the water it enters, so the channels
+  // changed shape and the trees that keep off them moved with them. Stripping the placement fields
+  // still strips all of that, which is what this test is for, and `terrain` is byte-identical to the
+  // build before the change.
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    '51de7b5fdc7ad2b425920a9146b7fbbbbbed94773f87b72723ad563a4f16cc59',
+    'bce5dc21e8a4909f7ffb2960ff5fa831bf6aba633bf3df0bdd0aa1d04c61f9f5',
   );
 });
 

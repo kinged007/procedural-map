@@ -163,6 +163,10 @@ export function plotSites(
     roads.some((road) => pointInPolygon(at, road)) ||
     sites.some((site) => pointInPolygon(at, site.clearing));
 
+  // A river is separated out because it is refused against the plot's whole rectangle rather than
+  // against five points of it. Both are water and the narrow one is the ribbon.
+  const rivers = water.filter((body) => body.kind === 'river').map((body) => body.geometry);
+
   const chosen: PlotSite[] = [];
   const wanted: PlotKind[] = [
     ...Array.from({ length: Math.max(0, counts.field) }, () => 'field' as const),
@@ -198,15 +202,17 @@ export function plotSites(
       const half = Math.hypot(plotWidth, plotDepth) / 2;
       if (chosen.some((other) => distance(other.position, position) < other.half + half)) continue;
       if (outOfBounds(position, corners, width, height)) continue;
-      // A road is refused against the whole rectangle, while water, rock and the beach are refused
-      // against the centre and the four corners. The difference is what the surfaces are: water and
-      // rock are broad and a plot that clips their edge is a plot beside a lake, which is ordinary,
-      // but a road is a ribbon and a rectangle that clips one is a field ploughed across it. Testing
-      // the centre and corners is a sample, and a sample of a rectangle misses a road that crosses
-      // between two of its sample points — measured over twelve 2048 by 1536 maps, 48 of 187 plots
-      // touched a road, 32 fields and 16 orchards, every one of them through an edge that the four
-      // corners and the middle all missed.
+      // A road and a river are refused against the whole rectangle, while lakes, rock and the beach
+      // are refused against the centre and the four corners. The difference is what the surfaces are:
+      // a lake and a rock are broad and a plot that clips their edge is a plot beside one, which is
+      // ordinary, but a road and a river are ribbons, and a rectangle that clips one is a field
+      // ploughed across it or a channel running through the crop. Testing the centre and corners is a
+      // sample, and a sample of a rectangle misses a ribbon that crosses between two of its sample
+      // points — measured over twelve 2048 by 1536 maps, 48 of 187 plots touched a road and 6 of 150
+      // touched a river, every one of them through an edge that the four corners and the middle all
+      // missed. A river is a `water` body and is still refused here, not on the sample below.
       if (roads.some((road) => polygonTouches(geometry, road))) continue;
+      if (rivers.some((river) => polygonTouches(geometry, river))) continue;
       if ([position, ...corners].some(refused)) continue;
 
       const trees =

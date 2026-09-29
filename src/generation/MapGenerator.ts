@@ -695,7 +695,18 @@ export function generateMap(config: GenerationConfig): GameMap {
   // Rivers are traced after the terrain is classified, so a river cuts a channel through ground that
   // is already drawn rather than being given a beach band of its own. Both are published as water.
   // The lakes go in with them so a course can be cut where it reaches standing water.
-  const water = [...lakes, ...generateRivers(resolved, fields, level, lakes)];
+  const water = [
+    ...lakes,
+    ...generateRivers(
+      resolved,
+      fields,
+      level,
+      lakes,
+      terrain
+        .filter((region) => region.kind === 'rock' && region.collision)
+        .map((region) => region.geometry),
+    ),
+  ];
   // Placement draws from a stream keyed on the tile's position in the world, not just the seed. One
   // seed for the whole world would give every tile the identical draw sequence, and a tiled world
   // would show the same grove in the same corner of every tile.

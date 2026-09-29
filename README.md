@@ -134,7 +134,14 @@ A river is published in the same `water` collection as a lake, with `kind: 'rive
 treats water as water treats a river as water. It is the main channel of a catchment, walked down the
 drainage of the elevation field, and every river runs to the water it drains into: a lake it reaches,
 the edge of the world, or a river already there that it joins. Where one reaches a lake, the site is
-published as `water.metadata.mouths` on the river, which is where a delta or an estuary asset goes.
+published as `water.metadata.mouths` on the river, which is where a delta or an estuary asset goes, and
+the site is out in the water rather than on the bank's edge.
+
+**A river starts at the edge of the mapped country or at a rock face, never in a field.** A course is
+traced down from a source, and a source is a divide, so on its own the head lands wherever the high
+ground stops collecting water, and the channel simply ceases there. The head is carried on to the map
+edge, which a consumer sees as a river running off the map and continuing in the next tile, or into a
+rock, which it sees as a spring at the foot of a cliff. Nothing else ends a river.
 
 **A road goes over a river rather than around it**, because a channel is narrow enough to bridge. In
 format 1.1 only lakes and rock refused a road; if you asserted that a road never touches water, that
@@ -173,7 +180,10 @@ settlement it is the waterfront of and the body of water it stands in, and carri
 ground a character walks on, and the walkability grid carves the water it covers back open, so a
 character can walk the length of a pier. To know which places are ports, read the docks and collect
 their `settlementId`s. A deck is 16 units across and 12 to 40 long, which is what the grid can see at
-`cellSize: 16` and finer; below that a pier may contribute no cell at all.
+`cellSize: 16` and finer; below that a pier may contribute no cell at all. A deck is only ever built
+where the water is deeper than the deck is long, so there is open water past the end of it and no deck
+is a plank across a pond — which also means a place near a pond rather than a bay has no waterfront,
+and a map can publish fewer decks than asked for.
 
 `map.resourceSites` holds the places worth gathering something at, and they are all `0` by default:
 the generator has no geology, so it will not tell you where iron is. It tells you where a rock face

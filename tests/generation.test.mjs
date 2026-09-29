@@ -60,9 +60,17 @@ test('generation is byte-stable for the same config', () => {
   // the wood rather than publishing a new collection, which is why it needed a number rather
   // than a key on the map.
   // `tests/tiling.test.mjs` holds the matching value for the map with the placement fields removed.
+  // The river channels moved last. A head used to stop on a divide in a field, so a river simply
+  // ceased in the middle of the map; a head is now carried to the map edge or to a rock face, and a
+  // mouth is carried two channel widths into the standing water it enters rather than sitting on the
+  // bank's edge. Every river on this map changed shape, and everything downstream of one moved with
+  // it: trees keep off water, roads and buildings follow the trees. The evidence that nothing else
+  // did is that the lakes, the sea and the whole of `terrain` are byte-identical to the build before
+  // it, and so are `docks`, `resourceSites`, `plots` and `barriers`, which are all zero here and all
+  // independent of the channels. The river count is the same six.
   assert.equal(
     stableHash(first),
-    '0d423a3f1dacc17fee3c4c45bef55986378d6ea0f7bac51ac9eda861c6947658',
+    '270a21ae0a3abe0f09964c41d16dffc0c7ef5eb50316ffe294adfcb2abfd30a5',
   );
 });
 

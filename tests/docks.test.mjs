@@ -72,9 +72,14 @@ test('a dock is the waterfront of a place, so a map with no place has no harbour
   // The count is an upper bound rather than a promise, and what limits it is the shoreline rather
   // than the number of places: one settlement on a long shore can have several decks.
   const perPlace = [];
-  for (const seed of [1, 7, 42, 777, 31415]) {
+  const seeds = [1, 7, 42, 777, 31415];
+  let withDeck = 0;
+  for (const seed of seeds) {
     const map = generateMap({ ...MAP, seed, settlements: { count: 2 }, docks: { count: 16 } });
-    assert.ok(map.docks.length > 0, 'a place on a shore does get a waterfront');
+    // A place standing on a shore deep enough to hold a deck gets a waterfront. Not every map has one
+    // to give, and that is not a fault: a shore is only offered where the water runs deeper than a
+    // deck is long, so a map whose places stand back from the water has no decks to place.
+    if (map.docks.length > 0) withDeck += 1;
     const counts = {};
     for (const dock of map.docks)
       counts[dock.metadata.settlementId] = (counts[dock.metadata.settlementId] ?? 0) + 1;
@@ -84,6 +89,10 @@ test('a dock is the waterfront of a place, so a map with no place has no harbour
       'every deck belongs to a place that exists',
     );
   }
+  assert.ok(
+    withDeck >= seeds.length - 1,
+    'a place on a shore deep enough to take a deck does get a waterfront',
+  );
   assert.ok(
     Math.max(...perPlace) > 1,
     'and one place can carry more than one deck, which is why the count is not the settlement count',
@@ -191,19 +200,58 @@ test('a deck stands in the water, rooted at the bank, and does not run across th
   }
 });
 
-test('a deck is as long as the water allows, and no longer', () => {
+test('a deck runs out as far as the water allows, and the water is always deep enough', () => {
   // A fixed length would lay a pier across a narrow inlet to the far bank. The reach is measured
-  // instead, so an inlet gives a short deck and a broad shore a full-length one.
-  const depths = [1, 7, 42, 583921, 777, 31415].flatMap((seed) =>
-    harbour({ seed }).docks.map((dock) => dock.depth),
-  );
-  assert.ok(Math.min(...depths) >= 12, 'no deck is too short to be one');
-  assert.ok(Math.max(...depths) <= 40, 'and none is longer than a landing stage');
-  assert.ok(
-    Math.max(...depths) - Math.min(...depths) > 0,
-    'the water decides, so a map with both an inlet and an open shore gets two lengths',
-  );
+  // instead, and a shore is only offered where the water is deeper than a whole deck, so a deck is
+  // always a landing stage rather than a plank laid across whatever was there. The consequence is
+  // that decks no longer come in two lengths, and that is the point: the water past the end of a deck
+  // is what a boat needs, and it is now guaranteed rather than hoped for.
+  const maps = [1, 7, 42, 583921, 777, 31415].map((seed) => harbour({ seed }));
+  const decks = maps.flatMap((map) => map.docks);
+  assert.ok(decks.length > 0, 'there are decks to measure');
+  for (const deck of decks) {
+    assert.ok(deck.depth >= 12, 'no deck is too short to be one');
+    assert.ok(deck.depth <= 40, 'and none is longer than a landing stage');
+  }
+  // Open water between the far end of every deck and the far bank, which is the plank across a pond
+  // that a deck standing on a small body of water is.
+  let tightest = Number.POSITIVE_INFINITY;
+  for (const map of maps)
+    for (const deck of map.docks) {
+      const water = map.water.find((region) => region.id === deck.metadata.waterId);
+      const far = deck.geometry.points
+        .filter(
+          (point) =>
+            Math.hypot(point.x - deck.position.x, point.y - deck.position.y) > deck.depth * 0.9,
+        )
+        .map((point) => distanceToRing(point, water.collision));
+      if (far.length === 0) continue;
+      tightest = Math.min(tightest, ...far);
+    }
+  assert.ok(tightest > 0, 'and no deck reaches the far bank of the water it stands in');
 });
+
+/** Shortest distance from a point to a ring's nearest edge, which for water is the shore. */
+const distanceToRing = (point, geometry) => {
+  let closest = Infinity;
+  const ring = geometry.points;
+  for (let index = 1; index < ring.length; index += 1) {
+    const a = ring[index - 1];
+    const b = ring[index];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const squared = dx * dx + dy * dy;
+    const along =
+      squared === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / squared));
+    closest = Math.min(
+      closest,
+      Math.hypot(point.x - (a.x + along * dx), point.y - (a.y + along * dy)),
+    );
+  }
+  return closest;
+};
 
 /** Nearest distance from a point to a polyline, which is how a station between path points is found. */
 function distanceToPath(point, path) {

@@ -36,8 +36,9 @@ Terrain classification is a separate stage over the generated fields. It contour
 
 `generation/rivers.ts` traces each course on the priority-flood drainage, and `generation/ribbon.ts`
 holds the offset code shared with roads, so a channel and a road are the same kind of surface. A course
-is cut where it first reaches standing water, and the site becomes a published mouth rather than a
-channel drawn over a lake.
+is cut where it first reaches standing water, carried two channel widths into it, and the site becomes
+a published mouth rather than a channel drawn over a lake. The same file carries the head out to the map
+edge or into a rock, so a river does not begin in a field.
 
 A bridge is not a map entity, and the renderer does not draw one. The road's `metadata.crossings` names
 the river, the site, and the channel's width, and the road ribbon and the channel polygon are both on

@@ -196,10 +196,16 @@ illustrated renderer draws no bridge and no marker at a crossing, because a road
 and a marker there only ever gets in the way of the road it is meant to explain.
 
 Where a river meets standing water, `water.metadata.mouths` on the river names the water body, the point
-where the channel met its edge, and a small square one channel wide at that point. That is where a
+in the water where the channel ends, and a small square one channel wide at that point. That is where a
 delta, a silt bank, an estuary, or a waterfall asset goes, and it is the only place a map says a river
-met something: a channel runs from its source in the hills, which is the other end of the ring and is
-not marked, to the water or off the edge of the map. Iterate `river.metadata?.mouths ?? []`.
+met something. The point is out in the water rather than on the bank, two channel widths in, so an
+asset placed there is over the join and not on the shore beside it. Iterate `river.metadata?.mouths ?? []`.
+
+The other end of a river is not marked, and a consumer should not expect it to be. `geometry.points[0]`
+and the last point are the two corners the head closes on, and they are on the edge of the mapped
+country or inside a rock face: a head is a river running off the map, which continues in the next tile,
+or a spring coming out of a cliff. There is no marker for either, because there is nothing to attach one
+to — a consumer that wants a waterfall at a head is placing its own site and should pick ground for it.
 
 ### 4. Buildings
 
@@ -373,14 +379,23 @@ const ports = new Set(map.docks.map((dock) => dock.metadata.settlementId));
 Two things to plan around. A dock carries no collision and is **walkable**: the walkability raster
 carves the water it covers back open, so a character can walk the length of a pier and stand at the
 end. And the count is bounded by the shore rather than by anything you set: a map with no settlements
-publishes no docks however many you ask for, and `count: 16` on a map with two settlements on one long
-shore fills.
+publishes no docks however many you ask for, a place standing back from the water has no deck, and
+`count: 16` on a map with two settlements on one long shore fills.
+
+The shore is also the thing that decides whether there can be a deck at all. A shore is only used where
+the water is deeper than a whole deck — 40 units of clearance measured at the point the deck is rooted
+at, which is what a builder checks before laying a pier out from a bank. A pond beside a road is not a
+harbour, so a place near one has no waterfront even though water is in sight, and a map can publish
+fewer decks than were asked for with nothing wrong with it. Over twelve maps the tightest gap between
+the far end of a deck and the far bank was 31 units, so a boat is never moored against the opposite
+shore.
 
 The deck's own `geometry` is the rectangle it is drawn and carved as: 16 units across, rooted at
 `position` on the waterline, running out over the water for `depth`. The whole of it is water, so
 there is no land crossing for a consumer to reason about — a pier is anchored at `position` and drawn
-along `rotation`. `depth` is measured rather than fixed and runs from 12 to 40, so a pier in a narrow
-inlet is a short one and a pier off a broad shore is a full-length one.
+along `rotation`. `depth` is measured rather than fixed and runs from 12 to 40. Every published deck is
+a full one: a shore that would have cut a shorter deck is not used, which is why a map has decks of one
+length rather than two.
 
 ### 7. Resource sites
 
