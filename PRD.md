@@ -905,6 +905,9 @@ importers/
 
 It must nevertheless exist as a first-class architectural concept.
 
+It does exist, and it is an adapter boundary that throws. Nothing is going to be built behind it: the
+Watabou milestone is deprecated, because Watabou is. See [v0.9](#v09--watabou-import--deprecated-not-planned).
+
 ---
 
 # 21. Watabou Integration Goal
@@ -941,7 +944,11 @@ Any information that can be reliably extracted should eventually be mapped into 
 - bridges;
 - other structures.
 
-Exact support depends on the available Watabou export schema and should be implemented incrementally after examining representative exports.
+Exact support depended on the available Watabou export schema and was to be implemented incrementally
+after examining representative exports. It is not being: Watabou is deprecated, so there is no export
+schema left to examine. The adapter stays because a second import format will need the same seam, and
+`NativeMapImporter` already occupies it. See
+[v0.9](#v09--watabou-import--deprecated-not-planned).
 
 ---
 
@@ -1810,27 +1817,19 @@ Themes should not fundamentally alter the canonical schema.
 
 ---
 
-## v0.9 — Watabou Import
+## v0.9 — Watabou Import — DEPRECATED, NOT PLANNED
 
-Develop robust support for representative Watabou Village Generator JSON exports.
+Watabou, the village generator this milestone was written for, is deprecated, so the import is not
+going to be built. The milestone is kept here rather than deleted, so the record says it was
+considered and why it was dropped: a reader looking for the importer finds that it was a real
+requirement, that the generator behind it no longer exists, and that the capability is reachable
+another way.
 
-Workflow:
-
-```
-Create/customize village in Watabou
-             ↓
-         Export JSON
-             ↓
-       Import into system
-             ↓
-      Convert to GameMap
-             ↓
-          Validate
-             ↓
-         Render / use
-```
-
-This provides a practical manual/custom map authoring workflow without requiring a custom editor immediately.
+Manual map authoring is still wanted, and v0.3's `NativeMapImporter` already does the half of this
+that matters: a hand-written map in the canonical format imports, validates, and renders. What this
+milestone would have added on top is a converter for one third party's export format, and that is
+the part with no subject left to convert. A new authoring format gets its own milestone when there
+is a format to support.
 
 ---
 
