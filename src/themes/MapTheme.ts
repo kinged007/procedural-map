@@ -45,4 +45,10 @@ export interface MapTheme {
    * the trees are already drawn. Optional, for the same reason as `docks`.
    */
   plots?: { field: string; furrow: string };
+  /**
+   * Enemy camp colours, one per ground, for the same reason as `resources`: the three are sited
+   * differently and a consumer overriding one has not overridden the others. Optional, for the same
+   * reason as `docks`.
+   */
+  camps?: { wood: string; rock: string; open: string };
 }

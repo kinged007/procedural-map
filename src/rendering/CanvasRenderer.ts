@@ -2,6 +2,7 @@ import type {
   BuildingEntity,
   CollisionGeometry,
   DockEntity,
+  EnemySettlementEntity,
   GameMap,
   GroundPlotEntity,
   Point,
@@ -183,6 +184,61 @@ function drawResourceSites(
       context.lineTo(x + forward.x * size, y + forward.y * size);
       for (const side of [1, -1]) {
         const angle = heading + side * 0.45 * Math.PI;
+        context.moveTo(x + forward.x * size, y + forward.y * size);
+        context.lineTo(
+          x + forward.x * size * 0.5 + Math.cos(angle) * size * 0.5,
+          y + forward.y * size * 0.5 + Math.sin(angle) * size * 0.5,
+        );
+      }
+    }
+    context.stroke();
+  }
+}
+
+/**
+ * Enemy camps: the published footprint filled, with a mark on it that says which way is out.
+ *
+ * A camp is a site and not an object, so it is drawn the way a field is drawn rather than the way a
+ * building is: a footprint on the ground the consumer can build inside, plus a mark that is about
+ * the place rather than about anything in it. The arrow appears only where there is an out, which
+ * is the wood and the rock; an open camp has nothing set into it and gets a plain cross.
+ */
+function drawEnemySettlements(
+  context: CanvasRenderingContext2D,
+  camps: EnemySettlementEntity[],
+  scale: number,
+  theme: MapTheme,
+): void {
+  const palette = theme.camps ?? defaultTheme.camps!;
+  for (const camp of camps) {
+    const colour = palette[camp.metadata.ground];
+    polygonPath(context, camp.geometry);
+    context.fillStyle = `${colour}33`;
+    context.fill();
+    context.strokeStyle = colour;
+    context.lineWidth = 1.4 / scale;
+    context.setLineDash([5 / scale, 4 / scale]);
+    context.stroke();
+    context.setLineDash([]);
+
+    const { x, y } = camp.position;
+    const size = 7 / scale;
+    context.lineWidth = 1.6 / scale;
+    context.beginPath();
+    if (camp.rotation === undefined) {
+      context.moveTo(x - size * 0.5, y - size * 0.5);
+      context.lineTo(x + size * 0.5, y + size * 0.5);
+      context.moveTo(x + size * 0.5, y - size * 0.5);
+      context.lineTo(x - size * 0.5, y + size * 0.5);
+    } else {
+      // The head of the arrow is the way out, which is the direction the generator measured a clear
+      // run in. It reads as a direction rather than as a spike, which is the whole of what an edge
+      // marker is for.
+      const forward = { x: Math.cos(camp.rotation), y: Math.sin(camp.rotation) };
+      context.moveTo(x - forward.x * size, y - forward.y * size);
+      context.lineTo(x + forward.x * size, y + forward.y * size);
+      for (const side of [1, -1]) {
+        const angle = camp.rotation + side * 0.45 * Math.PI;
         context.moveTo(x + forward.x * size, y + forward.y * size);
         context.lineTo(
           x + forward.x * size * 0.5 + Math.cos(angle) * size * 0.5,
@@ -802,6 +858,8 @@ export class CanvasRenderer {
       // A field is ground rather than an object, so it goes under the trees and under the roads,
       // beside the settlement clearings it shares a reason with.
       if (styled && map.plots.length > 0) drawPlots(context, map.plots, scale, theme);
+      if (styled && map.enemySettlements.length > 0)
+        drawEnemySettlements(context, map.enemySettlements, scale, theme);
       if (styled) drawMouths(context, map.water, theme);
       // A settlement's clearing, over the road it sits on. It is open ground, so it is drawn as
       // ground rather than as an object: a green at the middle of a place, with the road running
@@ -886,6 +944,7 @@ export class CanvasRenderer {
           ...map.vegetation,
           ...map.structures,
           ...map.settlements,
+          ...map.enemySettlements,
           ...map.docks,
           ...map.resourceSites,
           ...map.roads,

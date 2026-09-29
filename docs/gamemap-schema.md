@@ -13,10 +13,11 @@ elided with a comment rather than truncated silently.
 
 ## What changed in 1.4
 
-1.4 adds a `settlements` collection, a `docks` one, a `resourceSites` one and a `plots` one. Before it
-a map had houses but no village: buildings were placed one at a time against a road and nothing said which
-of them belonged together, nothing said a place reached the water, nothing said where the ground was
-worth gathering on, and nothing said which ground the places worked.
+1.4 adds a `settlements` collection, a `docks` one, a `resourceSites` one, a `plots` one and an
+`enemySettlements` one. Before it a map had houses but no village: buildings were placed one at a time
+against a road and nothing said which of them belonged together, nothing said a place reached the water,
+nothing said where the ground was worth gathering on, nothing said which ground the places worked, and
+nothing said where anyone else was.
 
 | Change                                | Kind                    | What a consumer does                                                                                                                |
 | ------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -35,11 +36,18 @@ worth gathering on, and nothing said which ground the places worked.
 | A plot carries no collision           | new                     | A field is ground to walk across. The trees on an orchard are the blockers, not the rectangle.                                      |
 | Generation config gains `plots`       | new optional config     | `plots: { field, orchard }`. Both unset is `0`. The counts are ceilings, not promises — plots need ground a place can reach.        |
 | A building says whether it stands     | new required field      | `state` is `standing` or `ruined`. A ruin carries no `collision`, so rubble is walkable.                                            |
+| `enemySettlements` holds camps        | new required collection | Iterate it. Each entry is a site with a ground under it: a `wood` camp, a `rock` camp or an `open` camp.                            |
+| A camp is not a settlement            | new                     | A separate collection on purpose. A camp in `settlements` would be offered as a player spawn, ringed with fields, and given a pier. |
+| A camp carries no collision           | new                     | A camp is a place, not an obstacle. Nothing blocks until a consumer builds inside the footprint it published.                       |
+| A camp names what it is set against   | new                     | `metadata.forestId` on a `wood` camp, `metadata.rockId` on a `rock` camp, and neither on an `open` one, which is set into nothing.  |
+| A camp's facing is conditional        | new                     | `rotation` is required on a `wood` or `rock` camp and forbidden on an `open` one, the same rule a fishing spot follows.             |
+| A camp publishes its distance         | new optional field      | `metadata.distanceToSettlement` is measured, and is absent on a map that publishes no settlements.                                  |
+| Generation config gains `enemies`     | new optional config     | `enemies: { count, minDistance, grounds }`. All unset is `0` camps: a map says where rock ends, not that anyone is in it.           |
 
 A 1.3 map still validates as 1.3, and a 1.4 map does not validate as 1.3: the validator accepts
-`"1.4"` only, `settlements`, `docks`, `resourceSites` and `plots` are required, and all four are checked
-for their shape. A 1.3 map read by a 1.4 consumer has none, so anything that renders or uses places has to
-cope with none.
+`"1.4"` only, `settlements`, `docks`, `resourceSites`, `plots` and `enemySettlements` are required, and
+all five are checked for their shape. A 1.3 map read by a 1.4 consumer has none, so anything that
+renders or uses places has to cope with none.
 
 ## What changed in 1.3
 
@@ -95,6 +103,7 @@ interface GameMap {
   forests: ForestEntity[];
   structures: BuildingEntity[];
   settlements: SettlementEntity[];
+  enemySettlements: EnemySettlementEntity[];
   docks: DockEntity[];
   resourceSites: ResourceSiteEntity[];
   plots: GroundPlotEntity[];
@@ -104,12 +113,12 @@ interface GameMap {
 }
 ```
 
-All fourteen of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`,
-`structures`, `settlements`, `docks`, `resourceSites`, `plots`, `roads`, and `barriers` are required,
-even when the collection is empty. `metadataLayers` is optional.
+All fifteen of `version`, `metadata`, `bounds`, `terrain`, `water`, `vegetation`, `forests`,
+`structures`, `settlements`, `enemySettlements`, `docks`, `resourceSites`, `plots`, `roads`, and
+`barriers` are required, even when the collection is empty. `metadataLayers` is optional.
 A generated map fills `structures` with buildings, `settlements` with places, `docks` with decks,
-`resourceSites` with sites to gather at and `plots` with worked ground — though the last three are empty
-unless asked for — and leaves `barriers` empty.
+`resourceSites` with sites to gather at, `plots` with worked ground and `enemySettlements` with camps —
+though the last four are empty unless asked for — and leaves `barriers` empty.
 
 `bounds` is the size of the world in world units. Every coordinate in the map is absolute and lies
 inside it.

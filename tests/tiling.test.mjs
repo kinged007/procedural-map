@@ -46,11 +46,14 @@ test('a tile with no origin and no world is the map it always was', () => {
   // a rock face, and a mouth is carried two channel widths into the water it enters, so the channels
   // changed shape and the trees that keep off them moved with them. Stripping the placement fields
   // still strips all of that, which is what this test is for, and `terrain` is byte-identical to the
-  // build before the change.
+  // build before the change. Enemy camps moved it last, and in exactly the way resource sites and
+  // plots did: a required `enemySettlements: []` and a resolved `metadataLayers.generation.enemies`
+  // are both keys, the default of zero publishes no camp, and deleting both from this build
+  // reproduces the previous hash exactly — the same evidence that the terrain did not move.
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    'bce5dc21e8a4909f7ffb2960ff5fa831bf6aba633bf3df0bdd0aa1d04c61f9f5',
+    'abd132c68588e14117d7be1a951c2dbf12c5332531cd3c0cd207e815919f5463',
   );
 });
 

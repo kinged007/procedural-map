@@ -1783,7 +1783,19 @@ Add:
 - paths;
 - river crossing structures, on the sites v0.3 publishes;
 - barriers.
-- NEW - Enemy spawn locations, like settlements (for player), enemy settlements basically. Games will decide how to render the asset, but lets call it enemy settlements. a custom parameters to determine quantity and minimum distance from a settlement. Preferred locations would be dense forests (with a way to get out), rocky areas, remote locations, open locations, away from settlements. 
+- DONE - Enemy spawn locations, like settlements (for player), enemy settlements basically. Games will decide how to render the asset, but lets call it enemy settlements. a custom parameters to determine quantity and minimum distance from a settlement. Preferred locations would be dense forests (with a way to get out), rocky areas, remote locations, open locations, away from settlements.
+
+Shipped as `map.enemySettlements`, a site collection of its own rather than a flag on `map.settlements`:
+everything that reads a settlement assumes people live in it, so a camp in that collection would be
+handed a farm, a pier and a player spawn. A camp is a centre, a radius, a footprint and the ground it
+is on, with no buildings and no collision, and the ground is `wood`, `rock` or `open` rather than
+whatever a caller asks for. The caller's parameters are `enemies.count`, `enemies.minDistance` and
+`enemies.grounds`, the last being relative weights over the three grounds in the manner of
+`buildings.categories`. The three preferred locations are three real placements rather than one
+placement relabelled: a wood camp is inside a grove and faces a face with 16 units of clear ground
+behind it, a rock camp stands off a cliff facing away from it, and an open camp has no canopy over it
+and no facing to publish. See `plans/enemy-settlement-plan.md` for the measurements behind the
+`minDistance` default.
 
 ---
 

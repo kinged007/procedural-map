@@ -740,11 +740,58 @@ So the map is not mistaken for more than it is:
 - **No what-a-thing-is-worth.** `resourceSites` says where gathering would make sense and deliberately
   does not say what a site yields: there is no ore, no fish and no game in a `GameMap`, because the
   generator has no geology and a fantasy bolted to it is a different product. The same goes for a field,
-  which is tilled ground and not wheat.
+  which is tilled ground and not wheat, and for an `enemySettlements` camp, which is a site on the
+  ground and not a bandit camp with tents in it.
+- **No ground cut for a camp.** A `wood` camp is sited inside a grove and nothing is cleared for it.
+  A camp is a place and the consumer decides what is in it, so cutting a clearing would be the
+  generator making that decision. Remove the trees yourself, or weight `enemies.grounds` towards
+  `open`.
 - **No region naming.** Regions are numbered by size. No region has a name.
 - **No stitched world.** A map is one tile. `origin` and `world` make a tile continuous with its
   neighbours, but nothing merges two tiles into one geometry: a lake across a seam stays two polygons,
   and joining them is the consumer's step.
+
+### 8. Enemy camps
+
+`map.enemySettlements` holds enemy camps. They are `0` by default, and the reason is the same as the
+resource sites': **the map does not say who lives anywhere.** It says where a camp would be worth
+putting, and you decide what stands in it.
+
+```js
+const map = generateMap({
+  seed: 583921,
+  width: 2048,
+  height: 1536,
+  settlements: { count: 4 },
+  enemies: { count: 12, minDistance: 800, grounds: { wood: 2, rock: 1, open: 3 } },
+});
+for (const camp of map.enemySettlements) console.log(camp.metadata.ground, camp.position);
+```
+
+This is a collection of its own and not a flag on `map.settlements`, on purpose. Everything that reads
+a settlement assumes people live in it — the nav layer offers them as player spawn points, plots ring
+them with fields, farms work those fields, docks reach the water beside them — so a camp in that
+collection would be handed a farm, a pier and a player start. A camp here has none of that.
+
+A camp gives you a `position`, a `radius` of 40, a `geometry` footprint to build inside, and
+`metadata.ground`: `wood`, `rock` or `open`, read off the map rather than configured. A `wood` camp
+names the grove in `metadata.forestId` and a `rock` camp names the region in `metadata.rockId`, so
+either can be cleared, hidden behind, or drawn against; an `open` camp names nothing, because open
+ground is set into nothing. The first two carry `rotation`, the way out that was checked for 16 units
+of clear ground — put an entrance on it, or walk a character in along it. `metadata.distanceToSettlement`
+is the measured distance to the nearest town, absent on a map that publishes no settlements.
+
+`grounds` is relative draw weights, not a guaranteed mix, and a camp needs ground the map actually
+offers. A ground left out of the table keeps its default weight, so `{ wood: 1 }` is still a third each
+and asking for one ground on its own means writing `{ wood: 1, rock: 0, open: 0 }`.
+
+The count is a ceiling, and `minDistance` is the setting most likely to be why one comes up short: camps
+sit in the complement of the settlements, so a map whose towns cluster in one corner puts them in the
+other. If you get fewer than you asked for and want them closer, lower `minDistance`; if you get none on
+a rock-only setting, the map had no cliff far enough out.
+
+Clearing a wood camp's trees is yours to do. The generator does not cut a clearing for a camp, because a
+camp is a site and the consumer decides what is in it — the same reason there is no building in one.
 
 ## Debugging a map that looks wrong
 

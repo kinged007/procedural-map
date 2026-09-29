@@ -415,6 +415,7 @@ export function validateMap(data: unknown): ValidationResult {
       'settlements',
       'docks',
       'resourceSites',
+      'enemySettlements',
       'plots',
       'roads',
       'barriers',
@@ -471,6 +472,7 @@ export function validateMap(data: unknown): ValidationResult {
             collection === 'settlements' ||
             collection === 'docks' ||
             collection === 'resourceSites' ||
+            collection === 'enemySettlements' ||
             collection === 'plots';
           validator.entity(entity, `${collection}[${index}]`, bounds!, !specialized);
           if (!isRecord(entity)) return;
@@ -565,6 +567,98 @@ export function validateMap(data: unknown): ValidationResult {
               `${collection}[${index}]`,
               'must be a dock with a positive size, a deck, no collision, and a settlement and a body of water',
             );
+
+          if (
+            collection === 'enemySettlements' &&
+            (entity.type !== 'enemySettlement' ||
+              !['wood', 'rock', 'open'].includes(
+                String(isRecord(entity.metadata) ? entity.metadata.ground : ''),
+              ) ||
+              entity.collision !== undefined ||
+              !isRecord(entity.metadata) ||
+              !validator.finite(entity.radius, `${collection}[${index}].radius`) ||
+              (entity.radius as number) <= 0 ||
+              !validator.polygon(entity.geometry, `${collection}[${index}].geometry`, bounds!) ||
+              // The distance is a measurement, published so a consumer that wants its camps further
+              // off than the caller asked for reads the number rather than measuring it again. A camp
+              // on a map with no settlements has nothing to be far from, so the field is absent
+              // there; on a map with settlements, a camp without one is a camp whose distance to the
+              // nearest town is unknown, which is the one thing the field is for.
+              (settlementIds.size > 0 &&
+                (!validator.finite(
+                  entity.metadata.distanceToSettlement,
+                  `${collection}[${index}].metadata.distanceToSettlement`,
+                ) ||
+                  (entity.metadata.distanceToSettlement as number) < 0)))
+          )
+            validator.error(
+              `${collection}[${index}]`,
+              'must be a camp with a ground, a radius, a footprint, its distance from the nearest settlement where there are any, and no collision',
+            );
+
+          // A camp names the grove or the rock it is set against, so a name resolving to nothing is a
+          // camp a consumer cannot clear or hide behind. `wood` names a grove and `rock` names a
+          // region, and neither is a substitute for the other: a wood camp against a cliff is not a
+          // camp the generator placed.
+          if (collection === 'enemySettlements' && isRecord(entity.metadata)) {
+            const required = { wood: 'forestId', rock: 'rockId' } as const;
+            const ground = entity.metadata.ground as keyof typeof required | undefined;
+            const named = ground === undefined ? undefined : required[ground];
+            if (named) {
+              const other = named === 'forestId' ? 'rockId' : 'forestId';
+              if (entity.metadata[other] !== undefined)
+                validator.error(
+                  `${collection}[${index}].metadata.${other}`,
+                  `a ${ground} camp must not name a ${other.replace('Id', '')}`,
+                );
+              const value = entity.metadata[named];
+              const known = named === 'forestId' ? forestIds : rockIds;
+              if (typeof value !== 'string' || !value.length)
+                validator.error(
+                  `${collection}[${index}].metadata.${named}`,
+                  `a ${ground} camp must name the ${named.replace('Id', '')} it is set against`,
+                );
+              else if (!known.has(value))
+                validator.error(
+                  `${collection}[${index}].metadata.${named}`,
+                  named === 'forestId'
+                    ? 'must name a forest published in forests'
+                    : 'must name a rock region published in terrain',
+                );
+            }
+          }
+
+          // Open ground is set into nothing, so a camp on it names nothing. A camp carrying a grove
+          // or a cliff tells a consumer to clear trees that are not there, or to draw cover against
+          // a rock the generator never put it against.
+          if (
+            collection === 'enemySettlements' &&
+            isRecord(entity.metadata) &&
+            entity.metadata.ground === 'open'
+          )
+            for (const named of ['forestId', 'rockId'])
+              if (entity.metadata[named] !== undefined)
+                validator.error(
+                  `${collection}[${index}].metadata.${named}`,
+                  'an open camp is set into nothing and must name nothing',
+                );
+
+          // A camp set into a wood or against a cliff faces the way out, which is the run the
+          // generator checked. Open ground is set into nothing and has no out, so an arrow on it
+          // would point somewhere nobody measured, and both directions are refused.
+          if (collection === 'enemySettlements' && isRecord(entity.metadata)) {
+            const facing = entity.metadata.ground === 'wood' || entity.metadata.ground === 'rock';
+            if (facing && !validator.finite(entity.rotation, `${collection}[${index}].rotation`))
+              validator.error(
+                `${collection}[${index}].rotation`,
+                `a ${entity.metadata.ground} camp must face out of what it is set against`,
+              );
+            if (!facing && entity.rotation !== undefined)
+              validator.error(
+                `${collection}[${index}].rotation`,
+                'an open camp is set into nothing and must publish no facing',
+              );
+          }
 
           if (
             collection === 'resourceSites' &&

@@ -236,6 +236,38 @@
                   <span>No orchards</span><span>Planted rows in a field</span>
                 </div>
               </div>
+              <div class="range-field">
+                <label for="enemy-camps"
+                  >Enemy camps<output id="enemy-camps-value" for="enemy-camps">0</output></label
+                ><input id="enemy-camps" type="range" min="0" max="16" value="0" />
+                <div class="range-hints">
+                  <span>No camps</span><span>Sites kept away from every place</span>
+                </div>
+              </div>
+              <div class="weight-group">
+                <span class="field-label">Camp ground, as draw weights</span>
+                <div class="range-field">
+                  <label for="camp-wood"
+                    >Wood<output id="camp-wood-value" for="camp-wood">1</output></label
+                  ><input id="camp-wood" type="range" min="0" max="8" value="1" />
+                </div>
+                <div class="range-field">
+                  <label for="camp-rock"
+                    >Rock<output id="camp-rock-value" for="camp-rock">1</output></label
+                  ><input id="camp-rock" type="range" min="0" max="8" value="1" />
+                </div>
+                <div class="range-field">
+                  <label for="camp-open"
+                    >Open<output id="camp-open-value" for="camp-open">1</output></label
+                  ><input id="camp-open" type="range" min="0" max="8" value="1" />
+                </div>
+                <div class="range-hints">
+                  <span
+                    >A camp needs ground the map offers, so one weight alone gets only that
+                    ground</span
+                  >
+                </div>
+              </div>
               <label class="field-label" for="setback">Building setback from road (units)</label
               ><input
                 class="number-input"
@@ -375,6 +407,10 @@
             <div class="stat">
               <span class="stat-label">WORKED GROUND</span><strong id="plot-count">—</strong
               ><span class="stat-detail" id="plot-detail">fields · orchards</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">ENEMY CAMPS</span><strong id="camp-count">—</strong
+              ><span class="stat-detail" id="camp-detail">wood · rock · open</span>
             </div>
             <div class="stat">
               <span class="stat-label">WATER BODIES</span><strong id="lake-count">—</strong

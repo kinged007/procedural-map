@@ -67,10 +67,16 @@ test('generation is byte-stable for the same config', () => {
   // it: trees keep off water, roads and buildings follow the trees. The evidence that nothing else
   // did is that the lakes, the sea and the whole of `terrain` are byte-identical to the build before
   // it, and so are `docks`, `resourceSites`, `plots` and `barriers`, which are all zero here and all
-  // independent of the channels. The river count is the same six.
+  // independent of the channels. The river count is the same six. Enemy camps moved it once more, in
+  // exactly the way plots did and for the same reason: a required `enemySettlements: []` is a key on
+  // the map, and `metadataLayers.generation.enemies` is the resolved knob, so the hash reads them and
+  // the default of zero publishes no camp. Deleting those two keys from this build reproduces the
+  // previous map byte for byte — every collection, `terrain` and the rivers among them, is identical
+  // to the build before camps existed. A camp draws from a stream of its own and is a site rather
+  // than a keep-out, so nothing downstream of one could have moved even if there were camps here.
   assert.equal(
     stableHash(first),
-    '270a21ae0a3abe0f09964c41d16dffc0c7ef5eb50316ffe294adfcb2abfd30a5',
+    '2ddaa416f143dc827f850cab31649eb83de96df261f18f9111537ea87f36daf3',
   );
 });
 

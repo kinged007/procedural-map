@@ -1,4 +1,4 @@
-import type { BuildingCategory } from '../map/GameMap.js';
+import type { BuildingCategory, EnemyGround } from '../map/GameMap.js';
 
 export interface GenerationConfig {
   seed: number;
@@ -111,6 +111,35 @@ export interface GenerationConfig {
    * in it, and a default map that ploughed one would be claiming a crop it knows nothing about.
    */
   plots?: { field?: number; orchard?: number };
+  /**
+   * Enemy camps: sites the map says nothing lives in.
+   *
+   * `count` of 0 is the default, because a map says where rock ends and where a river runs, not that
+   * anyone is in either. As with every other count, a caller may ask for more than the ground
+   * supports and take what the map has, so a rock-only caller on a flat map is short rather than
+   * refused.
+   *
+   * `minDistance` is how far a camp is held from the nearest player settlement's centre, in world
+   * units. The default of 800 is three settlement radii and leaves about a quarter of the land to
+   * choose from, measured over five default maps; 600 is barely distinguishable from the approach to
+   * a village, and 1000 leaves too little for a map that has settlements of its own.
+   *
+   * It is also the setting most likely to be the reason a count comes up short, and on a map whose
+   * settlements happen to cluster it is the only one that is. Seed 7 with four settlements leaves 5%
+   * of its land 800 units from all of them, and asks for 14 camps there and gets 8; the same map
+   * publishes all 14 at a `minDistance` of 300. Camps sit in the complement of the settlements by
+   * construction, so a map with towns in one corner puts them in the other.
+   *
+   * `grounds` is how often each ground is drawn, as relative weights, and not a finished share. A
+   * camp needs ground the map actually offers, so `{ rock: 1 }` on a map with no cliff publishes
+   * none rather than putting a cave camp on a meadow. Weights tune in one place without moving the
+   * other two, the same way `buildings.categories` does.
+   */
+  enemies?: {
+    count?: number;
+    minDistance?: number;
+    grounds?: Partial<Record<EnemyGround, number>>;
+  };
 }
 
 export interface ResolvedGenerationConfig {
@@ -135,6 +164,11 @@ export interface ResolvedGenerationConfig {
   docks: { count: number };
   resources: { mine: number; fishing: number; hunting: number };
   plots: { field: number; orchard: number };
+  enemies: {
+    count: number;
+    minDistance: number;
+    grounds: Record<EnemyGround, number>;
+  };
 }
 
 export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
@@ -159,4 +193,5 @@ export const DEFAULT_CONFIG: ResolvedGenerationConfig = {
   docks: { count: 0 },
   resources: { mine: 0, fishing: 0, hunting: 0 },
   plots: { field: 0, orchard: 0 },
+  enemies: { count: 0, minDistance: 800, grounds: { wood: 1, rock: 1, open: 1 } },
 };

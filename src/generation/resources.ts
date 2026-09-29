@@ -6,7 +6,14 @@ import type {
   TerrainRegion,
   WaterRegion,
 } from '../map/GameMap.js';
-import { boundsOf, pointInPolygon, polygonArea } from '../map/geometry.js';
+import {
+  boundsOf,
+  clearRun,
+  offsetPoint as offset,
+  outwardFaces,
+  pointInPolygon,
+  polygonArea,
+} from '../map/geometry.js';
 import { distance } from './ribbon.js';
 
 /**
@@ -78,12 +85,6 @@ const SPACING = 24;
 
 /** How often a rock face is sampled along its outline, in world units. */
 const SAMPLE_STEP = 8;
-
-/** A point on a polygon's outline, and a direction that leads out of it. */
-interface Face {
-  at: Point;
-  outward: Point;
-}
 
 /** How often open water is sampled, in world units. Finer than `SPACING`, so a body is not skipped. */
 const WATER_STEP = 16;
@@ -342,66 +343,4 @@ function gapToShore(point: Point, body: WaterRegion): number {
 /** Whether a point is in any body of water. */
 function inWater(point: Point, water: WaterRegion[]): boolean {
   return water.some((body) => pointInPolygon(point, body.geometry));
-}
-
-function offset(point: Point, direction: Point, by: number): Point {
-  return { x: point.x + direction.x * by, y: point.y + direction.y * by };
-}
-
-/**
- * How far out along `normal` the ground stays clear of `blocked`, capped at `reach`.
- *
- * This is the length of the clear run, not the first clear step, and the difference is the whole
- * point. A first-clear-step test accepts a face with four units of daylight and then a wall, so the
- * arrow points out of a grove and into the wood next door, which is the case this was written to
- * stop. A caller that needs the full reach asks for it by comparing the result with `reach`.
- */
-function clearRun(
-  at: Point,
-  normal: Point,
-  blocked: (at: Point) => boolean,
-  reach: number,
-): number {
-  let clear = 0;
-  for (let step = 4; step <= reach; step += 4)
-    if (blocked(offset(at, normal, step))) break;
-    else clear = step;
-  return clear;
-}
-
-/**
- * Points along a polygon's outline, each with a direction that leads out of it.
- *
- * The direction out is a perpendicular to the outline there, which is the normal. A polygon's own
- * vertices are too coarse to aim at: a contour vertex can be a hundred units from its neighbours, and
- * the stretch between two of them is the edge a character would stand at.
- *
- * A sample yields one face where only one perpendicular leaves the polygon, which is every sample of a
- * convex hull, and two where the outline is concave enough that both do. Both are real directions out
- * and the caller takes whichever clears, so neither is guessed at. A notch, where the polygon wraps
- * round three sides and neither perpendicular leads anywhere, yields nothing.
- */
-function* outwardFaces(geometry: PolygonGeometry, step: number): Generator<Face> {
-  for (const ring of [geometry.points, ...(geometry.holes ?? [])])
-    for (let index = 0; index < ring.length; index += 1) {
-      const a = ring[index];
-      const b = ring[index + 1 === ring.length ? 0 : index + 1];
-      const span = Math.hypot(b.x - a.x, b.y - a.y);
-      if (span < step) continue;
-      const count = Math.floor(span / step);
-      const tangent = { x: (b.x - a.x) / span, y: (b.y - a.y) / span };
-      for (let n = 0; n < count; n += 1) {
-        // The middle of the sub-segment, never its start. A sample on a vertex is not on an edge in
-        // any useful sense: the two normals there belong to the two edges meeting at it, and stepping
-        // back along one of them at a sharp angle leaves the polygon instead of entering it, which
-        // put a mark outside the very hull it named.
-        const t = (n + 0.5) / count;
-        const at = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-        for (const outward of [
-          { x: -tangent.y, y: tangent.x },
-          { x: tangent.y, y: -tangent.x },
-        ])
-          if (!pointInPolygon(offset(at, outward, 3), geometry)) yield { at, outward };
-      }
-    }
 }

@@ -515,6 +515,58 @@ asked for rather than a different set because a number moved, and neither draws 
 stream, so nothing else on the map moves. The cost is a flat array walk and nothing more at the default
 of zero; at 64 of each on a 2048 by 1536 map it is about 7% of generation time.
 
+## Enemy camps
+
+An enemy camp is a site on the ground and nothing else, published in an `enemySettlements` collection.
+It is a collection of its own rather than a flag on `settlements` because everything that reads a
+settlement assumes people live in it: the nav layer offers them as player spawn points, plots ring them
+with fields, farms work those fields, and docks reach the water beside them. A camp carries a centre, a
+40-unit radius, a footprint to build inside, and the ground it is on. No buildings, because the PRD
+leaves the asset to the game, and a camp published as tents would be the same fantasy claim a mine-as-
+iron is. No collision, for the reason a plot and a dock carry none: a camp is a place, and a place is
+not an obstacle until something is built in it.
+
+`enemies.count` defaults to `0`, for the same reason every other count in the file that needs a world
+to mean something does: a map says where rock ends and where a river runs, not that anyone is in
+either.
+
+**The ground is derived, and the weights are the caller's.** `metadata.ground` is `wood`, `rock` or
+`open`, read off the map rather than configured, the way a settlement's `kind` is read off its
+membership. `enemies.grounds` weights the three as draw rates rather than as a finished share, in the
+manner of `buildings.categories`, because whether a game camps in woods or in clearings is the same
+decision as which buildings a road gets built on. A ground left out of the table keeps its default
+weight, so asking for one ground on its own means zeroing the other two.
+
+The three are three placements, not one placement relabelled. A **wood camp** sits 12 units inside a
+grove's hull, on a face with 16 units of clear ground behind it, and every neighbouring grove blocks that
+run — the same rule a hunting site follows, for the same reason: two hulls a stride apart are one wood
+to a character standing between them. It needs 20 trees and `walkableInside`, the same floor a hunting
+site uses, so a camp is never in a copse. A **rock camp** stands 4 units off a cliff on the side the
+face points to, with the cliff behind it. An **open camp** is on open ground with no grove hull over it
+and no canopy within a radius of it — the same `radius + 1` test trees are kept off beaches with — and
+it publishes no `rotation`, because open ground is set into nothing and there is no out of it. A
+`wood` and a `rock` camp both carry `rotation`, and it is the direction whose 16-unit run was checked.
+
+**The whole footprint is tested against water, not only its centre.** A centre on dry ground says
+nothing about the 40 units around it: over the reference map a third of camps had a shore running
+through their own ground, and a consumer building inside the footprint it was handed would have put a
+tent in a lake. This is the same trap a plot fell into with a river. Rock is deliberately not tested,
+because a camp sited at the foot of a cliff with the cliff behind it is using the rock as cover, and a
+cliff is a backdrop rather than a hole.
+
+**`enemies.minDistance` is the setting most likely to be why a count comes up short.** It defaults to
+800, three settlement radii, measured over five default maps: land is 59% open, 35% wood and 5.4% rock,
+the median point is 560 units from the nearest town, and 800 leaves 24% of the land to choose from
+where 600 leaves 45% and is barely distinguishable from the approach to a village. Camps sit in the
+complement of the settlements by construction, so a map whose towns cluster puts them in the other
+corner: seed 7 with four settlements leaves 5% of its land 800 units from all of them, asks for 14 camps
+and publishes 8, and the same map publishes all 14 at 300. A map with no settlements has nothing to be
+far from, so the rule does not apply and `metadata.distanceToSettlement` is absent rather than a
+distance of infinity, which is not a number a map can carry through JSON.
+
+Camps draw from a stream keyed apart from every other, so adding camps to a map a caller has already
+tuned moves no tree, no road and no building. The cost at the default of zero is one comparison.
+
 ## Plots
 
 A plot is a piece of ground a settlement works, published in a `plots` collection as a `field` or an

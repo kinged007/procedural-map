@@ -28,6 +28,7 @@ export const gameMapSchema = {
     'settlements',
     'docks',
     'resourceSites',
+    'enemySettlements',
     'plots',
     'roads',
     'barriers',
@@ -44,6 +45,7 @@ export const gameMapSchema = {
     settlements: { type: 'array', items: { $ref: '#/$defs/settlement' } },
     docks: { type: 'array', items: { $ref: '#/$defs/dock' } },
     resourceSites: { type: 'array', items: { $ref: '#/$defs/resourceSite' } },
+    enemySettlements: { type: 'array', items: { $ref: '#/$defs/enemySettlement' } },
     plots: { type: 'array', items: { $ref: '#/$defs/groundPlot' } },
     roads: { type: 'array', items: { $ref: '#/$defs/road' } },
     barriers: { type: 'array', items: { $ref: '#/$defs/entity' } },
@@ -321,6 +323,93 @@ export const gameMapSchema = {
           ],
           // A site is a mark on the ground, not an obstacle, so it carries no collision. The same
           // reason a forest hull, a settlement and a dock carry none.
+          not: { required: ['collision'] },
+        },
+      ],
+    },
+    enemySettlement: {
+      allOf: [
+        { $ref: '#/$defs/entity' },
+        {
+          type: 'object',
+          required: ['type', 'position', 'radius', 'geometry', 'metadata'],
+          properties: {
+            type: { const: 'enemySettlement' },
+            radius: { type: 'number', exclusiveMinimum: 0 },
+            geometry: { $ref: '#/$defs/polygon' },
+            rotation: { type: 'number' },
+            metadata: {
+              type: 'object',
+              required: ['ground'],
+              properties: {
+                ground: { enum: ['wood', 'rock', 'open'] },
+                distanceToSettlement: { type: 'number', minimum: 0 },
+                forestId: { type: 'string', minLength: 1 },
+                rockId: { type: 'string', minLength: 1 },
+              },
+              additionalProperties: { $ref: '#/$defs/jsonValue' },
+            },
+          },
+          allOf: [
+            {
+              // A camp set into a wood or against a cliff has to say which way is out of it, which is
+              // the direction the generator checked for a clear run. An open camp is set into
+              // nothing and has no out, so an arrow on it would point somewhere nobody measured, and
+              // both directions are refused rather than left unchecked.
+              if: {
+                anyOf: [
+                  {
+                    properties: { metadata: { properties: { ground: { const: 'wood' } } } },
+                    required: ['metadata'],
+                  },
+                  {
+                    properties: { metadata: { properties: { ground: { const: 'rock' } } } },
+                    required: ['metadata'],
+                  },
+                ],
+              },
+              then: { required: ['rotation'] },
+              else: { properties: { not: { required: ['rotation'] } } },
+            },
+            {
+              // A camp names the ground it is on, and each ground that is set against something has
+              // one thing it is set against. A name resolving to nothing is a camp a consumer cannot
+              // clear or hide behind, and a camp naming both a grove and a cliff is a camp the
+              // generator never placed.
+              if: {
+                properties: { metadata: { properties: { ground: { const: 'wood' } } } },
+                required: ['metadata'],
+              },
+              then: {
+                properties: { metadata: { required: ['forestId'], not: { required: ['rockId'] } } },
+              },
+            },
+            {
+              if: {
+                properties: { metadata: { properties: { ground: { const: 'rock' } } } },
+                required: ['metadata'],
+              },
+              then: {
+                properties: { metadata: { required: ['rockId'], not: { required: ['forestId'] } } },
+              },
+            },
+            {
+              // Open ground is set into nothing, so a camp on it names nothing.
+              if: {
+                properties: { metadata: { properties: { ground: { const: 'open' } } } },
+                required: ['metadata'],
+              },
+              then: {
+                properties: {
+                  metadata: {
+                    not: { anyOf: [{ required: ['forestId'] }, { required: ['rockId'] }] },
+                  },
+                },
+              },
+            },
+          ],
+          // A camp is a place, not an obstacle, and the same for a plot, a dock and a forest hull.
+          // Nothing blocks until a consumer builds something inside the footprint it published.
           not: { required: ['collision'] },
         },
       ],

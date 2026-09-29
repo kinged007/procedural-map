@@ -81,6 +81,28 @@ with no carve — the difference from a dock deck, where the deck is the thing t
 written into the grid after the blockers. `generatePlots` runs after everything exists, to resolve each
 plot's `settlementId` and the tree ids that survived.
 
+## Enemy camps
+
+`generation/enemies.ts` runs last of all, after the forests have been measured and the settlements
+published, because a camp is a site on ground the rest of the map has already decided: a wood camp needs
+a grove that reports `walkableInside`, and every camp needs the settlements to be far from. It is a
+separate collection from `settlements` rather than a flag on it, and that is the whole design: every
+consumer of `map.settlements` — the nav layer's spawn candidates, plot and farm placement, dock
+attachment — assumes people live there, so a camp in that collection would be handed a farm, a pier and
+a player start. A second collection makes those conditions not exist instead of conditions to write.
+
+The three grounds are three placements rather than one placement relabelled. A wood camp sits 12 units
+inside a grove's hull on a face that has 16 units of clear ground behind it, and every neighbouring
+grove blocks that run, because two hulls a few units apart are one wood to a character standing between
+them. A rock camp stands 4 units off a cliff on the side the face points to. An open camp is on open
+ground with no grove hull over it and no canopy within a radius, and it publishes no `rotation` because
+open ground is set into nothing and has no out.
+
+The whole footprint is tested against water rather than only its centre, which is the same trap a plot
+fell into with a river: over the reference map a third of camps had a shore running through their own
+ground. Rock is deliberately not tested, because a camp sited at the foot of a cliff with the cliff
+behind it is using the rock as cover, and a cliff is a backdrop rather than a hole.
+
 ## Walkability
 
 `navigation` is the only module that turns map geometry into something a game can read per frame. It

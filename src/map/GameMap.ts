@@ -294,6 +294,59 @@ export interface ResourceSiteEntity extends MapEntity {
   };
 }
 
+/**
+ * The ground an enemy settlement is sited on, named by what the map offers there.
+ *
+ * A player settlement is placed on the road network and a resource site is placed in the rock, the
+ * water or the wood that makes it worth the walk. An enemy settlement has no such anchor, because a
+ * camp is not where anything is — it is where someone chose to stop. So the ground it is on is the
+ * one thing that describes it, and it is read off the map rather than configured, the way
+ * `SettlementEntity.kind` is read off its membership rather than asked for.
+ */
+export type EnemyGround = 'wood' | 'rock' | 'open';
+
+export interface EnemySettlementEntity extends MapEntity {
+  type: 'enemySettlement';
+  /** The middle of the camp. */
+  position: Point;
+  /**
+   * How far the camp reaches from its centre, in world units. It is the ground a consumer may build
+   * on, not a wall: the entity carries no `collision`, for the same reason a plot and a dock carry
+   * none, because a camp is a place and a place is not an obstacle.
+   */
+  radius: number;
+  /** The camp's footprint, which a consumer may build inside or test against. */
+  geometry: PolygonGeometry;
+  /**
+   * Radians, and required on a `wood` or `rock` camp: each is set against something and has to say
+   * which way is out of it. A wood camp sits just inside the hull it is in and faces the open ground
+   * it was reached across, and a rock camp stands off a cliff and faces the same way, so a consumer
+   * placing an entrance or walking a character in knows where from without testing the map.
+   *
+   * An `open` camp has nothing set into and publishes none, the same way a fishing spot has no
+   * facing: there is no out of open ground, and an arrow on it would point at a direction the
+   * generator never checked.
+   */
+  rotation?: number;
+  metadata: {
+    /** The ground the camp is on. Derived from the map, never configured. */
+    ground: EnemyGround;
+    /**
+     * How far the camp is from the nearest player settlement's centre, in world units. Measured, not
+     * configured, so a consumer that wants its camps further off than the caller asked for reads the
+     * number rather than having to measure it again.
+     *
+     * Absent on a map that publishes no settlements. There is nothing there to be far from, and the
+     * alternative is a distance of infinity, which is not a number a map can carry through JSON.
+     */
+    distanceToSettlement?: number;
+    /** The grove a `wood` camp stands in, which a consumer can clear or hide behind. */
+    forestId?: string;
+    /** The rock region a `rock` camp stands against, which is what gives the camp its cover. */
+    rockId?: string;
+  };
+}
+
 export interface SpatialFields {
   columns: number;
   rows: number;
@@ -390,6 +443,17 @@ export interface GameMap {
   forests: ForestEntity[];
   structures: BuildingEntity[];
   settlements: SettlementEntity[];
+  /**
+   * Enemy camps: places the map says nothing lives in.
+   *
+   * A separate collection from `settlements`, and not a flag on them, because everything that reads
+   * `settlements` assumes people live there: the nav layer offers them as player spawn points, plots
+   * ring them with fields, farms work those fields, and docks reach the water beside them. An enemy
+   * camp in that collection would be handed a farm, a pier and a player start. Here it is a site on
+   * the ground with no buildings, which is the only thing a generator without a fantasy can honestly
+   * publish about a camp.
+   */
+  enemySettlements: EnemySettlementEntity[];
   docks: DockEntity[];
   resourceSites: ResourceSiteEntity[];
   plots: GroundPlotEntity[];

@@ -106,3 +106,72 @@ export function polygonArea(geometry: PolygonGeometry): number {
     (geometry.holes ?? []).reduce((area, hole) => area + Math.abs(ringArea(hole)), 0)
   );
 }
+
+export function offsetPoint(point: Point, direction: Point, distance: number): Point {
+  return { x: point.x + direction.x * distance, y: point.y + direction.y * distance };
+}
+
+/**
+ * A polygon's outline, as one sample per `step` units with the outward normal of each.
+ *
+ * The direction out is a perpendicular to the outline there, which is the normal. A polygon's own
+ * vertices are too coarse to aim at: a contour vertex can be a hundred units from its neighbours, and
+ * the stretch between two of them is the edge a character would stand at.
+ *
+ * Samples sit in the interior of each segment, never on a vertex. A sample on a vertex is on the
+ * boundary of two segments rather than inside one, the two normals there belong to the two edges
+ * meeting at it, and stepping back along one at a sharp angle leaves the polygon instead of entering
+ * it. The outward direction is confirmed against the polygon rather than taken from the winding
+ * order, so a ring wound either way reports the same way out.
+ *
+ * A sample yields one face where only one perpendicular leaves the polygon, which is every sample of
+ * a convex hull, and two where the outline is concave enough that both do. Both are real directions
+ * out and the caller takes whichever clears, so neither is guessed at. A notch, where the polygon
+ * wraps round three sides and neither perpendicular leads anywhere, yields nothing.
+ */
+export function* outwardFaces(
+  geometry: PolygonGeometry,
+  step: number,
+): Generator<{ at: Point; outward: Point }> {
+  for (const ring of [geometry.points, ...(geometry.holes ?? [])])
+    for (let index = 0; index < ring.length; index += 1) {
+      const a = ring[index];
+      const b = ring[index + 1 === ring.length ? 0 : index + 1];
+      const span = Math.hypot(b.x - a.x, b.y - a.y);
+      if (span < step) continue;
+      const count = Math.floor(span / step);
+      const tangent = { x: (b.x - a.x) / span, y: (b.y - a.y) / span };
+      for (let n = 0; n < count; n += 1) {
+        const t = (n + 0.5) / count;
+        const at = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        for (const outward of [
+          { x: -tangent.y, y: tangent.x },
+          { x: tangent.y, y: -tangent.x },
+        ])
+          if (!pointInPolygon(offsetPoint(at, outward, 3), geometry)) yield { at, outward };
+      }
+    }
+}
+
+/**
+ * How far a character can walk from `at` along `normal` before `blocked` stops them, measured in
+ * 4-unit steps.
+ *
+ * The whole run is measured, not the first step. A first-step test accepts a face with four units of
+ * daylight and then a wall, so an arrow points out of a grove and into the wood next door, and a
+ * caller that is told the site is reachable sends a character somewhere they cannot leave. The
+ * comparison is `reach === wanted`; a run that stops short is a different answer from a clear one.
+ */
+export function clearRun(
+  at: Point,
+  normal: Point,
+  blocked: (at: Point) => boolean,
+  reach: number,
+): number {
+  let clear = 0;
+  for (let step = 4; step <= reach; step += 4) {
+    if (blocked(offsetPoint(at, normal, step))) break;
+    clear = step;
+  }
+  return clear;
+}

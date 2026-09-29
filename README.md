@@ -98,33 +98,36 @@ own size, and a single-tile map is unchanged.
 
 Every knob, with the value used when it is left out:
 
-| Option                  | Default                 | What it changes                                                                                                                                                                                          |
-| ----------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `seed`                  | `583921`                | The whole map. The same seed and the same config always produce the same map.                                                                                                                            |
-| `width`, `height`       | `2048`, `1536`          | Tile size, up to 4096 by 4096.                                                                                                                                                                           |
-| `origin`                | `{ x: 0, y: 0 }`        | Where this tile sits in its world.                                                                                                                                                                       |
-| `world`                 | tile size               | The world's size. Defaults to the tile, which is a world of one.                                                                                                                                         |
-| `terrain.variation`     | `0.35`                  | How strongly the terrain field swings between its highs and lows, which is what decides where the meadow, scrub, and rock boundaries fall. It does not change how much water there is.                   |
-| `terrain.scale`         | `0.004`                 | How large the patches of meadow, scrub, and forest are. Smaller is broader country, and far fewer trees. It does not move the coastline or the rock.                                                     |
-| `water.amount`          | `0.2`                   | How much of the map is below the waterline. `1` is all water, `0` none.                                                                                                                                  |
-| `water.scale`           | `0.003`                 | Despite the name, this is the scale of the **elevation** field, so it sets the size of the landforms and, with them, the size of the lakes and the extent of the rock. Larger is more, smaller features. |
-| `vegetation.density`    | `0.65`                  | How many trees. `0` is bare ground.                                                                                                                                                                      |
-| `vegetation.clustering` | `0.8`                   | How much the trees clump into groves rather than spreading evenly.                                                                                                                                       |
-| `roads.density`         | `0.5`                   | How many roads, and how far a tier reaches.                                                                                                                                                              |
-| `rivers.density`        | `1`                     | How many rivers. `0` publishes none at all, for a map whose water is only standing.                                                                                                                      |
-| `rivers.width`          | `12`                    | Channel width in world units, which also sets the span recorded at a road crossing.                                                                                                                      |
-| `buildings.density`     | `0.5`                   | The chance a site offered by a road is built on. `0` publishes no buildings.                                                                                                                             |
-| `buildings.spacing`     | `34`                    | Smallest gap between two buildings, centre to centre, measured across the whole map.                                                                                                                     |
-| `buildings.setback`     | `16`                    | How far a building's front wall stands off the road centreline. A farm sets its own.                                                                                                                     |
-| `buildings.ruin`        | `0`                     | Share of buildings that have fallen down, `0` to `1`. A ruin keeps its footprint and stops being a wall. `0` is no opinion on how a building looks.                                                      |
-| `buildings.categories`  | `{ house: 8, farm: 1 }` | Relative weights over what a road gets built on. A weight of `0` is never placed, and a name the generator cannot place is rejected.                                                                     |
-| `settlements.count`     | `2`                     | How many settlements the map has. A map with no roads publishes none, whatever this is set to.                                                                                                           |
-| `docks.count`           | `0`                     | How many plank decks reach out over the water. A dock is a settlement's waterfront, so a map with no settlements publishes none, and `0` is a map of no harbours.                                        |
-| `resources.mine`        | `0`                     | Upper bound on mine sites cut into rock faces. A face is only offered if the ground in front of it is open, and a map with no rock publishes none.                                                       |
-| `resources.fishing`     | `0`                     | Upper bound on fishing spots in the water. Only bodies of 20,000 square units or more are fished, so a map of ponds publishes none.                                                                      |
-| `resources.hunting`     | `0`                     | Upper bound on huntable woods. A grove needs 20 trees and open ground inside it, which a default map holds 16 to 23 times.                                                                               |
-| `plots.field`           | `0`                     | Upper bound on fields worked around the settlements. A plot is ground a place reaches, and nothing is ploughed until a game says what a field yields.                                                    |
-| `plots.orchard`         | `0`                     | Upper bound on orchards. An orchard is a field with rows of real trees standing in it, and those trees block, so an orchard is walkable between the rows and not through them.                           |
+| Option                  | Default                         | What it changes                                                                                                                                                                                          |
+| ----------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `seed`                  | `583921`                        | The whole map. The same seed and the same config always produce the same map.                                                                                                                            |
+| `width`, `height`       | `2048`, `1536`                  | Tile size, up to 4096 by 4096.                                                                                                                                                                           |
+| `origin`                | `{ x: 0, y: 0 }`                | Where this tile sits in its world.                                                                                                                                                                       |
+| `world`                 | tile size                       | The world's size. Defaults to the tile, which is a world of one.                                                                                                                                         |
+| `terrain.variation`     | `0.35`                          | How strongly the terrain field swings between its highs and lows, which is what decides where the meadow, scrub, and rock boundaries fall. It does not change how much water there is.                   |
+| `terrain.scale`         | `0.004`                         | How large the patches of meadow, scrub, and forest are. Smaller is broader country, and far fewer trees. It does not move the coastline or the rock.                                                     |
+| `water.amount`          | `0.2`                           | How much of the map is below the waterline. `1` is all water, `0` none.                                                                                                                                  |
+| `water.scale`           | `0.003`                         | Despite the name, this is the scale of the **elevation** field, so it sets the size of the landforms and, with them, the size of the lakes and the extent of the rock. Larger is more, smaller features. |
+| `vegetation.density`    | `0.65`                          | How many trees. `0` is bare ground.                                                                                                                                                                      |
+| `vegetation.clustering` | `0.8`                           | How much the trees clump into groves rather than spreading evenly.                                                                                                                                       |
+| `roads.density`         | `0.5`                           | How many roads, and how far a tier reaches.                                                                                                                                                              |
+| `rivers.density`        | `1`                             | How many rivers. `0` publishes none at all, for a map whose water is only standing.                                                                                                                      |
+| `rivers.width`          | `12`                            | Channel width in world units, which also sets the span recorded at a road crossing.                                                                                                                      |
+| `buildings.density`     | `0.5`                           | The chance a site offered by a road is built on. `0` publishes no buildings.                                                                                                                             |
+| `buildings.spacing`     | `34`                            | Smallest gap between two buildings, centre to centre, measured across the whole map.                                                                                                                     |
+| `buildings.setback`     | `16`                            | How far a building's front wall stands off the road centreline. A farm sets its own.                                                                                                                     |
+| `buildings.ruin`        | `0`                             | Share of buildings that have fallen down, `0` to `1`. A ruin keeps its footprint and stops being a wall. `0` is no opinion on how a building looks.                                                      |
+| `buildings.categories`  | `{ house: 8, farm: 1 }`         | Relative weights over what a road gets built on. A weight of `0` is never placed, and a name the generator cannot place is rejected.                                                                     |
+| `settlements.count`     | `2`                             | How many settlements the map has. A map with no roads publishes none, whatever this is set to.                                                                                                           |
+| `docks.count`           | `0`                             | How many plank decks reach out over the water. A dock is a settlement's waterfront, so a map with no settlements publishes none, and `0` is a map of no harbours.                                        |
+| `resources.mine`        | `0`                             | Upper bound on mine sites cut into rock faces. A face is only offered if the ground in front of it is open, and a map with no rock publishes none.                                                       |
+| `resources.fishing`     | `0`                             | Upper bound on fishing spots in the water. Only bodies of 20,000 square units or more are fished, so a map of ponds publishes none.                                                                      |
+| `resources.hunting`     | `0`                             | Upper bound on huntable woods. A grove needs 20 trees and open ground inside it, which a default map holds 16 to 23 times.                                                                               |
+| `plots.field`           | `0`                             | Upper bound on fields worked around the settlements. A plot is ground a place reaches, and nothing is ploughed until a game says what a field yields.                                                    |
+| `plots.orchard`         | `0`                             | Upper bound on orchards. An orchard is a field with rows of real trees standing in it, and those trees block, so an orchard is walkable between the rows and not through them.                           |
+| `enemies.count`         | `0`                             | Upper bound on enemy camps. A camp is a site on the ground with no buildings in it, and `0` is a map that says nothing about who lives anywhere.                                                         |
+| `enemies.minDistance`   | `800`                           | How far a camp is held from the nearest settlement's centre, in world units. A map with no settlements has nothing to be far from, so the rule does not apply there.                                     |
+| `enemies.grounds`       | `{ wood: 1, rock: 1, open: 1 }` | Relative weights over which ground a camp is sited on. A camp needs ground the map actually offers, so a weight of `1` alone gets only that ground and nothing else.                                     |
 
 Values outside a knob's range are rejected at the boundary rather than clamped silently.
 
@@ -208,6 +211,26 @@ rectangle is refused one, not only its middle and corners — and a plot is neve
 trees are kept off it by more than the distance groves group over, so no `forests` hull spans one either.
 An orchard's rows form a grove of their own with `species: 'orchard'`, never mixed with the wood beside
 them.
+
+`map.enemySettlements` holds enemy camps, and it is a collection of its own rather than a flag on
+`map.settlements` because everything that reads `settlements` assumes people live there: the nav layer
+offers them as player spawn points, plots ring them with fields, farms work those fields, and docks
+reach the water beside them. A camp carries none of that. It is a centre, a 40-unit radius, a
+footprint to build inside, and the ground it is on — `wood`, `rock` or `open`, derived from the map
+rather than configured. It has no buildings and no collision, so a camp is a place and not an obstacle
+until you build something in it. A `wood` camp sits just inside a grove and names it in
+`metadata.forestId`, a `rock` camp stands off a cliff and names it in `metadata.rockId`, and an `open`
+camp is on open ground with no canopy over it. The first two carry `rotation`, the way out that was
+checked for a clear 16-unit run; an `open` camp has nothing set into it and publishes none.
+`metadata.distanceToSettlement` is the measured distance to the nearest town, and is absent on a map
+that publishes no settlements, since there is nothing there to be far from.
+
+The count is a ceiling rather than a promise, and the setting most likely to be the reason one comes up
+short is `enemies.minDistance`: camps sit in the complement of the settlements, so a map whose towns
+cluster in one corner puts them in the other. Seed 7 with four settlements leaves 5% of its land 800
+units from all of them, asks for 14 camps and publishes 8; the same map publishes 14 at a
+`minDistance` of 300. A whole footprint is checked rather than only its centre, so a camp is never
+published with a shore running through its own ground.
 
 A `farm` building is placed in a field rather than along a road, because a farm is the building that
 works a field. It stands hard against the end of the field nearest the settlement, facing out over the

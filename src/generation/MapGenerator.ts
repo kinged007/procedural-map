@@ -1,5 +1,7 @@
 import type {
   BuildingCategory,
+  EnemyGround,
+  EnemySettlementEntity,
   ForestEntity,
   GameMap,
   PolygonGeometry,
@@ -14,6 +16,7 @@ import { assertValidMap } from '../validation/MapValidator.js';
 import { generateBuildings, CATEGORIES } from './buildings.js';
 import { gridToEdgePolygons } from './contours.js';
 import { generateDocks } from './docks.js';
+import { generateEnemySettlements } from './enemies.js';
 import { generateResourceSites } from './resources.js';
 import { generateForests, markWalkableInside } from './forests.js';
 import { generatePlots, plotKeepOut, plotSites } from './plots.js';
@@ -33,6 +36,9 @@ import {
  * beside it, so a trunk is not placed where its canopy would hang over the verge.
  */
 const ROAD_CLEARANCE = 3;
+
+/** The grounds a camp can be sited on, in the order a caller's weights are listed. */
+const ENEMY_GROUNDS: EnemyGround[] = ['wood', 'rock', 'open'];
 
 const MIN_DIMENSION = 128;
 const MAX_DIMENSION = 4096;
@@ -148,34 +154,33 @@ function resolveCount(
 }
 
 /**
- * The caller's category weights, filled in from the defaults and checked.
+ * A set of caller-supplied weights, filled in from the defaults and checked.
  *
- * A name with no footprint is rejected rather than dropped. A weight the generator cannot honour is
- * a setting that appears to do something and does not, and a caller who has misspelled `house` is
- * better served by a throw than by a map of farms. A category left out of the table keeps the default
- * weight, so asking to reweight one does not silently drop the other.
+ * A name with no meaning to the generator is rejected rather than dropped. A weight the generator
+ * cannot honour is a setting that appears to do something and does not, and a caller who has
+ * misspelled `house` is better served by a throw than by a map of farms. A name left out of the table
+ * keeps the default weight, so asking to reweight one does not silently drop the other.
+ *
+ * The two callers are the building categories and the grounds an enemy camp is sited on, which are
+ * the same decision — the generator draws, the caller weights — differing only in what a name refers
+ * to, so they share one check rather than two that drift apart.
  */
-function resolveCategories(
-  weights: Partial<Record<BuildingCategory, number>> | undefined,
-): Record<BuildingCategory, number> {
-  const resolved = { ...DEFAULT_CONFIG.buildings.categories };
-  for (const [name, weight] of Object.entries(weights ?? {})) {
-    if (!(name in CATEGORIES))
-      throw new RangeError(
-        `buildings.categories.${name} is not a building the generator can place: ${Object.keys(CATEGORIES).join(', ')}`,
-      );
-    resolved[name as BuildingCategory] = resolveNumber(
-      weight,
-      0,
-      `buildings.categories.${name}`,
-      0,
-      Number.MAX_SAFE_INTEGER,
-    );
+function resolveWeights<T extends string>(
+  weights: Partial<Record<T, number>> | undefined,
+  names: readonly T[],
+  fallback: Record<T, number>,
+  label: string,
+  subject: string,
+  unit: string,
+): Record<T, number> {
+  const resolved = { ...fallback };
+  for (const [name, weight] of Object.entries(weights ?? {}) as [string, number][]) {
+    if (!(names as readonly string[]).includes(name))
+      throw new RangeError(`${label}.${name} is not ${subject}: ${names.join(', ')}`);
+    resolved[name as T] = resolveNumber(weight, 0, `${label}.${name}`, 0, Number.MAX_SAFE_INTEGER);
   }
-  if (Object.values(resolved).every((weight) => weight <= 0))
-    throw new RangeError(
-      'buildings.categories must give at least one category a weight above zero',
-    );
+  if (Object.values(resolved as Record<string, number>).every((weight) => weight <= 0))
+    throw new RangeError(`${label} must give at least one ${unit} a weight above zero`);
   return resolved;
 }
 
@@ -337,7 +342,14 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         0,
         1,
       ),
-      categories: resolveCategories(config.buildings?.categories),
+      categories: resolveWeights(
+        config.buildings?.categories,
+        Object.keys(CATEGORIES) as BuildingCategory[],
+        DEFAULT_CONFIG.buildings.categories,
+        'buildings.categories',
+        'a building the generator can place',
+        'category',
+      ),
     },
     settlements: {
       // A count, not a density: a caller asking for four settlements wants four, and a map with no
@@ -386,6 +398,29 @@ export function resolveGenerationConfig(config: GenerationConfig): ResolvedGener
         DEFAULT_CONFIG.plots.orchard,
         'plots.orchard',
         64,
+      ),
+    },
+    enemies: {
+      // A count, and an upper bound rather than a promise for the same reason the resource counts
+      // are: the grounds offer a camp unevenly, and a caller who asks for eight rock camps on a map
+      // with two cliff faces takes the two.
+      count: resolveCount(config.enemies?.count, DEFAULT_CONFIG.enemies.count, 'enemies.count', 64),
+      // A distance in world units, so it is bounded by the map rather than by 64. Zero is allowed and
+      // means a camp may stand on top of a town, which is a caller's decision and a real one.
+      minDistance: resolveNumber(
+        config.enemies?.minDistance,
+        DEFAULT_CONFIG.enemies.minDistance,
+        'enemies.minDistance',
+        0,
+        Number.MAX_SAFE_INTEGER,
+      ),
+      grounds: resolveWeights(
+        config.enemies?.grounds,
+        ENEMY_GROUNDS,
+        DEFAULT_CONFIG.enemies.grounds,
+        'enemies.grounds',
+        'ground the generator can site a camp on',
+        'ground',
       ),
     },
   };
@@ -844,6 +879,8 @@ export function generateMap(config: GenerationConfig): GameMap {
     forests,
     structures,
     settlements,
+    // Filled in below, once the map exists, along with the resource sites.
+    enemySettlements: [] as EnemySettlementEntity[],
     docks,
     // Filled in below, once the map exists. A site is a question about the finished ground, so it is
     // asked of the finished map rather than of the collections as they are assembled.
@@ -868,6 +905,12 @@ export function generateMap(config: GenerationConfig): GameMap {
     mine: () => mineRandom.next(),
     fishing: () => fishRandom.next(),
   });
+  // Camps come last of all, because a camp is a site on ground the rest of the map has already
+  // decided: it needs the forests measured for walkable interiors and the settlements published to be
+  // far from. Its own stream is keyed apart from every other, so a caller tuning a camp count cannot
+  // move a single tree, road or building.
+  const campRandom = new Random(placement ^ 0x5ab3e7);
+  map.enemySettlements = generateEnemySettlements(map, resolved.enemies, () => campRandom.next());
   assertValidMap(map);
   return map;
 }

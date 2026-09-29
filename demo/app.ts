@@ -49,8 +49,17 @@ const ranges = [
   'hunting',
   'field',
   'orchard',
+  'enemy-camps',
+  // The camp grounds are ranges rather than the number boxes the building weights use, because a
+  // weight is usually either off, on, or somewhere between and a slider says that faster. They are
+  // here rather than left out because the loop is what writes their badge and their track fill, and a
+  // slider outside it is a slider that looks live and does nothing.
+  'camp-wood',
+  'camp-rock',
+  'camp-open',
 ] as const;
-// The ranges that are a count in world units rather than a percentage, so they read as a number.
+// The ranges that are a count or a weight in world units rather than a percentage, so they read as a
+// number.
 const unitRanges = new Set([
   'spacing',
   'settlements',
@@ -60,6 +69,10 @@ const unitRanges = new Set([
   'hunting',
   'field',
   'orchard',
+  'enemy-camps',
+  'camp-wood',
+  'camp-rock',
+  'camp-open',
 ]);
 const numberFormat = new Intl.NumberFormat('en');
 const descriptions: Record<MapView, string> = {
@@ -199,6 +212,14 @@ function configFromControls(): GenerationConfig {
       field: element<HTMLInputElement>('field').valueAsNumber,
       orchard: element<HTMLInputElement>('orchard').valueAsNumber,
     },
+    enemies: {
+      count: element<HTMLInputElement>('enemy-camps').valueAsNumber,
+      grounds: {
+        wood: element<HTMLInputElement>('camp-wood').valueAsNumber,
+        rock: element<HTMLInputElement>('camp-rock').valueAsNumber,
+        open: element<HTMLInputElement>('camp-open').valueAsNumber,
+      },
+    },
   };
 }
 
@@ -229,6 +250,10 @@ function updateControls(config: ResolvedGenerationConfig) {
   element<HTMLInputElement>('hunting').value = String(config.resources.hunting);
   element<HTMLInputElement>('field').value = String(config.plots.field);
   element<HTMLInputElement>('orchard').value = String(config.plots.orchard);
+  element<HTMLInputElement>('enemy-camps').value = String(config.enemies.count);
+  element<HTMLInputElement>('camp-wood').value = String(config.enemies.grounds.wood);
+  element<HTMLInputElement>('camp-rock').value = String(config.enemies.grounds.rock);
+  element<HTMLInputElement>('camp-open').value = String(config.enemies.grounds.open);
   element<HTMLInputElement>('terrain-scale').value = String(config.terrain.scale);
   element<HTMLInputElement>('water-scale').value = String(config.water.scale);
   element<HTMLInputElement>('origin-x').value = String(config.origin.x);
@@ -322,6 +347,24 @@ function showMap(nextMap: GameMap, source: string, elapsed?: number) {
     : map.settlements.length
       ? 'no worked ground around the places'
       : 'no places to have worked ground';
+  // The camp detail reports the grounds, because a caller tuning the weights cannot predict the mix
+  // from the count: a rock camp needs a cliff and a wood camp needs a wood with open ground beside
+  // it, and a map with neither publishes fewer camps than the count asked for.
+  const camps = { wood: 0, rock: 0, open: 0 };
+  let nearest = Infinity;
+  for (const camp of map.enemySettlements) {
+    camps[camp.metadata.ground] += 1;
+    if (camp.metadata.distanceToSettlement !== undefined)
+      nearest = Math.min(nearest, camp.metadata.distanceToSettlement);
+  }
+  element('camp-count').textContent = numberFormat.format(map.enemySettlements.length);
+  element('camp-detail').textContent = map.enemySettlements.length
+    ? `${camps.wood} wood · ${camps.rock} rock · ${camps.open} open${
+        map.settlements.length ? ` (nearest ${Math.round(nearest)}u away)` : ''
+      }`
+    : map.settlements.length
+      ? 'no camps, or nowhere far enough from a place to sit one'
+      : 'no places, so no distance to keep a camp from';
   const coverage =
     (map.water.reduce((total, lake) => total + polygonArea(lake.geometry), 0) / (width * height)) *
     100;

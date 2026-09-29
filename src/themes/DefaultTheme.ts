@@ -37,4 +37,9 @@ export const defaultTheme: MapTheme = {
   // the furrow lines are darker still. An orchard gets no colour here because its rows are trees: the
   // generator draws nothing over an orchard but the trees, so the two cannot disagree about it.
   plots: { field: '#c8bd7e', furrow: '#a2924f' },
+  // A camp is a footprint and a mark on it, so each is a fill that a consumer can tell from the
+  // ground behind it and a stroke that does not read as a wall. The wood and rock camps are darker
+  // than the open one because they are sited against cover, and none of the three is a colour a
+  // player would read as water.
+  camps: { wood: '#5a4a6a', rock: '#6a5a4a', open: '#7a6a3a' },
 };
