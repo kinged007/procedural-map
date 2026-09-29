@@ -130,15 +130,27 @@ export function generateBuildings(
       let roadId: string | undefined;
       let front: number;
       if (field) {
-        // At one end of its field, so the worked ground runs away behind the farmstead rather than
-        // being split down the middle by it, and on the field's own heading, so the farm lies with
-        // the field rather than across it. The field is claimed further down, once the farm is
-        // actually standing in it: a farm refused here for a neighbour or a tree leaves its field
-        // free for the next one, rather than taking a field with nothing on it.
+        // At the end of its field nearest the settlement that works it, looking out over the worked
+        // ground, because that is the way round a farm is: the house is at the gate and the field
+        // runs away in front of it. A field's heading already points back at its settlement, so the
+        // near end is the positive one and the farm faces the opposite way, out over the field — the
+        // same convention a house uses, a building's front looking at what it is for.
+        //
+        // The sign is fixed rather than drawn, so the same field always gets the same farm; drawing it
+        // would put half the farms at the far gate, facing away from their own field, which is the one
+        // direction a farm should never face. `facing` turns the building about rather than moving it,
+        // since the footprint is a rectangle centred on `position` and is the same either way.
+        //
+        // The centre is half the farm's own depth in from the field's near edge, so the building sits
+        // hard against the boundary with no ground wasted behind it and the whole rest of the field
+        // ahead of it. The margin here is zero on purpose: a farm is 20 deep, and a field runs 32 to
+        // 64, so leaving even a 6-unit gap on both sides left only 6 units of worked ground in front
+        // of the building — measured at 9 to 15 per cent of the field, which read as a house standing
+        // in a small paddock rather than a farm at the edge of its own field.
         const along = { x: Math.cos(field.rotation), y: Math.sin(field.rotation) };
-        const end = (random() < 0.5 ? -1 : 1) * (field.depth / 2 - spec.depth / 2 - EDGE_MARGIN);
+        const end = field.depth / 2 - spec.depth / 2;
         position = { x: field.position.x + along.x * end, y: field.position.y + along.y * end };
-        facing = { x: along.x, y: along.y };
+        facing = { x: -along.x, y: -along.y };
         front = 0;
       } else {
         front = spec.setback > 0 ? spec.setback : setback;
@@ -176,6 +188,9 @@ export function generateBuildings(
         // turning every building into a ruin should leave the same map, not a different set of
         // houses. A ruin keeps its footprint and loses its collision, because rubble is ground a
         // character walks over.
+        // The field is claimed here, once the farm is actually standing in it: a farm refused above
+        // for a neighbour or a tree leaves its field free for the next one, rather than taking a
+        // field with nothing on it.
         const state = ruinRandom() < ruin ? 'ruined' : 'standing';
         if (field) worked.add(field);
         buildings.push({

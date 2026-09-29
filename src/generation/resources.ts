@@ -136,9 +136,14 @@ function mines(map: GameMap, count: number, random: () => number): ResourceSiteE
   const water = map.water;
   // Every rock, not only the one the face belongs to. A mine driven into a seam between two
   // outcrops has rock on both sides and an entrance in a wall, and testing only the named region
-  // would have called that a face.
+  // would have called that a face. The edge inset is in the same list because a mine is a place a
+  // character walks to: an entrance whose 16 units of approach run off the side of the map is an
+  // entrance in the void, and refusing the face is what makes the generator offer the next one
+  // rather than leaving the rock with no mine at all.
   const blocked = (at: Point) =>
-    rocks.some((rock) => pointInPolygon(at, rock.geometry)) || inWater(at, water);
+    rocks.some((rock) => pointInPolygon(at, rock.geometry)) ||
+    inWater(at, water) ||
+    !clearOfEdge(map, at);
 
   // Shuffled so a fixed seed does not fill the first rock, and so the same faces are offered for the
   // same seed at every count.
@@ -156,6 +161,7 @@ function mines(map: GameMap, count: number, random: () => number): ResourceSiteE
     if (clearRun(face.at, face.outward, blocked, ENTRANCE_REACH) !== ENTRANCE_REACH) continue;
     const position = offset(face.at, face.outward, -INSIDE_BITE);
     if (sites.some((site) => distance(site.position, position) < SPACING)) continue;
+    if (!clearOfEdge(map, position)) continue;
     sites.push({
       id: '',
       type: 'resource-site',
@@ -241,10 +247,17 @@ function fishing(map: GameMap, count: number, random: () => number): ResourceSit
 function hunting(map: GameMap, count: number): ResourceSiteEntity[] {
   if (count <= 0) return [];
   const rocks = map.terrain.filter((region) => region.kind === 'rock');
+  // The edge inset is in the same list as the wood, the rock and the water, and for the same reason:
+  // a stand whose approach walks off the side of the map is a stand nobody reaches. Putting it here
+  // rather than in a check on the finished site means a wood on the boundary is offered its next
+  // edge instead of being given no stand at all — over twelve maps the check on the site alone cost
+  // 2 of 16 eligible woods on the reference seed, and both were woods with edges well inside the map
+  // that simply lost the draw to their first, outermost one.
   const blocked = (at: Point) =>
     map.forests.some((forest) => pointInPolygon(at, forest.geometry)) ||
     rocks.some((rock) => pointInPolygon(at, rock.geometry)) ||
-    inWater(at, map.water);
+    inWater(at, map.water) ||
+    !clearOfEdge(map, at);
 
   const sites: ResourceSiteEntity[] = [];
   for (const forest of map.forests) {
@@ -254,6 +267,7 @@ function hunting(map: GameMap, count: number): ResourceSiteEntity[] {
     if (!face) continue;
     const position = offset(face.at, face.outward, -INSIDE_BITE);
     if (sites.some((site) => distance(site.position, position) < SPACING)) continue;
+    if (!clearOfEdge(map, position)) continue;
     sites.push({
       id: '',
       type: 'resource-site',
@@ -265,6 +279,33 @@ function hunting(map: GameMap, count: number): ResourceSiteEntity[] {
     });
   }
   return sites;
+}
+
+/**
+ * How far inside the map a site that has to be reached on foot has to stand, in world units.
+ *
+ * A mine and a hunting site are both places a character walks to, and most games cut the playfield off
+ * somewhere short of the map edge — a camera bound, a fog of war, a loading skirt. A site standing on
+ * the boundary is then either off screen or a two-pixel marker against the void, and the map
+ * publishes no way for a consumer to tell the two apart. So a site a character has to reach is kept
+ * this far in, and a fishing spot is not: a boat leaves from the shore and the shore can be the edge.
+ */
+const REACHABLE_INSET = 80;
+
+/**
+ * Whether a site is far enough inside the map for a character on foot to reach it.
+ *
+ * The test is the whole inset box and not the site alone, so the marker, and the ground its arrow
+ * points at, both land inside it. `ENTRANCE_REACH` is what an arrow needs in front of itself, so a
+ * site clear by the inset and no more than that is a site whose entrance runs off the edge.
+ */
+function clearOfEdge(map: GameMap, at: Point): boolean {
+  return (
+    at.x >= REACHABLE_INSET &&
+    at.y >= REACHABLE_INSET &&
+    at.x <= map.bounds.width - REACHABLE_INSET &&
+    at.y <= map.bounds.height - REACHABLE_INSET
+  );
 }
 
 /** The first edge on a hull's outline that faces clear ground, or nothing if the wood is hemmed in. */

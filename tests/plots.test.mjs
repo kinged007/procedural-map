@@ -480,3 +480,76 @@ test('a building stands clear of what is around it, footprint and not centre', (
     }
   }
 });
+
+/**
+ * Whether a rectangle touches a polygon at all, in either direction.
+ *
+ * The same two-part test the placer uses. Testing one ring's points against the other alone misses
+ * the case that actually happens: a road running through the middle of a rectangle without any of the
+ * rectangle's own boundary landing in it.
+ */
+function touches(rectangle, polygon) {
+  if (polygon.points.some((point) => pointInPolygon(point, rectangle))) return true;
+  const ring = rectangle.points;
+  for (let index = 0; index < ring.length; index += 1) {
+    const from = ring[index];
+    const to = ring[(index + 1) % ring.length];
+    for (let step = 1; step < 12; step += 1) {
+      const t = step / 12;
+      if (
+        pointInPolygon(
+          { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t },
+          polygon,
+        )
+      )
+        return true;
+    }
+  }
+  return false;
+}
+
+test('a plot is not ploughed across a road, edge to edge', () => {
+  // A field's keep-out was tested at its centre and its four corners, which is a sample of the
+  // rectangle, and a road is a ribbon: it crosses between two of the sample points. Measured over
+  // twelve 2048 by 1536 maps, 48 of 187 plots were on a road, 32 fields and 16 orchards. Water, rock
+  // and the beach are still refused at the sample points, because a field clipping the edge of a lake
+  // is a field beside a lake, which is ordinary.
+  for (const seed of SEEDS) {
+    const map = mapFor({ seed, plots: PLENTY });
+    for (const plot of map.plots)
+      for (const road of map.roads)
+        assert.ok(
+          !touches(plot.geometry, road.collision),
+          `${plot.id} is ploughed across ${road.id}`,
+        );
+  }
+});
+
+test('a farm stands at the edge of its field and looks out over it', () => {
+  // Two things at once, and both were wrong. The farm was drawn at whichever end the stream picked,
+  // half of them facing away from their own field; and it was held a margin off the field's edge, so
+  // a 20-deep farm in a 40-deep field left 6 units of open ground in front of it — 15% of the field,
+  // which reads as a house in a paddock rather than a farm at the edge of its field.
+  for (const seed of SEEDS) {
+    const map = mapFor({ seed, plots: PLENTY });
+    for (const farm of map.structures.filter(
+      (entry) => entry.category === 'farm' && entry.metadata.plotId,
+    )) {
+      const field = map.plots.find((plot) => plot.id === farm.metadata.plotId);
+      const front = { x: Math.cos(farm.rotation), y: Math.sin(farm.rotation) };
+      const ahead = (point) =>
+        (point.x - farm.position.x) * front.x + (point.y - farm.position.y) * front.y;
+      // Nothing behind the back wall: the farm is hard against the field's near edge.
+      const behind = farm.depth / 2 + Math.min(...field.geometry.points.map(ahead));
+      assert.ok(behind < 0.5, `${farm.id} has ${behind.toFixed(1)} units of field behind it`);
+      // And the rest of the field in front of the front wall. A farm that is 20 deep in a field 32
+      // deep leaves 12, so this is the arithmetic rather than a number someone liked.
+      const open = Math.max(...field.geometry.points.map(ahead)) - farm.depth / 2;
+      assert.ok(open > 0, `${farm.id} has no field in front of it`);
+      assert.ok(
+        open >= field.depth - farm.depth - 0.5,
+        `${farm.id} faces only ${open.toFixed(1)} of a ${field.depth.toFixed(1)} field`,
+      );
+    }
+  }
+});

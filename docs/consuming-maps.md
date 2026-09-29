@@ -220,13 +220,18 @@ is a solid rectangle, so it is a footprint to fit an asset into and a wall to wa
   rectangle, not its centre, so you can draw a building asset and trust it to be on clear ground.
 
 **A farm stands in a field, not along a road.** A farm is the building that works a field, so it is
-placed inside one it names in `plotId`: at one end of it, on the field's own heading, with the worked
-ground running away behind it. That puts it on the outskirts of the settlement that owns the field,
-which is where a farm belongs, and it means a farm never appears strung along a road in the middle of
-a place. One field holds one farm. A `house` is never in a plot, and a farm is never in an orchard.
-Because a farm's site is a field, `buildings.categories.farm` is a ceiling set by how many fields the
-map has: asking for 8:1 on a map with twelve fields publishes about six farms and leaves six fields
-unworked, which is the weight deciding how many fields get worked rather than a placement failing.
+placed inside one it names in `plotId`: hard against the end nearest the settlement, facing out over the
+worked ground, with a median 60% of the field ahead of its front wall and none behind. That puts it on
+the outskirts of the settlement that owns the field, which is where a farm belongs, and it means a farm
+never appears strung along a road in the middle of a place. One field holds one farm. A `house` is never
+in a plot, and a farm is never in an orchard. Because a farm's site is a field, `buildings.categories.farm`
+is a ceiling set by how many fields the map has: asking for 8:1 on a map with twelve fields publishes
+about six farms and leaves six fields unworked, which is the weight deciding how many fields get worked
+rather than a placement failing.
+
+No part of a plot's rectangle touches a road — the whole rectangle is refused one, not just its middle
+and corners — and no part of a building's footprint touches a road, a beach, water or rock. A consumer
+can draw a field and a house on clear ground without re-testing either against the road network.
 
 **Which buildings a map has is your call.** `buildings.categories` is a set of relative weights over the
 categories, so a village of houses is `{ house: 1, farm: 0 }` and a farming valley is `{ house: 2,
@@ -413,6 +418,14 @@ with open ground inside it, and stands just inside the grove's own edge with `ro
 It is not in the middle of the wood: the trunks are the obstacle, so a stand in the middle of a grove
 is a stand nobody can walk to. The ground it faces is clear for 16 units — of every _other_ grove, of
 rock and of water — so you can put a camp at the far end of the arrow and walk to it.
+
+**A `mine` and a `hunting` site are never on the edge of the map.** Both stand at least 80 units inside
+the bounds, because a character has to walk to them and most games cut the playfield off somewhere short
+of the map edge — a camera bound, a fog of war, a loading skirt. A `GameMap` carries no camera bound, so
+the generator cannot know where yours is; 80 units is about three farmhouses of margin, and it is yours
+to tighten or ignore. A `fishing` spot _is_ allowed on the edge, because a boat leaves from the shore and
+the shore can be the edge. The cost is visible in the counts: a wood on the boundary is offered its next
+clear edge rather than being dropped, and only a wood with no interior edge at all loses its stand.
 
 ```js
 // Somewhere a hunter can stand, with open ground behind them.

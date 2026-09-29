@@ -417,6 +417,22 @@ enterability are both questions about finished ground, and `walkableInside` in p
 the raster once every other collection exists. Asking earlier would see every grove as unenterable and
 publish no hunting at all.
 
+**A mine and a hunting site are kept 80 units off the map's edge; a fishing spot is not.** Most games
+cut the playfield off somewhere short of the map edge — a camera bound, a fog of war, a loading skirt —
+and a site standing on the boundary is then off screen or a two-pixel marker against the void, with
+nothing in the map to tell a consumer which. A `GameMap` publishes no camera bound, so the generator
+cannot know where a consumer's edge is; the honest answer is to leave room, and 80 units is about three
+farmhouses. A fishing spot is exempt, because a boat leaves from the shore and the shore can be the
+edge, so a spot out at the far side of a lake is the point of one.
+
+The inset is part of _clear ground_ rather than a check on the finished site, and that distinction is
+the whole cost of the rule. Tested on the site alone, a wood on the boundary is offered its first clear
+edge, finds it 40 units in, and is dropped — 2 of 16 eligible woods on the reference seed, both of them
+with edges well inside the map that had simply lost to their outermost one. Folded into the predicate a
+clear edge is tested against, the generator is offered the _next_ edge instead, and only a wood whose
+every clear edge is on the boundary loses its stand: 1 of 16. Mines are unaffected either way and still
+fill 64 of 64 on all eight seeds measured.
+
 Sites draw from two separate streams, so a caller tuning the mine count gets the fishing spots they
 asked for rather than a different set because a number moved, and neither draws from the placement
 stream, so nothing else on the map moves. The cost is a flat array walk and nothing more at the default
@@ -451,6 +467,24 @@ be closer than the sum of their half-diagonals, so at these sizes twenty plots n
 quarters of the ring packed. Widening the ring past the settlement's own reach was tried first and bought
 a further twelve percent, which is not worth a field that belongs to somewhere else. The counts are
 ceilings, and a default map asked for twelve fields and eight orchards publishes about ten and five.
+
+### A road is refused edge to edge, and the other ground is not
+
+A plot's centre and its four corners are tested against water, rock, the beach and the settlement's own
+green. A road is different, and is tested against the whole rectangle.
+
+The difference is what the surfaces are. Water and rock are broad, and a field that clips the edge of a
+lake is a field beside a lake, which is ordinary — a five-point sample is enough to keep a plot out of
+the lake itself. A road is a ribbon, and a rectangle that clips one is a field ploughed across it. A
+sample misses a road that crosses between two of its points, and it did: over twelve 2048 by 1536 maps,
+**48 of 187 plots were on a road, 32 fields and 16 orchards**, every one of them through an edge that the
+four corners and the middle all missed.
+
+The test is two-sided — points along the plot's own boundary inside the road, and the road's own vertices
+inside the plot — because a road cutting clean across the middle of a rectangle lands in neither ring's
+sample otherwise. That costs a few hundred point-in-polygon calls per plot offered, against a dozen
+before, and roads are few on a map. The number of plots fell by nine over those maps, which is the
+road-crossing ones going.
 
 Plot sizes were halved once for the same reason. A plot excludes a circle of its own half-diagonal, so at
 64 to 128 by 44 to 88 twenty of them needed more ground than a settlement has and the count was routinely
@@ -493,9 +527,9 @@ and three fields than five orchards and nothing.
 
 A field is worked ground and the building that works it is a `farm`, so a farm is placed inside a field
 rather than along a road. The site the road offered is only the reason the farm was drawn at all: the
-farm takes the nearest field with no farm on it, stands at one end of it on the field's own heading, and
-names it in `metadata.plotId`. One field holds one farm, a house is never in a plot, and a farm is
-never in an orchard.
+farm takes the nearest field with no farm on it, stands at the end nearest the settlement, and names it
+in `metadata.plotId`. One field holds one farm, a house is never in a plot, and a farm is never in an
+orchard.
 
 That is what puts a farm on the outskirts of a settlement, because a field is already out on the
 settlement's ring. A farm that finds every field taken is not put in one, and with no fields at all it
@@ -505,6 +539,18 @@ was before fields existed.
 A field is a keep-out to the tree placer and a farm's home to the building placer, so the two are kept
 apart rather than merged: the field reaches the building placer as ground a farm is offered before it is
 refused to a house, which is the only way a rule can depend on which category is being placed.
+
+**The farm faces out over its field, and sits hard against the field's near edge.** A field's heading
+already points back at its settlement, so the near end is the positive one and the farm faces the other
+way, out over the worked ground — the house is at the gate and the field runs away in front of it. The
+sign is fixed rather than drawn: drawing it put half the farms at the far gate facing away from their own
+field, which is the one direction a farm should never face.
+
+The margin behind it is zero, and that was measured rather than chosen. A farm is 20 deep and a field runs
+32 to 64, so the first version held the building 6 units off the field's edge — which left 6 units of
+open field in front of it, 9 to 15 per cent of the field, and read on screen as a house standing in a
+small paddock. Sitting hard against the edge leaves a median 29.6 units, 60 per cent of the field, ahead
+of the front wall and none behind.
 
 ### Buildings stand clear of the whole footprint, not its centre
 

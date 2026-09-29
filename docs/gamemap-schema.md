@@ -561,12 +561,17 @@ consumer can rely on no part of a footprint touching a road, because the generat
 that does.
 
 A `farm` is the one building placed in worked ground. It stands inside a `field` it names in
-`plotId`, at one end of it and on the field's own heading, so the worked ground runs away behind the
-farmstead rather than being split down the middle by it. It therefore carries no `roadId`, and its
-`setback` is `0`, because `setback` is a distance from a road and there is no road. One field holds
-one farm, and a farm standing in a field is on the outskirts of the settlement that owns it. A
+`plotId`, hard against the field's end nearest the settlement, facing out over the worked ground — a
+median 60% of the field lies ahead of its front wall and none behind. It therefore carries no `roadId`,
+and its `setback` is `0`, because `setback` is a distance from a road and there is no road. One field
+holds one farm, and a farm standing in a field is on the outskirts of the settlement that owns it. A
 `house` is never in a plot, and a farm is never in an orchard. `plotId` must name a plot published in
 `plots`, and validation rejects a farm naming a field that is not on the map.
+
+A plot is refused a road edge to edge rather than at its centre and corners, and a consumer can rely on
+it: no part of a plot's rectangle touches a road. The other ground a plot is kept off — water, rock, the
+beach, a settlement's own green — is tested at those five points, so a field may share an edge with a lake
+the way a field beside a lake should.
 
 `barriers` is a `MapEntity[]` and is empty on a generated map. It is where a wall, a gate, or anything
 else the generator did not produce belongs, and it is validated as a generic entity rather than as a
@@ -797,6 +802,11 @@ A map with no rock publishes no mines at any count.
 A site carries no `collision`, and validation rejects one that does. A site is a mark on the ground,
 not a thing standing in it — the third reason in this format for a surface to carry no collision,
 after a forest hull and a deck.
+
+A `mine` and a `hunting` site stand at least 80 units inside the map's bounds. A `fishing` spot may
+stand on the edge, because a boat leaves from the shore. A consumer with its own camera bound should
+tighten that itself; the figure is here so that the common case, a game that never brings its edge out
+to the map boundary, finds its sites already reachable.
 
 ## plots
 

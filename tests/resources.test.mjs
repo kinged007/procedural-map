@@ -56,16 +56,34 @@ test('each count is honoured on its own, and a count is a ceiling rather than a 
         assert.equal(of(some, other).length, 0, `${kind}: also published ${other} sites`);
   }
   // A count above what the ground will hold publishes everything there is rather than inventing any.
+  // "Everything there is" is every eligible wood with an edge clear of the map's edge inset, since a
+  // stand a character cannot walk to is refused. The woods it costs are exactly the ones whose hull
+  // reaches the boundary, so that is what is checked: 1 of 16 on the reference seed, and that one is a
+  // wood with no interior edge rather than a random loss.
   const many = generateMap({
     seed: 583921,
     width: 2048,
     height: 1536,
     resources: { hunting: 64 },
   });
-  const woods = generateMap({ seed: 583921, width: 2048, height: 1536 }).forests.filter(
+  const INSET = 80;
+  const reachesEdge = (forest) =>
+    forest.geometry.points.some(
+      (point) =>
+        point.x < INSET || point.y < INSET || point.x > 2048 - INSET || point.y > 1536 - INSET,
+    );
+  const eligible = generateMap({ seed: 583921, width: 2048, height: 1536 }).forests.filter(
     (forest) => forest.metadata.treeCount >= 20 && forest.metadata.walkableInside,
   );
-  assert.equal(of(many, 'hunting').length, woods.length);
+  const sites = of(many, 'hunting');
+  assert.ok(eligible.filter(reachesEdge).length > 0, 'the inset should cost a wood on this map');
+  assert.ok(sites.length <= eligible.length, 'more stands than there are woods to put them in');
+  for (const forest of eligible)
+    if (!sites.some((site) => site.metadata.forestId === forest.id))
+      assert.ok(reachesEdge(forest), `${forest.id} lost its stand without reaching the map edge`);
+  // No wood gets two stands, which is the other half of "publishes everything there is".
+  const named = sites.map((site) => site.metadata.forestId);
+  assert.equal(new Set(named).size, named.length, 'a wood was given two stands');
 });
 
 test('a mine is cut into a rock face, and its arrow points out of the rock', () => {
@@ -373,4 +391,53 @@ test('the same seed gives the same sites, and they survive a round trip', () => 
   const returned = importMap(exportMap(first));
   assert.ok(validateMap(returned).valid, JSON.stringify(validateMap(returned).errors.slice(0, 2)));
   assert.deepEqual(returned.resourceSites, first.resourceSites);
+});
+
+test('a site a character walks to is never left on the edge of the map', () => {
+  // Most games cut the playfield off somewhere short of the map edge — a camera bound, a fog of war, a
+  // loading skirt — and a site standing on the boundary is then off screen or a two-pixel marker
+  // against the void, with nothing in the map to tell a consumer which. A mine and a hunting site are
+  // both places a character walks to, so both are kept 80 units in. A fishing spot is not: a boat
+  // leaves from the shore and the shore can be the edge, so a spot out at the far side of a lake is
+  // the point of one.
+  const INSET = 80;
+  const SEEDS = [583921, 42, 777, 7, 1];
+  for (const seed of SEEDS) {
+    const map = generateMap({
+      seed,
+      width: 2048,
+      height: 1536,
+      resources: { mine: 32, fishing: 8, hunting: 32 },
+    });
+    const { width, height } = map.bounds;
+    const near = (site) =>
+      site.position.x < INSET ||
+      site.position.y < INSET ||
+      site.position.x > width - INSET ||
+      site.position.y > height - INSET;
+    for (const site of map.resourceSites) {
+      if (site.kind === 'fishing') continue;
+      assert.ok(
+        !near(site),
+        `${site.id} is a ${site.kind} at ${site.position.x.toFixed(0)},${site.position.y.toFixed(0)}, ${INSET} units from the edge`,
+      );
+    }
+  }
+});
+
+test('a site that has to be reached is still placed at all, at a high count', () => {
+  // The inset is a refusal, so it can only be paid for with places to put the site. This is the check
+  // that the refusal has not quietly emptied the feature at the counts the studio offers.
+  for (const seed of [583921, 42, 777]) {
+    const map = generateMap({
+      seed,
+      width: 2048,
+      height: 1536,
+      resources: { mine: 64, fishing: 0, hunting: 64 },
+    });
+    const mines = map.resourceSites.filter((site) => site.kind === 'mine');
+    const hunts = map.resourceSites.filter((site) => site.kind === 'hunting');
+    assert.ok(mines.length > 0, `seed ${seed} published no mines at all`);
+    assert.ok(hunts.length > 0, `seed ${seed} published no hunting sites at all`);
+  }
 });

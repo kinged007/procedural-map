@@ -182,7 +182,9 @@ big enough to hold game — and you decide what each of those is worth. A `mine`
 rock and `rotation` points the entrance out of it, a `fishing` spot is in the water and carries
 `access: 'land' | 'water'` alongside the measured `distanceToShore`, and a `hunting` site names a grove
 that was measured to be enterable. None of them blocks anything, so a site is a mark on the ground and
-not a thing in it.
+not a thing in it. A `mine` and a `hunting` site also stand at least 80 units inside the map's bounds,
+since a character has to walk to them and most games cut the playfield off short of the map edge; a
+`fishing` spot is exempt, because a boat leaves from the shore.
 
 `map.plots` holds the ground the settlements work, and they are `0` by default. A `field` is a
 rectangle with a heading pointing back at its settlement, sized between 44×32 and 96×64 units, and
@@ -191,13 +193,15 @@ standing in it — real trees in `map.vegetation`, with trunks that block, named
 an orchard is walkable between the rows and not through them. Neither kind blocks. The counts are
 ceilings rather than promises: plots need ground the settlements actually reach, so a caller asking for
 twelve fields and eight orchards on a default map gets about ten and five, and an orchard the river has
-eaten through is published as a field rather than dropped.
+eaten through is published as a field rather than dropped. No part of a plot touches a road — the whole
+rectangle is refused one, not only its middle and corners.
 
 A `farm` building is placed in a field rather than along a road, because a farm is the building that
-works a field. It stands at one end of the field, on the field's heading, and names it in
-`metadata.plotId` — which puts it on the outskirts, where the field already is — and it carries no
-`roadId` and a `setback` of `0`, because there is no road to stand back from. One field holds one farm,
-a house is never in a plot, and a farm is never in an orchard. Since a farm's site is a field,
+works a field. It stands hard against the end of the field nearest the settlement, facing out over the
+worked ground with a median 60% of the field ahead of it, and names the field in `metadata.plotId` —
+which puts it on the outskirts, where the field already is — and it carries no `roadId` and a `setback`
+of `0`, because there is no road to stand back from. One field holds one farm, a house is never in a
+plot, and a farm is never in an orchard. Since a farm's site is a field,
 `buildings.categories.farm` is effectively a ceiling set by how many fields exist: 8:1 on twelve fields
 publishes about six farms and leaves six fields unworked.
 
