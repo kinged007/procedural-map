@@ -457,6 +457,13 @@ wood into arbitrary pieces, and the median keeps the pieces roughly square.
 }
 ```
 
+A `forest` is wild wood, with one deliberate exception that is marked rather than hidden: an orchard's
+rows are also a `forest`, because their trunks are what make the raster close between the rows and the
+hulls are the broadphase that keeps marking them cheap. It carries `species: 'orchard'` and holds no tree
+of any other kind, so grouping by `species` never counts cultivated rows as wood. A `forest` never spans
+a `ground-plot`: cultivated ground is cleared of wild trees by more than the grove link distance, and a
+grove spanning a plot would need trees on both sides of it.
+
 The example grove holds four trees; only the first is shown.
 
 ## roads

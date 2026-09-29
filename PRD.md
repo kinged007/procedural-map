@@ -1610,13 +1610,25 @@ Delivered so far:
   still has the plot. That redundancy is deliberate and is the only one in the format.
 - **A field is a keep-out decided before the trees.** The plot sites are chosen at the same point the
   settlement clearings are, so a field reaches the tree placer and the building placer as a keep-out
-  rather than as a hole punched into a finished map. Only fields are kept clear; an orchard's rectangle
-  is already full of the trees it asked for, and refusing more inside it would leave bare gaps down
-  every row.
+  rather than as a hole punched into a finished map. Both kinds are kept clear of wild trees, and the
+  keep-out is the plot grown by the grove link distance rather than the plot itself.
+- **An orchard is cultivated ground, not a wood, and it is kept out of one.** It was a wood with fruit
+  trees in it, for two separate reasons, and the second one is the load-bearing one. Only a field was a
+  keep-out, on the reasoning that an orchard's rectangle is already full of the trees it asked for; over
+  eight 2048 by 1536 maps 30 of 41 orchards were growing wild trunks inside their own rectangle, up to
+  ten of them among their own fifteen rows. Clearing the rectangle does not fix it, because the trees
+  doing the damage were never in the rectangle: trees less than the link distance apart are one grove, so
+  a wild tree just outside an orchard joined its rows into a single `mixed` forest — 13 of the 14 groves
+  touching an orchard, the largest carrying 88 wild trees beside 36 rows. The keep-out is therefore the
+  plot grown by the link distance, which is the distance the wood groups over and is imported from
+  `forests.ts` rather than written down again so the two cannot drift. The same margin stops a hull
+  spanning a plot, which a convex hull can do with no tree inside it: 21 of 61 fields were inside some
+  wood's hull before, and a consumer may reasonably run `pointInPolygon` of a hull. Over eight maps now:
+  0 wild trees in 41 orchards, 41 of 41 cultivated groves published as pure `orchard`, 0 spanning. The
+  cost is 4.2% of the trees on a farmed map.
 - **An orchard's rows are real trees.** They are published in `vegetation` with trunks that block, and
   the grove builder groups them like any other, so the walkability raster closes around them with no
-  carve and a consumer never has to add collision of its own — the one job the generator owns. This is
-  the reason an orchard is worth building rather than publishing as a rectangle and a count. Measured
+  carve and a consumer never has to add collision of its own — the one job the generator owns. This is  the reason an orchard is worth building rather than publishing as a rectangle and a count. Measured
   over five maps, 575 of 578 orchard trees block their own raster cell; the three that do not are
   single-tree components, which block nothing on any map because `chunkTile` marks trunks from
   `forests` and a component of one is not a grove.

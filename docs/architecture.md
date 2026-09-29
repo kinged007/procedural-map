@@ -69,8 +69,9 @@ around each settlement. The fields among them join the tree placer's keep-out li
 way a field stays clear rather than being punched into a finished map, and they are handed to the
 building placer separately rather than folded into its keep-out list: a field is refused to a house but
 is the one place a farm is put, so the test has to happen where the category is known.
-Only fields are kept clear; an orchard's rectangle is already full of the trees it asked for, and
-refusing more inside it would leave bare gaps down every row.
+Both kinds of plot are kept clear, and the keep-out is the plot grown by the grove link distance
+rather than the plot itself. A tree 11 units outside an orchard is not in it, but it is well inside
+the distance the grove builder groups over, so it would join the orchard's own rows into one wood.
 
 The orchard's rows are added to `vegetation` at the same point, before the random trees, so that
 `generation/forests.ts` then groups planted and wild trees together by its own proximity rule. An

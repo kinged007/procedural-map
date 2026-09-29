@@ -524,10 +524,44 @@ reads at fit zoom and is a walk of a few seconds from the settlement's edge.
 
 The plot sites are chosen before anything is planted, for the same reason the settlement clearings are: a
 field is ground that stays open, so it has to reach the tree placer as a keep-out rather than as a hole
-punched into a finished map. Only a field is kept clear. An orchard's rectangle is already full of the
-trees it asked for, and refusing more inside it would leave bare gaps down every row.
+punched into a finished map. Both kinds are kept clear, and the keep-out is the plot **grown by the grove
+link distance** rather than the plot itself. That margin is the distance the wood groups over, and it is
+what makes the rule hold; see the next section.
 
 ### An orchard's rows are real trees
+
+An orchard used to be a wood with fruit trees in it, and two separate things let that happen. The first
+was a placement decision: only a field was a keep-out, on the reasoning that an orchard's rectangle is
+already full of the trees it asked for. The gaps between the rows are wanted — a character walks between
+them — but the wild trunks are not. Over eight 2048 by 1536 maps, 30 of 41 orchards were growing them,
+up to ten of them, among their own fifteen rows.
+
+The second is the one that decides the whole rule, and it is not a placement decision at all. Trees
+less than the link distance apart are one grove, so a wild tree standing just _outside_ an orchard joins
+its rows into a single `mixed` forest. Over three maps, 13 of the 14 groves touching an orchard were
+like that, and the largest carried 88 wild trees alongside 36 rows. Clearing the rectangle would not
+have touched it, because the trees doing the damage were never in the rectangle.
+
+So the keep-out is the plot grown by the link distance. It is that distance because that is the distance
+the wood groups over, not because it was chosen to look clear, and it is imported from
+`generation/forests.ts` rather than written down again here so the two cannot drift apart. A row's
+outermost tree sits about three units inside the rectangle and a wild tree is already held off whatever it
+is tested against by its own canopy, so the two are already further apart than the link distance before
+the margin is added.
+
+The same margin is what stops a hull spanning a plot, which a hull can otherwise do with no tree inside
+it at all: a grove spanning a plot would need trees on both sides, and trees on opposite sides of a plot
+are at least its 32-unit depth apart, which is more than the link distance. Before the keep-out was
+grown, 21 of 61 fields were inside some wood's hull, and the hull is a broadphase a consumer may
+reasonably run `pointInPolygon` against.
+
+The cost is 4.2% of the trees on a farmed map, which is the price of the ground a holding clears.
+
+A separate fix was tried and rejected: splitting cultivated trees out of the grove builder's groups, so
+a `mixed` forest could not form. It works, and it orphans trees, because trunks are marked by walking
+`map.forests` and a wild group left with fewer than three trees publishes no hull — those trees would
+have become walk-through. Loose trees already in no grove are a pre-existing property of the three-tree
+minimum, 127 to 249 per map with plots switched off, and this change does not add to them.
 
 A tree is a tree: an orchard's rows are published in `vegetation`, each with a trunk that blocks, and the
 grove builder groups them like any other. An orchard published as a rectangle and a count would leave the

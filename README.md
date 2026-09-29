@@ -194,7 +194,10 @@ an orchard is walkable between the rows and not through them. Neither kind block
 ceilings rather than promises: plots need ground the settlements actually reach, so a caller asking for
 twelve fields and eight orchards on a default map gets about ten and five, and an orchard the river has
 eaten through is published as a field rather than dropped. No part of a plot touches a road — the whole
-rectangle is refused one, not only its middle and corners.
+rectangle is refused one, not only its middle and corners — and a plot is never inside a wood: wild
+trees are kept off it by more than the distance groves group over, so no `forests` hull spans one either.
+An orchard's rows form a grove of their own with `species: 'orchard'`, never mixed with the wood beside
+them.
 
 A `farm` building is placed in a field rather than along a road, because a farm is the building that
 works a field. It stands hard against the end of the field nearest the settlement, facing out over the

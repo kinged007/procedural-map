@@ -233,6 +233,13 @@ No part of a plot's rectangle touches a road — the whole rectangle is refused 
 and corners — and no part of a building's footprint touches a road, a beach, water or rock. A consumer
 can draw a field and a house on clear ground without re-testing either against the road network.
 
+**A plot is cultivated ground, and it is not inside a wood.** No wild tree roots in a plot and no
+`forests` hull spans one, so `pointInPolygon(position, forest.geometry)` answers _no_ for cultivated
+ground. That is a stronger statement than “no tree is drawn there”: a hull is a convex hull and can span
+ground nothing stands on, so it is asserted directly and holds for both kinds of plot. An orchard's own
+rows are published in `vegetation` and named in `metadata.treeIds`, and they form a grove of their own
+with `species: 'orchard'` — never counted as part of the wood beside them.
+
 **Which buildings a map has is your call.** `buildings.categories` is a set of relative weights over the
 categories, so a village of houses is `{ house: 1, farm: 0 }` and a farming valley is `{ house: 2,
 farm: 1 }`:
