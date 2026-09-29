@@ -66,9 +66,11 @@ const SHORE_REACH = 32;
  * How few trees a grove can have and still be worth hunting, in trees.
  *
  * A grove of four trees is a copse and not a wood, and `densityPct` cannot tell them apart: it reads
- * 100 on every hull on a default map, because a hull is drawn tight around its own canopies, so
- * canopy coverage is full by construction. `treeCount` is the signal that carries, and 20 is about
- * where a grove stops being a few trees and starts being somewhere with something in it.
+ * 100 on 302 of 303 groves on a default map, because a hull is drawn tight around its own canopies,
+ * so canopy coverage is full by construction. `edgeCoverPct` does vary, but it measures the rim rather
+ * than the size of the wood, so it is the wrong signal for this. `treeCount` is the one that carries,
+ * and 20 is about where a grove stops being a few trees and starts being somewhere with something in
+ * it.
  */
 const MIN_WOOD_TREES = 20;
 /** How close one site may come to another, centre to centre, in world units. */

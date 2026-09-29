@@ -469,10 +469,11 @@ export const gameMapSchema = {
             asset: { $ref: '#/$defs/asset' },
             metadata: {
               type: 'object',
-              required: ['treeCount', 'densityPct', 'walkableInside'],
+              required: ['treeCount', 'densityPct', 'edgeCoverPct', 'walkableInside'],
               properties: {
                 treeCount: { type: 'integer', minimum: 2 },
                 densityPct: { type: 'number', minimum: 0 },
+                edgeCoverPct: { type: 'number', minimum: 0, maximum: 100 },
                 walkableInside: { type: 'boolean' },
               },
               additionalProperties: { $ref: '#/$defs/jsonValue' },

@@ -1698,16 +1698,40 @@ Delivered so far:
   every other collection exists. Asked earlier, every grove would look unenterable and no hunting at
   all would be published.
 
-Trails are delivered already: `RoadEntity.kind` has been `'path'` since v0.4, and a path is a narrow
-track between places, which is what a trail is. Building a second collection for them would duplicate a
-road with a different width and buy nothing.
+Trails are delivered already, and not as a second collection: `RoadEntity.kind` has been `'path'`
+since v0.4 and the road generator builds it as the third tier, so a default 2048 by 1536 map publishes
+about six paths at a width of 7 units against a primary road's 22. A path is a narrow track between
+places, which is what a trail is, and a second collection for them would duplicate a road with a
+different width and buy nothing.
 
 Fences are held back deliberately rather than left out: a fence has to decide whether it blocks, which
 is a navigation call and not a placement one, and it is the one item on this milestone whose answer is
-waiting on a decision rather than a measurement. Farms, clearings and isolated buildings are delivered —
-a farm is a building category since v0.5, a clearing is a settlement's own since v0.5, and an isolated
-building is what a dead settlement is. Vegetation transitions are the terrain overlay's own boundaries
-since v0.3, published as the meeting of two `terrain` regions.
+waiting on a decision rather than a measurement.
+
+Clearings are delivered, and are a settlement's own. `SettlementEntity.clearing` is the 28-unit open
+ground at the middle of a place, chosen before the trees and the buildings so it reaches them as a
+keep-out rather than as a hole punched into a finished map, and it shrinks rather than leaving the
+world at a map edge.
+
+Isolated buildings are delivered, and the reason is not the one this file gave earlier. It claimed an
+isolated building is a dead settlement, which is a category rather than a thing: `settlements.count`
+is a count, and a map asked for two places publishes two. What is actually delivered is better than
+that, and is measured. Buildings are placed against roads, not against settlements, so the countryside
+carries its own: over three default maps, 35 of 42, 44 of 52 and 50 of 58 buildings stand more than
+260 units — a whole settlement radius — from the nearest settlement, with a median of about 650 and a
+maximum past 1200. A map asked for no settlements at all still publishes 42 buildings and no place,
+which is a hamlet-less map of scattered farmsteads. A consumer can therefore rely on both halves: a
+building is never inside a place's clearing unless the place claims it in `metadata.buildingIds`, and
+most buildings on a map are nowhere near a place.
+
+Vegetation transitions are delivered, and are a measurement on the forest rather than a new collection.
+The transition between a wood and the scrub around it happens on the hull's own outline, and the hull
+is drawn tight around the outermost canopies, so it is a hard edge whether the rim trees overlap or
+stand apart. `densityPct` cannot say which, and does not try: canopies overlap freely, so canopy area
+over hull area saturates, and it reads exactly `100` on 302 of 303 groves over six default maps.
+`metadata.edgeCoverPct` is the share of that outline lying under a canopy, and over the same 303 groves
+it runs from 46.6 to 100 with 105 of them under 90 — a real spread, and the mixed groves, which are the
+loosely linked ones, are where the ragged rims are.
 
 ---
 

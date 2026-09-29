@@ -38,12 +38,14 @@ test('a tile with no origin and no world is the map it always was', () => {
   // what says the terrain did not move and only the new keys did. Buildings then moved it once more,
   // on their own: the clearance test is the half-diagonal rather than half the depth, so corners that
   // overhung their own test are refused, and `settlements` moved with them because a settlement's
-  // membership is the buildings around it. This still guards against `origin`/`world` leaking into
-  // the terrain.
+  // membership is the buildings around it. A forest then gained `metadata.edgeCoverPct`, the measured
+  // share of the hull outline that lies under a canopy, and that moved this value too. Deleting it
+  // from this map as well reproduces the previous hash exactly, so the placement fields still are not
+  // what carries the terrain. This still guards against `origin`/`world` leaking into the terrain.
   const map = generateMap({ seed: SEED, width: 640, height: 480 });
   assert.equal(
     stableHash(withoutPlacement(map)),
-    '399c572174c955609559ffeecf61d2ceca19230e4b6cc614adf2c46fef0eac4d',
+    '51de7b5fdc7ad2b425920a9146b7fbbbbbed94773f87b72723ad563a4f16cc59',
   );
 });
 

@@ -541,7 +541,11 @@ for (const forest of map.forests) {
 - `forest.metadata.walkableInside` is measured at 8-unit cells: `true` means there is clear ground
   inside the hull. This is the field to read before deciding a grove is sealed. Roughly a quarter of
   groves on a densely wooded map report `false`, which is a true statement about thick wood.
-- `forest.metadata.densityPct` is canopy cover, saturated at 100. Useful for thinning distant wood.
+- `forest.metadata.densityPct` is canopy cover, saturated at 100, and reads 100 on 302 of 303 groves on
+  a default map, so it is close to a constant. `forest.metadata.edgeCoverPct` is the one that varies:
+  the share of the hull's outline under a canopy, from 46.6 to 100 over the same groves. Near 100 is a
+  hard wood edge, low is a wood that thins into scrub over a band, and that is the number to draw a
+  vegetation overlay from.
 - `forest.species` is `oak`, `birch`, or `mixed`, from the majority of trees inside.
 
 A forest deliberately has **no** `collision`. A grove is not a wall, and the trunks block while the

@@ -142,6 +142,34 @@ Rock is in the same keep-out list, because the test is identical and the two are
 
 The determinism pins are taken on a 640x480 map, which has no beach band at all, so none of this is covered by them and they do not move. The tests in `tests/generation.test.mjs` are the ones that hold it.
 
+### Where a wood meets the scrub
+
+A hull is the convex hull of a grove's own trees, so it is drawn tight around the outermost canopies and
+is a hard edge whichever kind of wood it is closing off. That is the right shape to fill with, and the
+wrong one to draw a vegetation overlay from: a wood whose rim trees overlap and a wood that thins
+outwards both publish the same kind of line.
+
+`metadata.densityPct` cannot tell them apart, and the reason is structural rather than a mistake in the
+formula. Canopies overlap freely, so canopy area over hull area runs far past 100 in any thick wood and
+the ratio saturates. Measured over six default maps it reads exactly `100` on 302 of 303 groves, because
+a hull drawn tight around its own canopies is fully covered by construction. It is a saturation, not a
+measurement of anything that varies.
+
+`metadata.edgeCoverPct` is the share of the hull's **own outline** that lies under a canopy, sampled
+every 4 units. The outline is the only place the transition exists, so that is where it is measured.
+Over the same 303 groves it runs from 46.6 to 100, with 105 of them under 90, and the ragged ones are
+the `mixed` groves — the loosely linked groups — where a `pure` oak or birch grove is saturated at 100.
+
+The outline is sampled rather than integrated, so the step is a floor on what can be resolved: a gap
+narrower than 4 units is not found. Canopies in a generated wood are 10 to 18 units across, so the gaps
+between the canopies of a thinning rim are several units and 4 resolves them. The cost is a walk of the
+outline against the grove's own trees — about 800,000 distance tests at the ceiling of 8000 trees, and
+63 groves out of that in 79ms.
+
+`ponytail:` the sampling is a walk of the outline times the grove's tree count, so a wood at the 128-tree
+ceiling costs the most. If a consumer ever wants the exact figure rather than a 4-unit estimate, sweep
+the outline properly and drop the constant; the published number's meaning does not change.
+
 ## Roads
 
 Roads are grown in three tiers, widest and longest first: `primary` at width 22, `secondary` at 14, and `path` at 7. Primary and secondary roads start at the map edge and cross the map; paths branch off roads already placed, which is what makes the network connected rather than a set of parallel lines. A default map produces 12 to 16 roads.
@@ -406,9 +434,10 @@ passed the size test still had at least one fully clear edge, so the pool is unc
 twenty-three woods per default map.
 
 A grove needs at least 20 trees and `walkableInside` before it is offered at all. The 20 is a floor
-because `densityPct` cannot tell a copse from a wood: it reads 100 on every hull on a default map,
-since a hull is drawn tight around its own canopies, so canopy coverage is full by construction and
-the field carries no information. `walkableInside` is the field that earns its place — it is the
+because `densityPct` cannot tell a copse from a wood: it reads 100 on 302 of 303 groves on a default
+map, since a hull is drawn tight around its own canopies, so canopy coverage is full by construction
+and the field carries no information. `edgeCoverPct` does vary, but it measures the rim rather than the
+size of the wood, which is not what this floor is asking. `walkableInside` is the field that earns its place — it is the
 measured answer to whether a character can get into a grove and back out, which is what separates a
 wood from a thicket.
 

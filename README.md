@@ -230,9 +230,11 @@ consequences, in [Consuming generated maps](docs/consuming-maps.md).
 Trees are not in that grid, because a trunk blocks a small circle inside a large canopy and baking the
 canopy would seal the clearings between trees. Each map also carries `forests`, the groves its trees
 belong to, as a convex hull plus the trees inside. A chunk bake uses the hulls as a broadphase, so it
-costs what the wood next to it costs rather than what the whole map costs, and `metadata
-.walkableInside` on a forest tells you whether there is clear ground inside its hull before you decide
-to seal it. A forest has no `collision`, on purpose: a grove is not a wall.
+costs what the wood next to it costs rather than what the whole map costs, and
+`metadata.walkableInside` on a forest tells you whether there is clear ground inside its hull before
+you decide to seal it. `metadata.edgeCoverPct` is the share of the hull's outline under a canopy, which
+is how sharply the wood meets the scrub around it — near 100 is a hard edge, low is a band. A forest
+has no `collision`, on purpose: a grove is not a wall.
 
 The Canvas renderer is available from the `fieldwork-map/rendering` subpath. Supply it with an HTML canvas and either the built-in `defaultTheme` or a custom `MapTheme`.
 

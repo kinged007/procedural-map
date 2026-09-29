@@ -372,7 +372,12 @@ interface ForestEntity extends MapEntity {
   geometry: PolygonGeometry; // convex hull around the trees, 3 to 24 points
   trees: VegetationEntity[]; // 2 to 128 trees; the generator emits 3 or more
   asset: { category: 'vegetation.forest'; variant: string };
-  metadata: { treeCount: number; densityPct: number; walkableInside: boolean };
+  metadata: {
+    treeCount: number;
+    densityPct: number;
+    edgeCoverPct: number;
+    walkableInside: boolean;
+  };
 }
 ```
 
@@ -392,7 +397,17 @@ two copies ever disagree.
 
 `metadata.densityPct` is canopy cover, 0 to 100, saturated at 100. Canopies overlap freely, so the raw
 ratio of canopy area to hull area runs into the thousands in a thick wood; cover cannot exceed the
-ground there is. `metadata.walkableInside` is measured, not assumed: the generator rasterises
+ground there is. It reads `100` on 302 of 303 groves over six default maps, because a hull drawn tight
+around its own canopies is fully covered by construction, so it is close to a constant and a consumer
+drawing a vegetation overlay should reach for `edgeCoverPct` instead.
+
+`metadata.edgeCoverPct` is the share of the hull's **own outline** that lies under a canopy, 0 to 100.
+This is the transition between the wood and the scrub around it, measured where the transition happens.
+Near `100` is a rim of overlapping canopies meeting the scrub in a line; low is a rim of separated trees
+meeting it in a band. The hull cannot tell a consumer which, because the hull is a hard edge in both
+cases. Over the same 303 groves it runs from 46.6 to 100, with 105 of them under 90.
+
+`metadata.walkableInside` is measured, not assumed: the generator rasterises
 walkability at 8-unit cells and records whether any cell inside the hull is clear of water, rock, and
 trunks. Roughly a quarter of groves on a densely wooded map report `false`, which is a true statement
 about thick wood at that resolution and not a defect.
@@ -433,7 +448,12 @@ wood into arbitrary pieces, and the median keeps the pieces roughly square.
     }
   ],
   "asset": { "category": "vegetation.forest", "variant": "oak-1" },
-  "metadata": { "treeCount": 4, "densityPct": 100, "walkableInside": false }
+  "metadata": {
+    "treeCount": 4,
+    "densityPct": 100,
+    "edgeCoverPct": 92.5,
+    "walkableInside": false
+  }
 }
 ```
 
@@ -787,8 +807,9 @@ of a grove is a stand nobody can walk to. The ground it faces has to be clear of
 and of rock and water. The neighbouring-grove test is the one that matters, because two groves of one
 wood are separate hulls — their trees are more than the link distance apart — yet their hulls can be a
 stride of each other, so an edge facing a neighbour is an edge facing more wood. The 20-tree floor is
-needed because `densityPct` cannot tell a copse from a wood: it reads 100 on every hull on a default
-map, since a hull is drawn tight around its own canopies, so canopy coverage is full by construction.
+needed because `densityPct` cannot tell a copse from a wood: it reads 100 on 302 of 303 groves on a
+default map, since a hull is drawn tight around its own canopies, so canopy coverage is full by
+construction.
 
 **All three counts are upper bounds, and all three default to `0`.** `resources: { mine, fishing,
 hunting }` is unset at zero across the board, which is a map that says nothing about where anything is

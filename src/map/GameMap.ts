@@ -96,8 +96,22 @@ export interface ForestEntity extends MapEntity {
   asset: AssetReference;
   metadata: {
     treeCount: number;
-    /** Share of the hull's area covered by tree canopies, as a percentage. */
+    /**
+     * Share of the hull's area covered by tree canopies, as a percentage.
+     *
+     * Canopies overlap freely, so this saturates: a hull drawn tight around its own canopies is fully
+     * covered by construction, and it reads `100` on essentially every grove. It says a wood is wood.
+     * `edgeCoverPct` is the number that differs between one kind of wood and another.
+     */
     densityPct: number;
+    /**
+     * Share of the hull's own outline that lies under a canopy, as a percentage. This is how sharply
+     * a wood meets the scrub around it: near `100` is a rim of overlapping canopies and a hard edge,
+     * low is a rim of separated trees and a band. A consumer drawing a vegetation overlay reads this
+     * to decide where the hard line is; the hull alone cannot say, because the hull is a hard edge
+     * either way.
+     */
+    edgeCoverPct: number;
     /** Whether the walkability raster still reports open ground inside the hull. */
     walkableInside: boolean;
   };

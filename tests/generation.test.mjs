@@ -53,10 +53,16 @@ test('generation is byte-stable for the same config', () => {
   // around it, so buildings moving moves it. The terrain, the water, the trees, the roads, the plots
   // and the resolved config are all untouched, which is the point of the field grid the two halves of
   // this library do not share.
+  // A forest gained `metadata.edgeCoverPct`, the measured share of the hull outline that lies
+  // under a canopy, and that moved this value. It is additive in the sense the other moves above
+  // were: deleting `edgeCoverPct` from the published map reproduces the previous hash exactly, so
+  // no tree moved and no hull changed. It is the only change here that measures something about
+  // the wood rather than publishing a new collection, which is why it needed a number rather
+  // than a key on the map.
   // `tests/tiling.test.mjs` holds the matching value for the map with the placement fields removed.
   assert.equal(
     stableHash(first),
-    '345b46e164c48863c4302c1fa6802dabf1eb60a865186e1377deb317237db850',
+    '0d423a3f1dacc17fee3c4c45bef55986378d6ea0f7bac51ac9eda861c6947658',
   );
 });
 

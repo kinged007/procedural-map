@@ -873,6 +873,16 @@ export function validateMap(data: unknown): ValidationResult {
               !validator.finite(entity.metadata.densityPct, `${label}.metadata.densityPct`)
             )
               validator.error(`${label}.metadata.densityPct`, 'must be a finite number');
+            if (
+              isRecord(entity.metadata) &&
+              (!validator.finite(entity.metadata.edgeCoverPct, `${label}.metadata.edgeCoverPct`) ||
+                entity.metadata.edgeCoverPct < 0 ||
+                entity.metadata.edgeCoverPct > 100)
+            )
+              validator.error(
+                `${label}.metadata.edgeCoverPct`,
+                'must be a percentage from 0 to 100',
+              );
             if (isRecord(entity.metadata) && typeof entity.metadata.walkableInside !== 'boolean')
               validator.error(`${label}.metadata.walkableInside`, 'must be a boolean');
           }

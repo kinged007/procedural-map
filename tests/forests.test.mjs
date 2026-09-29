@@ -302,7 +302,7 @@ const forestFixture = (overrides) => {
         },
         trees: JSON.parse(JSON.stringify(trees)),
         asset: { category: 'vegetation.forest', variant: 'oak-1' },
-        metadata: { treeCount: 2, densityPct: 4, walkableInside: true },
+        metadata: { treeCount: 2, densityPct: 4, edgeCoverPct: 4, walkableInside: true },
       },
     ],
     structures: [],
@@ -405,4 +405,119 @@ test('a tree inside a forest still needs a valid trunk', () => {
     ),
     result.errors.join('; '),
   );
+});
+
+/**
+ * A stand of trees, built rather than grown, so a test can control how closely the trunks sit.
+ *
+ * `canopy` is the canopy radius and `spacing` the distance between centres, so a spacing below the
+ * canopy diameter overlaps and a spacing above it leaves gaps.
+ */
+function stand(spacing, canopy, side = 5) {
+  const trees = [];
+  let id = 0;
+  for (let row = 0; row < side; row += 1)
+    for (let column = 0; column < side; column += 1) {
+      id += 1;
+      const centre = { x: 500 + column * spacing, y: 500 + row * spacing };
+      trees.push({
+        id: `tree-${id}`,
+        type: 'tree',
+        species: 'oak',
+        position: centre,
+        radius: canopy,
+        collision: { type: 'circle', center: centre, radius: 4 },
+      });
+    }
+  return trees;
+}
+
+test('edge cover says how sharply a wood meets the scrub, and density cannot', () => {
+  // The hull is drawn tight around the outermost canopies, so it is a hard edge whether the rim trees
+  // overlap or stand apart, and `densityPct` saturates at 100 for a wood either way. The outline is
+  // the only place the transition is visible, so that is where it is measured.
+  const tight = generateForests(stand(11, 6));
+  // 25, not 26 and not 20. 26 is exactly the link distance the grove is built on, so it is a
+  // knife edge; and at 20 the gaps between the rim canopies are about as wide as the sampling step,
+  // which saturates the measurement on a wood that plainly has one. 25 leaves a gap twice the step.
+  const loose = generateForests(stand(25, 6));
+  assert.equal(tight.length, 1, 'the tight stand should be one grove');
+  assert.equal(loose.length, 1, 'the loose stand should be one grove');
+
+  // Two groves of the same 25 trees, the same species, the same canopy, differing only in spacing.
+  // Their hulls are the same square scaled up, so the hull a consumer draws a hard edge from is
+  // identical in shape and carries nothing about which kind of edge it is closing off. That is what
+  // the measurement is for, and this asserts it rather than asserting it in a comment.
+  assert.equal(tight[0].metadata.treeCount, loose[0].metadata.treeCount);
+  const side = (forest) => {
+    const xs = forest.geometry.points.map((point) => point.x);
+    return Math.max(...xs) - Math.min(...xs);
+  };
+  assert.equal(tight[0].geometry.points.length, loose[0].geometry.points.length);
+  assert.equal(
+    side(loose[0]) / side(tight[0]),
+    25 / 11,
+    'the two hulls should be the same square at different scales, so shape cannot tell them apart',
+  );
+  assert.ok(
+    tight[0].metadata.edgeCoverPct > loose[0].metadata.edgeCoverPct,
+    `a rim of overlapping canopies (${tight[0].metadata.edgeCoverPct.toFixed(1)}%) should cover more of the outline than a rim of separated trees (${loose[0].metadata.edgeCoverPct.toFixed(1)}%)`,
+  );
+  // The tight one is a hard edge and the loose one is a band, which is the distinction itself.
+  assert.ok(
+    tight[0].metadata.edgeCoverPct > 95,
+    `tight rim read ${tight[0].metadata.edgeCoverPct.toFixed(1)}%`,
+  );
+  assert.ok(
+    loose[0].metadata.edgeCoverPct < 85,
+    `loose rim read ${loose[0].metadata.edgeCoverPct.toFixed(1)}%`,
+  );
+});
+
+test('edge cover is a measured percentage, and it is not the same number on every grove', () => {
+  const cover = [];
+  const density = [];
+  for (const seed of [SEED, 42, 777, 7, 1, 99999]) {
+    const map = generateMap({ seed, width: 2048, height: 1536 });
+    for (const forest of map.forests) {
+      const { edgeCoverPct } = forest.metadata;
+      assert.ok(Number.isFinite(edgeCoverPct), `grove ${forest.id} reported no edge cover`);
+      assert.ok(
+        edgeCoverPct >= 0 && edgeCoverPct <= 100,
+        `grove ${forest.id} reported ${edgeCoverPct}`,
+      );
+      cover.push(edgeCoverPct);
+      density.push(forest.metadata.densityPct);
+    }
+  }
+  // A measurement that saturates everywhere is the fault this was added to correct, so it is checked
+  // directly. `densityPct` reads 100 on 302 of 303 groves over six default maps, because a hull drawn
+  // tight around its own canopies is fully covered by construction. Edge cover has to separate them,
+  // and the loosely linked mixed groves are where the ragged rims are.
+  assert.ok(
+    density.filter((value) => value === 100).length / density.length > 0.9,
+    'densityPct no longer saturates, so this measurement may no longer be earning its place',
+  );
+  const ragged = cover.filter((value) => value < 90).length;
+  assert.ok(
+    ragged > 20,
+    `only ${ragged} of ${cover.length} groves have a ragged rim, so edge cover is saturating too`,
+  );
+});
+
+test('a forest without its measured edge cover is rejected', () => {
+  // The measurement is required, because a consumer that draws a vegetation overlay needs to tell a
+  // missing rim from a bare one, and an absent field is indistinguishable from a grove of one tree.
+  const map = wooded();
+  const forest = structuredClone(map.forests[0]);
+  assert.equal(typeof forest.metadata.edgeCoverPct, 'number');
+  delete forest.metadata.edgeCoverPct;
+  const result = validateMap({ ...map, forests: [forest] });
+  assert.ok(!result.valid, 'a forest with no edge cover was accepted');
+  assert.match(result.errors.join(' '), /edgeCoverPct/);
+
+  // And one that is not a percentage is a broken measurement rather than a ragged rim.
+  const over = structuredClone(map.forests[0]);
+  over.metadata.edgeCoverPct = 140;
+  assert.match(validateMap({ ...map, forests: [over] }).errors.join(' '), /edgeCoverPct/);
 });
