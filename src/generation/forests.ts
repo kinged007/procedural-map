@@ -9,6 +9,11 @@ import type { WalkabilityRaster } from '../navigation/walkability.js';
  * grove boundary, not a gameplay distance, so its exact value does not change how the map walks.
  */
 const LINK_DISTANCE = 26;
+/**
+ * Exported because a cultivated plot is kept clear of the wood by this distance, and the reason it is
+ * this distance is that it is this distance. See `plotKeepOut`.
+ */
+export const GROVE_LINK_DISTANCE = LINK_DISTANCE;
 const LINK_DISTANCE_SQUARED = LINK_DISTANCE * LINK_DISTANCE;
 
 /** Smallest component that counts as a grove rather than a copse of loose trees. */

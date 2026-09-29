@@ -8,6 +8,7 @@ import type {
 } from '../map/GameMap.js';
 import { circleIntersectsPolygon, pointInPolygon } from '../map/geometry.js';
 import { distance } from './ribbon.js';
+import { GROVE_LINK_DISTANCE } from './forests.js';
 import type { SettlementSite } from './settlements.js';
 
 /** What a plot is worked as. The two differ only in what stands on the ground. */
@@ -362,6 +363,38 @@ function plotRectangle(
       corner(-depth / 2, width / 2),
     ],
   };
+}
+
+/**
+ * The ground a plot keeps wild trees off, which is larger than the plot.
+ *
+ * A cultivated holding is cleared ground, so nothing wild roots in it. Keeping the wild trees off the
+ * plot's own rectangle is not enough, and the reason is the wood's own grouping: trees less than
+ * `GROVE_LINK_DISTANCE` apart are one grove, so a wild tree standing just outside an orchard joins the
+ * orchard's own rows into a single `mixed` forest. An orchard then reads as a copse in a wood rather
+ * than as rows, and over three maps 13 of the 14 groves touching an orchard were like that — the
+ * largest carried 88 wild trees alongside 36 rows.
+ *
+ * The margin is the link distance because that is the distance the wood groups over, not because it
+ * was tuned. A row's outermost tree sits about three units inside the rectangle, and a wild tree is
+ * already held off whatever it is tested against by its own canopy, so the two are further apart than
+ * that already; adding the link distance puts them beyond the reach of the grouping with room to
+ * spare. It also means no grove's hull can span a plot: a grove spanning one would need trees on both
+ * sides, and trees on opposite sides are at least the plot's 32-unit depth apart, which is more than
+ * the link distance.
+ *
+ * This is deliberately larger than the keep-out a tree needs for its own trunk. A tree that is only
+ * 11 units from a field is not in the field and does not shade it; one that is within the link distance
+ * is in the same wood, and that is the difference this rule is about.
+ */
+export function plotKeepOut(plot: PlotSite): PolygonGeometry {
+  const margin = GROVE_LINK_DISTANCE;
+  return plotRectangle(
+    plot.position,
+    plot.rotation,
+    plot.width + 2 * margin,
+    plot.depth + 2 * margin,
+  );
 }
 
 /** True when a plot would leave the world, which a polygon outside the bounds is not a valid one. */

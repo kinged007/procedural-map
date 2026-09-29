@@ -16,7 +16,7 @@ import { gridToEdgePolygons } from './contours.js';
 import { generateDocks } from './docks.js';
 import { generateResourceSites } from './resources.js';
 import { generateForests, markWalkableInside } from './forests.js';
-import { generatePlots, plotSites } from './plots.js';
+import { generatePlots, plotKeepOut, plotSites } from './plots.js';
 import { generateSettlements, settlementSites, type SettlementSite } from './settlements.js';
 import { generateRoads } from './roads/RoadGenerator.js';
 import { generateRivers } from './rivers.js';
@@ -733,15 +733,20 @@ export function generateMap(config: GenerationConfig): GameMap {
     resolved.height,
     () => plotRandom.next(),
   );
-  // Only a field is kept clear: an orchard's rectangle is already full of the trees it asked for, and
-  // refusing more inside it would leave bare gaps down every row.
+  // A plot is cultivated ground, so wild trees are kept off it in both its kinds. Only fields were, on
+  // the reasoning that an orchard's rectangle is already full of the trees it asked for and refusing
+  // more inside it would leave bare gaps down every row. The gaps are wanted — a character walks
+  // between the rows — but the trees that should not be there are the wild ones: 30 of 41 orchards
+  // over eight maps were growing wild trunks inside their own rectangle, up to ten of them. The keep-out
+  // is the grown rectangle rather than the plot's own, because a wild tree just outside an orchard is
+  // inside the same wood as its rows; see `plotKeepOut`.
   const vegetation = [
     ...generateTrees(
       resolved,
       fields,
       water,
       random,
-      [...noTrees, ...plots.filter((plot) => plot.kind === 'field').map((plot) => plot.geometry)],
+      [...noTrees, ...plots.map(plotKeepOut)],
       roads,
       sites,
     ),

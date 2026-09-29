@@ -553,3 +553,84 @@ test('a farm stands at the edge of its field and looks out over it', () => {
     }
   }
 });
+
+test('an orchard is cultivated ground, so no wild tree roots in it and no wood claims it', () => {
+  // An orchard used to be a wood with fruit trees in it. Two things let that happen, and both are
+  // about distance rather than about whether the orchard was placed sensibly.
+  //
+  // Wild trees were only kept off a *field*, on the reasoning that an orchard's rectangle is already
+  // full of the trees it asked for. The gaps between the rows are wanted — a character walks between
+  // them — but the wild trunks are not: 30 of 41 orchards over eight maps were growing them, up to
+  // ten of them, among their own fifteen rows.
+  //
+  // And keeping the wild trees off the rectangle would not have been enough. Trees less than the link
+  // distance apart are one grove, so a wild tree standing just outside an orchard joined its rows into
+  // a single `mixed` forest: 13 of the 14 groves touching an orchard, the largest carrying 88 wild
+  // trees beside 36 rows. The keep-out is the grown rectangle for that reason, and the margin is the
+  // link distance because that is the distance the wood groups over.
+  for (const seed of SEEDS) {
+    const map = mapFor({ seed, plots: PLENTY });
+    for (const orchard of of(map, 'orchard')) {
+      const own = new Set(orchard.metadata.treeIds);
+      assert.ok(own.size >= 2, `${orchard.id} published ${own.size} rows, so it is not an orchard`);
+      for (const tree of map.vegetation)
+        if (!own.has(tree.id))
+          assert.ok(
+            !pointInPolygon(tree.position, orchard.geometry),
+            `${tree.id} (${tree.species}) is rooted in ${orchard.id}`,
+          );
+      // A grove that reaches into an orchard is a wood, whatever its trees are called.
+      for (const forest of map.forests) {
+        const reaches = forest.geometry.points.some((point) =>
+          pointInPolygon(point, orchard.geometry),
+        );
+        if (!reaches) continue;
+        const wild = forest.trees.filter((tree) => !own.has(tree.id));
+        assert.equal(
+          wild.length,
+          0,
+          `${forest.id} (${forest.species}) reaches into ${orchard.id} with ${wild.length} wild trees`,
+        );
+      }
+    }
+    // A grove is a convex hull, so it can span ground no tree stands on, and a field is cleared
+    // ground: 21 of 61 fields were inside some wood's hull before the keep-out was grown. The hull is
+    // a broadphase and a consumer may reasonably ask `pointInPolygon` of it, so a plot is not inside
+    // one. A grove spanning a plot would need trees on both sides, and those are at least the plot's
+    // 32-unit depth apart, which is more than the link distance.
+    for (const plot of map.plots)
+      for (const forest of map.forests) {
+        const own = new Set(plot.kind === 'orchard' ? plot.metadata.treeIds : []);
+        if (own.size && forest.trees.every((tree) => own.has(tree.id))) continue;
+        assert.ok(
+          !forest.geometry.points.some((point) => pointInPolygon(point, plot.geometry)),
+          `${plot.id} is inside the hull of ${forest.id} (${forest.species})`,
+        );
+      }
+  }
+});
+
+test('an orchard is not a wood, so no grove is published as part of one', () => {
+  // The species of a grove is read off the trees inside it, so a grove that holds both kinds publishes
+  // itself as `mixed` and a consumer asking "is this forest" gets yes. Cultivated rows are in
+  // `vegetation` and in their plot's `treeIds`; a grove is the wild wood around them.
+  for (const seed of SEEDS) {
+    const map = mapFor({ seed, plots: PLENTY });
+    for (const forest of map.forests) {
+      const cultivated = forest.trees.filter((tree) => tree.species === 'orchard');
+      if (cultivated.length === 0) continue;
+      assert.equal(
+        cultivated.length,
+        forest.trees.length,
+        `${forest.id} mixes ${cultivated.length} cultivated rows with ${
+          forest.trees.length - cultivated.length
+        } wild trees`,
+      );
+      assert.equal(
+        forest.species,
+        'orchard',
+        `${forest.id} is all rows but calls itself ${forest.species}`,
+      );
+    }
+  }
+});
