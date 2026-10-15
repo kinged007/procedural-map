@@ -29,6 +29,5 @@ dependencies plus a browser map studio (Vite + Canvas). Generates seeded `GameMa
 
 ## Permissions and scope
 
-- This repo is public and self-contained. Do not publish code derived from the private
-  `tenantflex` organisation without written approval. See `docs/03-tenantflex.md` in the
-  profile-cleanup workspace for context.
+- Keep this repo self-contained. Do not commit secrets (API keys, tokens, .env). Only
+  `.env.example` belongs in the repo.
