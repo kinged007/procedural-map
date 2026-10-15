@@ -1,5 +1,9 @@
 # Procedural Map Generator
 
+[![CI](https://github.com/kinged007/procedural-map/actions/workflows/ci.yml/badge.svg)](https://github.com/kinged007/procedural-map/actions/workflows/ci.yml) [![npm version](https://img.shields.io/badge/npm-fieldwork--map-0.1.0-blue)](https://github.com/kinged007/procedural-map) [![Node](https://img.shields.io/badge/node-%3E%3D22.12-339933)](https://nodejs.org)
+
+> Live studio: https://kinged007.github.io/procedural-map/
+
 ![The Fieldwork map studio showing an illustrated temperate landscape with lakes, roads, and woodland](docs/images/studio.png)
 
 A procedural map generator for games and other projects. It started as a way to get good-looking maps generated from a seed for a game I was building, and it is general enough for any project that needs a world. The work is inspired by [Watabou](https://watabou.github.io), which showed what this kind of tool can do. Thanks.
